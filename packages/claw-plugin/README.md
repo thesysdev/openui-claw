@@ -6,7 +6,9 @@ OpenClaw plugin that enables [Generative UI](https://openui.com) in the [Claw cl
 
 The plugin registers a `before_prompt_build` hook. For each agent run initiated by the Claw client, it prepends the OpenUI Lang system prompt, instructing the LLM to emit structured UI components. Runs from other clients (CLI, other web apps) are unaffected.
 
-Detection works via a session key convention: the Claw client appends `:openui-claw` to its session keys (e.g. `main:openui-claw`). The plugin checks for this suffix in `ctx.sessionKey` and only activates when it is present.
+Detection works via a session key convention: the Claw client appends `:openui-claw` to its session keys (e.g. `agent:main:main:openui-claw`). The plugin checks for this suffix in `ctx.sessionKey` and only activates when it is present.
+
+The OpenUI Lang system prompt is baked directly into `src/index.ts` at generate time — the plugin is a single self-contained `.ts` file with no runtime dependencies beyond `openclaw` itself (which the gateway provides).
 
 ## Install
 
@@ -20,22 +22,37 @@ Restart the gateway after install.
 
 Open the [Claw client](https://claw.openui.com), enter your gateway URL and auth token in settings, and start chatting. Agent responses will render as interactive UI components.
 
+## Regenerating the system prompt
+
+The system prompt in `src/index.ts` is generated from `@openuidev/react-ui`. Re-run after upgrading that package:
+
+```sh
+pnpm generate
+```
+
+This rewrites `src/index.ts` in place. Commit the result.
+
 ---
 
 ## Local testing
 
-Install directly from the repo (no build step required — the plugin is a raw TypeScript file loaded by jiti):
+Install directly from the repo. The plugin is a single `.ts` file — no build step, no node_modules needed on the gateway machine.
 
+If running openclaw remotely
+```sh
+rsync -az --exclude node_modules --exclude .git \
+  -e "ssh -i <path-to-pem>" \
+  . <user>@<hostname>:~/openui-claw-plugin
+```
+
+Install the plugin:
 ```sh
 openclaw plugins install -l ./packages/claw-plugin
 ```
 
-Then restart your local gateway:
-
+Then restart your gateway:
 ```sh
 openclaw start
 ```
 
-Open the Claw client, connect to your local gateway, and send a message. If the plugin is active you will see OpenUI Lang output (e.g. `root = Card(...)`) rendered as interactive components instead of plain text.
-
-To verify detection is working, check the gateway logs — the plugin logs nothing on no-op calls and only fires the prompt injection for sessions whose key ends in `:openui-claw`.
+Open the OpenUI Claw client, connect to the gateway, and send a message. If the plugin is active you will see OpenUI Lang output rendered as interactive components instead of plain text.

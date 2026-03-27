@@ -1,16 +1,22 @@
 {
-  "name": "@openuidev/claw-plugin",
+  "name": "@openuidev/openui-claw-plugin",
   "version": "0.1.0",
   "private": true,
   "main": "./src/index.ts",
+  "scripts": {
+    "generate": "tsx generate-prompt.ts"
+  },
   "peerDependencies": {
     "openclaw": "*"
   },
   "devDependencies": {
     "@openuidev/react-ui": "*",
-    "openclaw": "*"
+    "openclaw": "*",
+    "tsx": "^4.0.0"
   },
   "openclaw": {
-    "extensions": ["./src/index.ts"]
+    "extensions": [
+      "./src/index.ts"
+    ]
   }
 }
