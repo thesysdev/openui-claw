@@ -1,0 +1,16 @@
+{
+  "name": "@openuidev/claw-plugin",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./src/index.ts",
+  "peerDependencies": {
+    "openclaw": "*"
+  },
+  "devDependencies": {
+    "@openuidev/react-ui": "*",
+    "openclaw": "*"
+  },
+  "openclaw": {
+    "extensions": ["./src/index.ts"]
+  }
+}
