@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { GatewaySocket } from "@/lib/gateway/socket";
 import { ConnectionState } from "@/lib/gateway/types";
-import type { AgentEvent, ChatEvent, EventFrame, HelloOk } from "@/lib/gateway/types";
+import type { AgentEvent, ChatEvent, ChatHistoryMessage, EventFrame, HelloOk } from "@/lib/gateway/types";
 import {
   clearAuthCredentials,
   clearDeviceToken,
@@ -12,7 +12,16 @@ import {
 } from "@/lib/storage";
 import type { Settings } from "@/lib/storage";
 import { getOrCreateDeviceIdentity } from "@/lib/gateway/device-identity";
-import { AGUIEventType } from "./openClawAdapter";
+import { EventType } from "@openuidev/react-headless";
+import { createOpenClawAGUIMapper } from "./openclaw-agui-mapper";
+import { mergeHistoryMessages } from "./history-merger";
+import type {
+  AgentsListResult,
+  ClawThreadListItem,
+  SessionsListResult,
+} from "@/types/gateway-responses";
+
+export type { ClawThreadListItem } from "@/types/gateway-responses";
 
 const log = (...args: unknown[]) => console.log("[claw:gateway]", ...args);
 const warn = (...args: unknown[]) => console.warn("[claw:gateway]", ...args);
@@ -40,31 +49,6 @@ function resolveChatSessionKey(threadId: string, agentIds: Set<string>): string 
   if (agentIds.has(threadId)) return agentMainSessionKey(threadId);
   return threadId;
 }
-
-// ── Gateway response types (subset we care about) ────────────────────────────
-
-interface SessionRow {
-  key: string;
-  displayName?: string | null;
-  derivedTitle?: string | null;
-  updatedAt?: number | null;
-}
-
-interface SessionsListResult {
-  sessions: SessionRow[];
-}
-
-interface AgentsListResult {
-  agents?: Array<{ id: string; name?: string; emoji?: string }>;
-}
-
-export type ClawThreadListItem = {
-  id: string;
-  title: string;
-  createdAt: number;
-  clawKind: "main" | "extra";
-  clawAgentId: string;
-};
 
 export function useGateway({ onAuthFailed }: { onAuthFailed: () => void }) {
   const [connectionState, setConnectionState] = useState<ConnectionState>(
@@ -188,10 +172,7 @@ export function useGateway({ onAuthFailed }: { onAuthFailed: () => void }) {
 
       if (!threadId) {
         return new Response(
-          JSON.stringify({
-            type: AGUIEventType.RUN_ERROR,
-            message: "No agent selected. Choose an agent from the sidebar.",
-          }) + "\n",
+          JSON.stringify({ type: EventType.RUN_ERROR, message: "No agent selected. Choose an agent from the sidebar." }) + "\n",
           { status: 200, headers: { "Content-Type": "application/octet-stream" } }
         );
       }
@@ -201,74 +182,22 @@ export function useGateway({ onAuthFailed }: { onAuthFailed: () => void }) {
 
       const encoder = new TextEncoder();
       let ctrl!: ReadableStreamDefaultController<Uint8Array>;
-      const stream = new ReadableStream<Uint8Array>({
-        start(c) {
-          ctrl = c;
-        },
-      });
+      const stream = new ReadableStream<Uint8Array>({ start(c) { ctrl = c; } });
 
-      const write = (event: object) => {
-        try {
-          ctrl.enqueue(encoder.encode(JSON.stringify(event) + "\n"));
-        } catch {
-          // controller already closed
-        }
+      const write = (event: Record<string, unknown>) => {
+        try { ctrl.enqueue(encoder.encode(JSON.stringify(event) + "\n")); } catch { /* closed */ }
       };
-
       const closeStream = () => {
         runListenerRef.current = null;
-        try {
-          ctrl.close();
-        } catch {
-          // already closed
-        }
+        try { ctrl.close(); } catch { /* already closed */ }
       };
 
-      let messageId: string | null = null;
-      const ensureStarted = (runId: string) => {
-        if (!messageId) {
-          messageId = runId;
-          write({
-            type: AGUIEventType.TEXT_MESSAGE_START,
-            messageId,
-            role: "assistant",
-          });
-        }
-      };
-
+      const mapper = createOpenClawAGUIMapper(write);
       runListenerRef.current = {
-        onAgentEvent(evt: AgentEvent) {
-          ensureStarted(evt.runId);
-          const delta = evt.data?.delta;
-          if (delta) {
-            write({
-              type: AGUIEventType.TEXT_MESSAGE_CONTENT,
-              messageId,
-              delta,
-            });
-          }
-        },
+        onAgentEvent: mapper.onAgentEvent,
         onChatEvent(evt: ChatEvent) {
-          if (evt.state === "delta") {
-            ensureStarted(evt.runId);
-            const text =
-              typeof evt.message === "string" ? evt.message : null;
-            if (text) {
-              write({
-                type: AGUIEventType.TEXT_MESSAGE_CONTENT,
-                messageId,
-                delta: text,
-              });
-            }
-          } else if (evt.state === "final" || evt.state === "aborted") {
-            if (messageId) write({ type: AGUIEventType.TEXT_MESSAGE_END, messageId });
-            write({ type: AGUIEventType.RUN_FINISHED });
-            closeStream();
-          } else if (evt.state === "error") {
-            write({
-              type: AGUIEventType.RUN_ERROR,
-              message: evt.errorMessage ?? "Agent error",
-            });
+          mapper.onChatEvent(evt);
+          if (evt.state === "final" || evt.state === "aborted" || evt.state === "error") {
             closeStream();
           }
         },
@@ -291,7 +220,7 @@ export function useGateway({ onAuthFailed }: { onAuthFailed: () => void }) {
       } catch (err) {
         runListenerRef.current = null;
         write({
-          type: AGUIEventType.RUN_ERROR,
+          type: EventType.RUN_ERROR,
           message: err instanceof Error ? err.message : "Failed to send",
         });
         closeStream();
@@ -329,7 +258,7 @@ export function useGateway({ onAuthFailed }: { onAuthFailed: () => void }) {
       const mainKey = agentMainSessionKey(a.id);
       items.push({
         id: a.id,
-        title: [a.emoji, a.name].filter(Boolean).join(" ") || a.id,
+        title: [a.identity?.emoji, a.identity?.name].filter(Boolean).join(" ") || a.id,
         createdAt: Date.now(),
         clawKind: "main",
         clawAgentId: a.id,
@@ -388,30 +317,17 @@ export function useGateway({ onAuthFailed }: { onAuthFailed: () => void }) {
 
   // ── Load thread = load agent's chat history ────────────────────────────────
   const loadThread = useCallback(async (threadId: string): Promise<
-    { id: string; role: "user" | "assistant"; content: string | null }[]
+    { id: string; role: "user" | "assistant"; content: string | null; toolCalls?: { id: string; type: "function"; function: { name: string; arguments: string } }[] }[]
   > => {
     const sessionKey = resolveChatSessionKey(threadId, knownAgentIdsRef.current);
     log(`loadThread  threadId=${threadId}  sessionKey=${sessionKey}`);
     try {
       const result = await socketRef.current?.request<{
-        messages?: Array<{ id?: string; role?: string; content?: unknown }>;
+        messages?: ChatHistoryMessage[];
       }>("chat.history", { sessionKey, limit: 100 });
       const raw = result?.messages ?? [];
-      const filtered = raw.filter((m) => m.role === "user" || m.role === "assistant");
-      log(`chat.history returned ${raw.length} messages (${filtered.length} user/assistant)`);
-      return filtered.map((m) => ({
-        id: m.id ?? crypto.randomUUID(),
-        role: (m.role ?? "assistant") as "user" | "assistant",
-        content:
-          typeof m.content === "string"
-            ? m.content
-            : Array.isArray(m.content)
-            ? (m.content as unknown[])
-                .filter((c) => (c as { type?: string } | null)?.type === "text")
-                .map((c) => (c as { text?: string } | null)?.text ?? "")
-                .join("")
-            : null,
-      }));
+      log(`chat.history returned ${raw.length} messages`);
+      return mergeHistoryMessages(raw);
     } catch (e) {
       warn("chat.history failed:", e);
       return [];

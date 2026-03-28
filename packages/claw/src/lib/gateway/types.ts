@@ -3,7 +3,7 @@
 // Source of truth: https://github.com/openclaw/openclaw/blob/main/src/gateway/protocol/client-info.ts
 // Schema definitions: https://github.com/openclaw/openclaw/blob/main/src/gateway/protocol/schema/
 
-// Copied verbatim from src/gateway/protocol/client-info.ts — no subpath export exists for this.
+// Copied from src/gateway/protocol/client-info.ts — no subpath export exists for this.
 export const GATEWAY_CLIENT_IDS = {
   WEBCHAT_UI: "webchat-ui",
   CONTROL_UI: "openclaw-control-ui",
@@ -33,6 +33,16 @@ export const GATEWAY_CLIENT_MODES = {
 } as const;
 
 export type GatewayClientMode = (typeof GATEWAY_CLIENT_MODES)[keyof typeof GATEWAY_CLIENT_MODES];
+
+// Client capabilities for opt-in event subscriptions.
+// Source: src/gateway/protocol/client-info.ts
+// Note: "thinking-events" is in an open PR (#54821) and not yet merged to main.
+export const GATEWAY_CLIENT_CAPS = {
+  TOOL_EVENTS: "tool-events",
+  THINKING_EVENTS: "thinking-events",
+} as const;
+
+export type GatewayClientCap = (typeof GATEWAY_CLIENT_CAPS)[keyof typeof GATEWAY_CLIENT_CAPS];
 
 export interface RequestFrame {
   type: "req";
@@ -80,6 +90,8 @@ export interface ConnectChallenge {
 export interface ConnectParams {
   minProtocol?: number;
   maxProtocol?: number;
+  /** Opt-in event capability subscriptions (e.g. "tool-events", "thinking-events"). */
+  caps?: string[];
   client?: {
     id: GatewayClientId;
     version?: string;
@@ -125,18 +137,88 @@ export interface ChatEvent {
   stopReason?: string;
 }
 
-// event:agent payload — streaming text chunks
-export interface AgentEvent {
+// Typed data shapes for each event:agent stream variant
+export interface AssistantStreamData {
+  delta: string;
+}
+
+export interface ThinkingStreamData {
+  delta: string;
+  text?: string;
+}
+
+export interface ToolStartData {
+  phase: "start";
+  name: string;
+  toolCallId: string;
+  args: Record<string, unknown>;
+}
+
+export interface ToolResultData {
+  phase: "result";
+  name: string;
+  toolCallId: string;
+  result?: unknown;
+  isError: boolean;
+  durationMs?: number;
+}
+
+export type ToolStreamData = ToolStartData | ToolResultData;
+
+// event:agent payload — discriminated union on `stream`.
+// The upstream protocol schema types data as Record<string,unknown>; we narrow
+// it per stream so the mapper never needs `as` casts.
+interface AgentEventBase {
   runId: string;
   seq: number;
-  stream?: string;           // stream name, e.g. "assistant"
-  ts?: number;
+  ts: number;
   sessionKey?: string;
-  data?: {
-    delta?: string;          // incremental text chunk
-    text?: string;           // full accumulated text so far
-    [key: string]: unknown;
+}
+
+export interface AssistantAgentEvent extends AgentEventBase {
+  stream: "assistant";
+  data: AssistantStreamData;
+}
+
+export interface ThinkingAgentEvent extends AgentEventBase {
+  stream: "thinking";
+  data: ThinkingStreamData;
+}
+
+export interface ToolAgentEvent extends AgentEventBase {
+  stream: "tool";
+  data: ToolStreamData;
+}
+
+export interface OtherAgentEvent extends AgentEventBase {
+  stream: string;
+  data: Record<string, unknown>;
+}
+
+export type AgentEvent =
+  | AssistantAgentEvent
+  | ThinkingAgentEvent
+  | ToolAgentEvent
+  | OtherAgentEvent;
+
+// Tool call shape as returned by chat.history on assistant messages
+export interface ChatHistoryToolCall {
+  id: string;
+  type: "function";
+  function: {
+    name: string;
+    arguments: string; // JSON string
   };
+}
+
+// Message shape returned by chat.history
+export interface ChatHistoryMessage {
+  id?: string;
+  role?: string;
+  content?: unknown;
+  tool_calls?: ChatHistoryToolCall[];
+  tool_call_id?: string;
+  __openclaw?: { id: string; seq: number };
 }
 
 export const ConnectionState = {

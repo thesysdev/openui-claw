@@ -1,5 +1,5 @@
 import type { ConnectParams } from "./types";
-import { GATEWAY_CLIENT_IDS, GATEWAY_CLIENT_MODES } from "./types";
+import { GATEWAY_CLIENT_IDS, GATEWAY_CLIENT_MODES, GATEWAY_CLIENT_CAPS } from "./types";
 import type { DeviceIdentity } from "./device-identity";
 import { signMessage, toBase64Url } from "./device-identity";
 import type { Settings } from "../storage";
@@ -59,6 +59,7 @@ export async function buildConnectParams(
   return {
     minProtocol: PROTOCOL_VERSION,
     maxProtocol: PROTOCOL_VERSION,
+    caps: [GATEWAY_CLIENT_CAPS.TOOL_EVENTS, GATEWAY_CLIENT_CAPS.THINKING_EVENTS],
     client: {
       id: CLIENT_ID,
       version: CLIENT_VERSION,

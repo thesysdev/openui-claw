@@ -3,7 +3,7 @@
 import { Renderer, BuiltinActionType } from "@openuidev/react-lang";
 import type { ActionEvent } from "@openuidev/react-lang";
 import { openuiChatLibrary } from "@openuidev/react-ui/genui-lib";
-import { Shell } from "@openuidev/react-ui";
+import { Shell, BehindTheScenes, ToolCallComponent } from "@openuidev/react-ui";
 import { useThread } from "@openuidev/react-headless";
 import type { AssistantMessage as AssistantMsg } from "@openuidev/react-headless";
 import ReactMarkdown from "react-markdown";
@@ -33,11 +33,18 @@ export function AssistantMessage({ message }: Props) {
     return false;
   }, [isRunning, messages, message.id]);
 
-  // Separate openui-lang code from persisted <context> form state
+  // Parse <context> suffix out of content; remaining is openui/markdown
   const { content: openuiCode, contextString } = useMemo(() => {
     if (!message.content) return { content: null, contextString: null };
     return separateContentAndContext(message.content);
   }, [message.content]);
+
+  // Tool calls from react-headless (populated live via TOOL_CALL_START/ARGS events
+  // and from chat history via loadThread)
+  const toolCalls = message.toolCalls ?? [];
+
+  // BehindTheScenes collapses once the text response starts arriving
+  const toolsDone = !isStreaming || !!openuiCode || !!message.content;
 
   const initialState = useMemo(() => {
     if (!contextString) return undefined;
@@ -77,11 +84,24 @@ export function AssistantMessage({ message }: Props) {
     [processMessage]
   );
 
-  const rawContent = message.content ?? "";
-  const format = detectFormat(openuiCode ?? rawContent);
+  const textContent = openuiCode ?? message.content ?? "";
+  const format = detectFormat(textContent);
 
   return (
     <Shell.AssistantMessageContainer>
+      {toolCalls.length > 0 && (
+        <BehindTheScenes isStreaming={isStreaming} toolCallsComplete={toolsDone}>
+          {toolCalls.map((tc, i) => (
+            <ToolCallComponent
+              key={tc.id}
+              toolCall={tc}
+              isStreaming={isStreaming}
+              toolsDone={toolsDone}
+              isLast={i === toolCalls.length - 1}
+            />
+          ))}
+        </BehindTheScenes>
+      )}
       {format === "openui" ? (
         <Renderer
           library={openuiChatLibrary}
@@ -91,11 +111,11 @@ export function AssistantMessage({ message }: Props) {
           onStateUpdate={handleStateUpdate}
           initialState={initialState}
         />
-      ) : (
+      ) : textContent ? (
         <div className="px-1 py-0.5 prose prose-sm max-w-none dark:prose-invert prose-pre:bg-muted prose-pre:border prose-pre:border-border prose-code:text-sm">
-          <ReactMarkdown remarkPlugins={[remarkGfm]}>{rawContent}</ReactMarkdown>
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>{textContent}</ReactMarkdown>
         </div>
-      )}
+      ) : null}
     </Shell.AssistantMessageContainer>
   );
 }

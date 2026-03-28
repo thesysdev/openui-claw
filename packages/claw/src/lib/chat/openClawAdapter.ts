@@ -1,19 +1,14 @@
 "use client";
 
-// Minimal AG-UI event shapes that @openuidev/react-headless understands.
-// Written as NDJSON (one JSON object per line) to the Response body.
-export const AGUIEventType = {
-  TEXT_MESSAGE_START: "TEXT_MESSAGE_START",
-  TEXT_MESSAGE_CONTENT: "TEXT_MESSAGE_CONTENT",
-  TEXT_MESSAGE_END: "TEXT_MESSAGE_END",
-  RUN_FINISHED: "RUN_FINISHED",
-  RUN_ERROR: "RUN_ERROR",
-} as const;
+import type { AGUIEvent, StreamProtocolAdapter } from "@openuidev/react-headless";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function openClawAdapter(): any {
+/**
+ * Stream protocol adapter: reads NDJSON lines from the Response body
+ * and yields parsed AG-UI event objects to @openuidev/react-headless.
+ */
+export function openClawAdapter(): StreamProtocolAdapter {
   return {
-    async *parse(response: Response): AsyncIterable<unknown> {
+    async *parse(response: Response): AsyncIterable<AGUIEvent> {
       if (!response.body) return;
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
@@ -28,20 +23,12 @@ export function openClawAdapter(): any {
           const line = buffer.slice(0, nl).trim();
           buffer = buffer.slice(nl + 1);
           if (line) {
-            try {
-              yield JSON.parse(line);
-            } catch {
-              // skip malformed lines
-            }
+            try { yield JSON.parse(line) as AGUIEvent; } catch { /* skip malformed */ }
           }
         }
       }
       if (buffer.trim()) {
-        try {
-          yield JSON.parse(buffer.trim());
-        } catch {
-          // skip
-        }
+        try { yield JSON.parse(buffer.trim()) as AGUIEvent; } catch { /* skip */ }
       }
     },
   };

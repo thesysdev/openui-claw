@@ -11,7 +11,7 @@ import { UserMessage } from "@/components/rendering/UserMessage";
 import { AppSidebar } from "@/components/layout/AppSidebar";
 import { SettingsDialog } from "@/components/settings/SettingsDialog";
 import { getSettings } from "@/lib/storage";
-import type { ClawThreadListItem } from "@/lib/chat/useGateway";
+import type { ClawThreadListItem } from "@/types/gateway-responses";
 
 // Same default used by FullScreen — swap for a custom Claw logo later.
 const LOGO_URL = "https://www.openui.com/favicon.svg";
@@ -61,6 +61,7 @@ export default function ChatApp() {
         id: m.id,
         role: m.role,
         content: m.content ?? undefined,
+        ...(m.toolCalls?.length ? { toolCalls: m.toolCalls } : {}),
       })) as Message[];
     },
     [loadThread]
