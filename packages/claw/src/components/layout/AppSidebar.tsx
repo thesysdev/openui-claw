@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ChevronRight, Plus, Settings } from "lucide-react";
+import { ChevronRight, EllipsisVertical, Pencil, Plus, Settings, Trash2 } from "lucide-react";
+import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { useThreadList } from "@openuidev/react-headless";
 import { Button, Shell } from "@openuidev/react-ui";
 import { ConnectionState } from "@/lib/gateway/types";
@@ -46,12 +47,16 @@ interface Props {
   connectionState: ConnectionState;
   onSettingsClick: () => void;
   createSession: (agentId: string) => Promise<string | null>;
+  renameSession: (threadId: string, label: string) => Promise<boolean>;
+  deleteSession: (threadId: string) => Promise<boolean>;
 }
 
 export function AppSidebar({
   connectionState,
   onSettingsClick,
   createSession,
+  renameSession,
+  deleteSession,
 }: Props) {
   const { threads, isLoadingThreads, selectedThreadId, loadThreads, selectThread } =
     useThreadList();
@@ -59,6 +64,11 @@ export function AppSidebar({
 
   const [expandedByAgent, setExpandedByAgent] = useState<Record<string, boolean>>({});
   const [creatingForAgent, setCreatingForAgent] = useState<string | null>(null);
+  const [editingThreadId, setEditingThreadId] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState("");
+  const [renamingThreadId, setRenamingThreadId] = useState<string | null>(null);
+  const [deletingThreadId, setDeletingThreadId] = useState<string | null>(null);
+  const editInputRef = useRef<HTMLInputElement | null>(null);
 
   const pendingSelectRef = useRef<string | null>(null);
 
@@ -121,13 +131,57 @@ export function AppSidebar({
     [createSession, runAfterRefresh]
   );
 
+  const startEditing = useCallback((threadId: string, currentTitle: string) => {
+    setEditingThreadId(threadId);
+    setEditValue(currentTitle);
+    requestAnimationFrame(() => {
+      editInputRef.current?.focus();
+      editInputRef.current?.select();
+    });
+  }, []);
+
+  const cancelEditing = useCallback(() => {
+    setEditingThreadId(null);
+    setEditValue("");
+  }, []);
+
+  const commitRename = useCallback(
+    async (threadId: string) => {
+      const trimmed = editValue.trim();
+      setEditingThreadId(null);
+      if (!trimmed) return;
+
+      setRenamingThreadId(threadId);
+      try {
+        const ok = await renameSession(threadId, trimmed);
+        if (ok) loadThreads();
+      } finally {
+        setRenamingThreadId(null);
+      }
+    },
+    [editValue, renameSession, loadThreads]
+  );
+
+  const handleDelete = useCallback(
+    async (threadId: string) => {
+      setDeletingThreadId(threadId);
+      try {
+        const ok = await deleteSession(threadId);
+        if (ok) loadThreads();
+      } finally {
+        setDeletingThreadId(null);
+      }
+    },
+    [deleteSession, loadThreads]
+  );
+
   return (
     <Shell.SidebarContainer>
       <Shell.SidebarHeader />
       <Shell.SidebarSeparator />
 
       <Shell.SidebarContent>
-        {isLoadingThreads && (
+        {isLoadingThreads && threads.length === 0 && (
           <p className="px-3 py-2 text-xs text-zinc-400">Loading agents…</p>
         )}
         {groups.map((g) => {
@@ -152,22 +206,98 @@ export function AppSidebar({
 
               {expanded && (
                 <div className="ml-1.5 mt-1 space-y-0.5 border-l border-zinc-200 pl-2.5 dark:border-zinc-700">
-                  {g.threads.map((t) => (
-                    <div
-                      key={t.id}
-                      className={`openui-shell-thread-button${selectedThreadId === t.id ? " openui-shell-thread-button--selected" : ""}`}
-                    >
-                      <button
-                        type="button"
-                        onClick={() => selectThread(t.id)}
-                        className="openui-shell-thread-button-title"
-                      >
-                        {t.clawKind === "main" ? "Main" : t.title}
-                      </button>
-                    </div>
-                  ))}
+                  {g.threads.map((t) => {
+                    const isEditing = editingThreadId === t.id;
+                    const isRenaming = renamingThreadId === t.id;
+                    const isDeleting = deletingThreadId === t.id;
+                    const isExtra = t.clawKind !== "main";
+                    const isBusy = isRenaming || isDeleting;
+                    const label = isDeleting
+                      ? "Deleting…"
+                      : isRenaming
+                      ? "Renaming…"
+                      : isExtra
+                      ? t.title
+                      : "Main";
 
-                  {/* TODO: sessions.delete blocked by gateway for webchat-ui clients — revisit */}
+                    return (
+                      <div
+                        key={t.id}
+                        className={`openui-shell-thread-button${selectedThreadId === t.id ? " openui-shell-thread-button--selected" : ""}`}
+                      >
+                        {isEditing ? (
+                          <input
+                            ref={editInputRef}
+                            className="openui-shell-thread-button-title w-full bg-transparent outline-none"
+                            value={editValue}
+                            onChange={(e) => setEditValue(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                commitRename(t.id);
+                              } else if (e.key === "Escape") {
+                                cancelEditing();
+                              }
+                            }}
+                            onBlur={() => commitRename(t.id)}
+                            maxLength={64}
+                          />
+                        ) : (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => selectThread(t.id)}
+                              onDoubleClick={
+                                isExtra && !isBusy
+                                  ? (e) => {
+                                      e.preventDefault();
+                                      startEditing(t.id, t.title);
+                                    }
+                                  : undefined
+                              }
+                              className="openui-shell-thread-button-title"
+                            >
+                              {label}
+                            </button>
+
+                            {isExtra && !isBusy && (
+                              <DropdownMenu.Root>
+                                <DropdownMenu.Trigger asChild>
+                                  <button className="openui-shell-thread-button-dropdown-trigger">
+                                    <EllipsisVertical size={14} />
+                                  </button>
+                                </DropdownMenu.Trigger>
+                                <DropdownMenu.Portal>
+                                  <DropdownMenu.Content
+                                    className="openui-shell-thread-button-dropdown-menu"
+                                    side="bottom"
+                                    align="start"
+                                    sideOffset={2}
+                                  >
+                                    <DropdownMenu.Item
+                                      className="openui-shell-thread-button-dropdown-menu-item"
+                                      onSelect={() => startEditing(t.id, t.title)}
+                                    >
+                                      <Pencil size={14} className="openui-shell-thread-button-dropdown-menu-item-icon" />
+                                      Rename
+                                    </DropdownMenu.Item>
+                                    <DropdownMenu.Item
+                                      className="openui-shell-thread-button-dropdown-menu-item"
+                                      onSelect={() => handleDelete(t.id)}
+                                    >
+                                      <Trash2 size={14} className="openui-shell-thread-button-dropdown-menu-item-icon" />
+                                      Delete
+                                    </DropdownMenu.Item>
+                                  </DropdownMenu.Content>
+                                </DropdownMenu.Portal>
+                              </DropdownMenu.Root>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    );
+                  })}
+
 
                   <Button
                     type="button"

@@ -37,6 +37,7 @@ export default function ChatApp() {
     loadThread,
     createSession,
     deleteSession,
+    renameSession,
     reconnect,
   } = useGateway({ onAuthFailed: () => setSettingsOpen(true) });
 
@@ -82,6 +83,8 @@ export default function ChatApp() {
             connectionState={connectionState}
             onSettingsClick={() => setSettingsOpen(true)}
             createSession={createSession}
+            renameSession={renameSession}
+            deleteSession={deleteSession}
           />
 
           <Shell.ThreadContainer>

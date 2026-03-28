@@ -315,6 +315,21 @@ export function useGateway({ onAuthFailed }: { onAuthFailed: () => void }) {
     }
   }, []);
 
+  const renameSession = useCallback(async (threadId: string, label: string): Promise<boolean> => {
+    const sessionKey = resolveChatSessionKey(threadId, knownAgentIdsRef.current);
+    log("renameSession", threadId, sessionKey, label);
+    try {
+      await socketRef.current?.request("sessions.patch", {
+        key: sessionKey,
+        label,
+      });
+      return true;
+    } catch (e) {
+      warn("sessions.patch (rename) failed:", e);
+      return false;
+    }
+  }, []);
+
   // ── Load thread = load agent's chat history ────────────────────────────────
   const loadThread = useCallback(async (threadId: string): Promise<
     { id: string; role: "user" | "assistant"; content: string | null; toolCalls?: { id: string; type: "function"; function: { name: string; arguments: string } }[] }[]
@@ -342,6 +357,7 @@ export function useGateway({ onAuthFailed }: { onAuthFailed: () => void }) {
     loadThread,
     createSession,
     deleteSession,
+    renameSession,
     reconnect,
   };
 }
