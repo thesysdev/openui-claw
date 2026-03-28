@@ -5,11 +5,11 @@ import { signMessage, toBase64Url } from "./device-identity";
 import type { Settings } from "../storage";
 
 const PROTOCOL_VERSION = 3;
-const CLIENT_ID = GATEWAY_CLIENT_IDS.WEBCHAT;
-const CLIENT_MODE = GATEWAY_CLIENT_MODES.WEBCHAT;
+const CLIENT_ID = GATEWAY_CLIENT_IDS.WEBCHAT_UI;
+const CLIENT_MODE = GATEWAY_CLIENT_MODES.UI;
 const CLIENT_VERSION = "0.1.0";
 const ROLE = "operator";
-const SCOPES = ["operator.read", "operator.write"];
+const SCOPES = ["operator.read", "operator.write", "operator.admin"];
 
 /**
  * Builds the v3 signature payload string.

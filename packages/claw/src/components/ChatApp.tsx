@@ -11,36 +11,49 @@ import { UserMessage } from "@/components/rendering/UserMessage";
 import { AppSidebar } from "@/components/layout/AppSidebar";
 import { SettingsDialog } from "@/components/settings/SettingsDialog";
 import { getSettings } from "@/lib/storage";
+import type { ClawThreadListItem } from "@/lib/chat/useGateway";
 
 // Same default used by FullScreen — swap for a custom Claw logo later.
 const LOGO_URL = "https://www.openui.com/favicon.svg";
 
+function toThreadRow(r: ClawThreadListItem): Thread {
+  return {
+    id: r.id,
+    title: r.title,
+    createdAt: r.createdAt,
+    clawKind: r.clawKind,
+    clawAgentId: r.clawAgentId,
+  } as Thread;
+}
+
 export default function ChatApp() {
   const [settingsOpen, setSettingsOpen] = useState(false);
 
-  const { connectionState, settings, processMessage, fetchThreadList, loadThread, reconnect } =
-    useGateway({ onAuthFailed: () => setSettingsOpen(true) });
+  const {
+    connectionState,
+    settings,
+    processMessage,
+    fetchThreadList,
+    loadThread,
+    createSession,
+    deleteSession,
+    reconnect,
+  } = useGateway({ onAuthFailed: () => setSettingsOpen(true) });
 
   // Auto-open settings on first visit (no gateway URL configured)
   useEffect(() => {
     if (!getSettings()?.gatewayUrl) setSettingsOpen(true);
   }, []);
 
-  // ChatProvider expects: (cursor?) => Promise<{ threads: Thread[]; nextCursor? }>
   const adaptedFetchThreadList = useCallback(async (): Promise<{
     threads: Thread[];
   }> => {
-    const agents = await fetchThreadList();
+    const rows = await fetchThreadList();
     return {
-      threads: agents.map((a) => ({
-        id: a.id,
-        title: a.title ?? a.id,
-        createdAt: Date.now(),
-      })),
+      threads: rows.map(toThreadRow),
     };
   }, [fetchThreadList]);
 
-  // ChatProvider expects: (threadId) => Promise<Message[]>
   const adaptedLoadThread = useCallback(
     async (threadId: string): Promise<Message[]> => {
       const msgs = await loadThread(threadId);
@@ -67,6 +80,7 @@ export default function ChatApp() {
           <AppSidebar
             connectionState={connectionState}
             onSettingsClick={() => setSettingsOpen(true)}
+            createSession={createSession}
           />
 
           <Shell.ThreadContainer>

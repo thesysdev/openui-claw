@@ -29,16 +29,42 @@ function createSocket(
   return new GatewaySocket(opts);
 }
 
-// Appends ":openui-claw" suffix for plugin detection. client.id must be a gateway-registered
-// constant ("webchat"), so the plugin detects Claw sessions via this session key suffix instead.
-function clawSessionKey(key: string): string {
-  return `${key}:openui-claw`;
+// All Claw sessions end with this suffix so the server-side plugin can detect them.
+const CLAW_SUFFIX = ":openui-claw";
+
+function agentMainSessionKey(agentId: string): string {
+  return `agent:${agentId}:main${CLAW_SUFFIX}`;
 }
 
-// Derives the operator's direct session key for an agent: agent:<id>:main
-function agentMainSessionKey(agentId: string): string {
-  return `agent:${agentId}:main`;
+function resolveChatSessionKey(threadId: string, agentIds: Set<string>): string {
+  if (agentIds.has(threadId)) return agentMainSessionKey(threadId);
+  return threadId;
 }
+
+// ── Gateway response types (subset we care about) ────────────────────────────
+
+interface SessionRow {
+  key: string;
+  displayName?: string | null;
+  derivedTitle?: string | null;
+  updatedAt?: number | null;
+}
+
+interface SessionsListResult {
+  sessions: SessionRow[];
+}
+
+interface AgentsListResult {
+  agents?: Array<{ id: string; name?: string; emoji?: string }>;
+}
+
+export type ClawThreadListItem = {
+  id: string;
+  title: string;
+  createdAt: number;
+  clawKind: "main" | "extra";
+  clawAgentId: string;
+};
 
 export function useGateway({ onAuthFailed }: { onAuthFailed: () => void }) {
   const [connectionState, setConnectionState] = useState<ConnectionState>(
@@ -79,6 +105,7 @@ export function useGateway({ onAuthFailed }: { onAuthFailed: () => void }) {
   }, []);
 
   const socketRef = useRef<GatewaySocket | null>(null);
+  const knownAgentIdsRef = useRef<Set<string>>(new Set());
 
   const buildSocketOpts = useCallback(
     (overrideSettings?: Settings | null) => ({
@@ -169,7 +196,7 @@ export function useGateway({ onAuthFailed }: { onAuthFailed: () => void }) {
         );
       }
 
-      const sessionKey = clawSessionKey(agentMainSessionKey(threadId));
+      const sessionKey = resolveChatSessionKey(threadId, knownAgentIdsRef.current);
       log(`processMessage  threadId=${threadId}  sessionKey=${sessionKey}`);
 
       const encoder = new TextEncoder();
@@ -278,35 +305,93 @@ export function useGateway({ onAuthFailed }: { onAuthFailed: () => void }) {
     []
   );
 
-  // ── Thread list = agent list ───────────────────────────────────────────────
-  const fetchThreadList = useCallback(async (): Promise<
-    { id: string; title?: string }[]
-  > => {
-    log("fetchThreadList — calling agents.list");
+  // ── Thread list ──────────────────────────────────────────────────────────
+  const fetchThreadList = useCallback(async (): Promise<ClawThreadListItem[]> => {
+    log("fetchThreadList");
+    let agents: AgentsListResult["agents"] = [];
     try {
-      const result = await socketRef.current?.request<{
-        agents?: Array<{ id: string; name?: string; emoji?: string }>;
-      }>("agents.list");
-      const agents = result?.agents ?? [];
-      log(`agents.list returned ${agents.length} agent(s):`, agents.map((a) => a.id));
-      if (agents.length > 0) {
-        return agents.map((a) => ({
-          id: a.id,
-          title: [a.emoji, a.name].filter(Boolean).join(" ") || a.id,
-        }));
-      }
+      const result = await socketRef.current?.request<AgentsListResult>("agents.list");
+      agents = result?.agents ?? [];
+      log(`agents.list → ${agents.length} agent(s)`);
     } catch (e) {
-      warn("agents.list failed — using fallback:", e);
+      warn("agents.list failed:", e);
     }
-    return [{ id: "main", title: "Agent" }];
+
+    if (!agents.length) {
+      knownAgentIdsRef.current = new Set(["main"]);
+      return [{ id: "main", title: "Agent", createdAt: Date.now(), clawKind: "main", clawAgentId: "main" }];
+    }
+
+    knownAgentIdsRef.current = new Set(agents.map((a) => a.id));
+    const items: ClawThreadListItem[] = [];
+
+    for (const a of agents) {
+      const mainKey = agentMainSessionKey(a.id);
+      items.push({
+        id: a.id,
+        title: [a.emoji, a.name].filter(Boolean).join(" ") || a.id,
+        createdAt: Date.now(),
+        clawKind: "main",
+        clawAgentId: a.id,
+      });
+
+      try {
+        const result = await socketRef.current?.request<SessionsListResult>(
+          "sessions.list", { agentId: a.id, limit: 50 },
+        );
+        const seen = new Set<string>();
+        for (const row of result?.sessions ?? []) {
+          if (!row.key.endsWith(CLAW_SUFFIX) || row.key === mainKey || seen.has(row.key)) continue;
+          seen.add(row.key);
+          items.push({
+            id: row.key,
+            title: row.displayName || row.derivedTitle || row.key,
+            createdAt: row.updatedAt ?? Date.now(),
+            clawKind: "extra",
+            clawAgentId: a.id,
+          });
+        }
+      } catch (e) {
+        warn(`sessions.list failed for ${a.id}:`, e);
+      }
+    }
+
+    return items;
+  }, []);
+
+  const createSession = useCallback(async (agentId: string): Promise<string | null> => {
+    const key = `agent:${agentId}:${crypto.randomUUID()}${CLAW_SUFFIX}`;
+    log("createSession", agentId, key);
+    try {
+      await socketRef.current?.request("sessions.create", { agentId, key });
+      return key;
+    } catch (e) {
+      warn("sessions.create failed:", e);
+      return null;
+    }
+  }, []);
+
+  const deleteSession = useCallback(async (threadId: string): Promise<boolean> => {
+    const sessionKey = resolveChatSessionKey(threadId, knownAgentIdsRef.current);
+    log("deleteSession", threadId, sessionKey);
+    try {
+      await socketRef.current?.request("sessions.delete", {
+        key: sessionKey,
+        deleteTranscript: true,
+      });
+      return true;
+    } catch (e) {
+      warn("sessions.delete failed:", e);
+      return false;
+    }
   }, []);
 
   // ── Load thread = load agent's chat history ────────────────────────────────
-  const loadThread = useCallback(async (agentId: string): Promise<
+  const loadThread = useCallback(async (threadId: string): Promise<
     { id: string; role: "user" | "assistant"; content: string | null }[]
   > => {
-    const sessionKey = clawSessionKey(agentMainSessionKey(agentId));
-    log(`loadThread  agentId=${agentId}  sessionKey=${sessionKey}`);
+    const sessionKey = resolveChatSessionKey(threadId, knownAgentIdsRef.current);
+    log(`loadThread  threadId=${threadId}  sessionKey=${sessionKey}`);
     try {
       const result = await socketRef.current?.request<{
         messages?: Array<{ id?: string; role?: string; content?: unknown }>;
@@ -339,6 +424,8 @@ export function useGateway({ onAuthFailed }: { onAuthFailed: () => void }) {
     processMessage,
     fetchThreadList,
     loadThread,
+    createSession,
+    deleteSession,
     reconnect,
   };
 }
