@@ -7,3 +7,81 @@ body {
   height: 100%;
   overflow: hidden;
 }
+
+/* ── Composer toolbar (session controls) ──────────────────────────────────── */
+
+.composer-toolbar {
+  max-width: 880px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 0 calc(32px + var(--openui-space-s, 8px));
+}
+
+.openui-shell-container--mobile .composer-toolbar {
+  padding: 0 14px;
+}
+
+.openui-shell-thread-container--artifact-active .composer-toolbar {
+  padding-left: 0;
+  padding-right: var(--openui-space-m, 16px);
+}
+
+.composer-toolbar__inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  background-color: var(--openui-foreground, #fff);
+  border: 1px solid var(--openui-border-interactive, #e4e4e7);
+  border-bottom: none;
+  border-radius: var(--openui-radius-2xl, 24px) var(--openui-radius-2xl, 24px) 0 0;
+  padding: 6px 12px;
+}
+
+/* Remove top border-radius from composer card when toolbar is present */
+.composer-toolbar + .openui-shell-thread-composer .openui-shell-thread-composer__input-wrapper {
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+  border-top-color: var(--openui-border-default, #f0f0f0);
+}
+
+.composer-toolbar__controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.composer-toolbar__select-group {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.composer-toolbar__icon {
+  width: 13px;
+  height: 13px;
+  color: var(--openui-text-neutral-secondary, #a1a1aa);
+  flex-shrink: 0;
+}
+
+.composer-toolbar__select {
+  height: 22px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  padding: 0 4px;
+  font: var(--openui-text-label-sm, 11px/1.2 system-ui);
+  letter-spacing: var(--openui-text-label-sm-letter-spacing, normal);
+  color: var(--openui-text-neutral-secondary, #71717a);
+  outline: none;
+  cursor: pointer;
+  appearance: auto;
+}
+
+.composer-toolbar__select:hover {
+  background-color: var(--openui-elevated, #f4f4f5);
+}
+
+.composer-toolbar__select--model {
+  max-width: 180px;
+}

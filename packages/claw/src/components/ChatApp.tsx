@@ -1,17 +1,18 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { ChatProvider } from "@openuidev/react-headless";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { ChatProvider, useThreadList } from "@openuidev/react-headless";
 import type { Message, Thread } from "@openuidev/react-headless";
 import { Shell, ThemeProvider } from "@openuidev/react-ui";
-import { useGateway } from "@/lib/chat/useGateway";
+import { useGateway, resolveChatSessionKey } from "@/lib/chat/useGateway";
 import { openClawAdapter } from "@/lib/chat/openClawAdapter";
 import { AssistantMessage } from "@/components/rendering/AssistantMessage";
 import { UserMessage } from "@/components/rendering/UserMessage";
 import { AppSidebar } from "@/components/layout/AppSidebar";
+import { ComposerToolbar } from "@/components/session/SessionControls";
 import { SettingsDialog } from "@/components/settings/SettingsDialog";
 import { getSettings } from "@/lib/storage";
-import type { ClawThreadListItem } from "@/types/gateway-responses";
+import type { ClawThreadListItem, SessionRow, ModelChoice } from "@/types/gateway-responses";
 
 // Same default used by FullScreen — swap for a custom Claw logo later.
 const LOGO_URL = "https://www.openui.com/favicon.svg";
@@ -24,6 +25,44 @@ function toThreadRow(r: ClawThreadListItem): Thread {
     clawKind: r.clawKind,
     clawAgentId: r.clawAgentId,
   } as Thread;
+}
+
+function ThreadArea({
+  sessionMeta,
+  availableModels,
+  patchSession,
+  knownAgentIds,
+}: {
+  sessionMeta: Map<string, SessionRow>;
+  availableModels: ModelChoice[];
+  patchSession: (key: string, patch: Record<string, unknown>) => Promise<boolean>;
+  knownAgentIds: React.RefObject<Set<string>>;
+}) {
+  const { selectedThreadId } = useThreadList();
+
+  const sessionKey = useMemo(() => {
+    if (!selectedThreadId) return null;
+    return resolveChatSessionKey(selectedThreadId, knownAgentIds.current);
+  }, [selectedThreadId, knownAgentIds]);
+
+  const meta = sessionKey ? sessionMeta.get(sessionKey) : undefined;
+
+  return (
+    <Shell.ThreadContainer>
+      <Shell.MobileHeader />
+      <Shell.ScrollArea>
+        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+        <Shell.Messages assistantMessage={AssistantMessage} userMessage={UserMessage as any} loader={<Shell.MessageLoading />} />
+      </Shell.ScrollArea>
+      <ComposerToolbar
+        meta={meta}
+        models={availableModels}
+        onPatch={patchSession}
+        sessionKey={sessionKey}
+      />
+      <Shell.Composer />
+    </Shell.ThreadContainer>
+  );
 }
 
 export default function ChatApp() {
@@ -39,6 +78,10 @@ export default function ChatApp() {
     deleteSession,
     renameSession,
     reconnect,
+    sessionMeta,
+    availableModels,
+    patchSession,
+    knownAgentIds,
   } = useGateway({ onAuthFailed: () => setSettingsOpen(true) });
 
   // Auto-open settings on first visit (no gateway URL configured)
@@ -87,14 +130,12 @@ export default function ChatApp() {
             deleteSession={deleteSession}
           />
 
-          <Shell.ThreadContainer>
-            <Shell.MobileHeader />
-            <Shell.ScrollArea>
-              {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-              <Shell.Messages assistantMessage={AssistantMessage} userMessage={UserMessage as any} loader={<Shell.MessageLoading />} />
-            </Shell.ScrollArea>
-            <Shell.Composer />
-          </Shell.ThreadContainer>
+          <ThreadArea
+            sessionMeta={sessionMeta}
+            availableModels={availableModels}
+            patchSession={patchSession}
+            knownAgentIds={knownAgentIds}
+          />
         </Shell.Container>
 
         <SettingsDialog

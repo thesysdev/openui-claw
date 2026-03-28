@@ -18,10 +18,14 @@ import { mergeHistoryMessages } from "./history-merger";
 import type {
   AgentsListResult,
   ClawThreadListItem,
+  ModelChoice,
+  ModelsListResult,
+  SessionRow,
   SessionsListResult,
 } from "@/types/gateway-responses";
 
 export type { ClawThreadListItem } from "@/types/gateway-responses";
+export type { SessionRow, ModelChoice } from "@/types/gateway-responses";
 
 const log = (...args: unknown[]) => console.log("[claw:gateway]", ...args);
 const warn = (...args: unknown[]) => console.warn("[claw:gateway]", ...args);
@@ -45,7 +49,7 @@ function agentMainSessionKey(agentId: string): string {
   return `agent:${agentId}:main${CLAW_SUFFIX}`;
 }
 
-function resolveChatSessionKey(threadId: string, agentIds: Set<string>): string {
+export function resolveChatSessionKey(threadId: string, agentIds: Set<string>): string {
   if (agentIds.has(threadId)) return agentMainSessionKey(threadId);
   return threadId;
 }
@@ -90,6 +94,11 @@ export function useGateway({ onAuthFailed }: { onAuthFailed: () => void }) {
 
   const socketRef = useRef<GatewaySocket | null>(null);
   const knownAgentIdsRef = useRef<Set<string>>(new Set());
+
+  const [sessionMeta, setSessionMeta] = useState<Map<string, SessionRow>>(
+    () => new Map()
+  );
+  const [availableModels, setAvailableModels] = useState<ModelChoice[]>([]);
 
   const buildSocketOpts = useCallback(
     (overrideSettings?: Settings | null) => ({
@@ -142,6 +151,45 @@ export function useGateway({ onAuthFailed }: { onAuthFailed: () => void }) {
       socket.start();
     },
     [buildSocketOpts]
+  );
+
+  // ── Session metadata helpers ─────────────────────────────────────────────
+
+  const refreshSessionMeta = useCallback((sessionKey: string) => {
+    const agentId = sessionKey.split(":")[1] ?? "main";
+    socketRef.current
+      ?.request<SessionsListResult>("sessions.list", { agentId, limit: 50 })
+      .then((result) => {
+        const rows = result?.sessions ?? [];
+        setSessionMeta((prev) => {
+          const next = new Map(prev);
+          for (const row of rows) {
+            next.set(row.key, row);
+          }
+          return next;
+        });
+      })
+      .catch((e) => warn("refreshSessionMeta failed:", e));
+  }, []);
+
+  const patchSession = useCallback(
+    async (sessionKey: string, patch: Record<string, unknown>): Promise<boolean> => {
+      log("patchSession", sessionKey, patch);
+      try {
+        await socketRef.current?.request("sessions.patch", { key: sessionKey, ...patch });
+        setSessionMeta((prev) => {
+          const next = new Map(prev);
+          const existing = next.get(sessionKey);
+          next.set(sessionKey, { ...existing, key: sessionKey, ...patch } as SessionRow);
+          return next;
+        });
+        return true;
+      } catch (e) {
+        warn("sessions.patch failed:", e);
+        return false;
+      }
+    },
+    []
   );
 
   // ── processMessage bridge ────────────────────────────────────────────────
@@ -197,6 +245,9 @@ export function useGateway({ onAuthFailed }: { onAuthFailed: () => void }) {
         onAgentEvent: mapper.onAgentEvent,
         onChatEvent(evt: ChatEvent) {
           mapper.onChatEvent(evt);
+          if (evt.state === "final") {
+            refreshSessionMeta(sessionKey);
+          }
           if (evt.state === "final" || evt.state === "aborted" || evt.state === "error") {
             closeStream();
           }
@@ -231,7 +282,7 @@ export function useGateway({ onAuthFailed }: { onAuthFailed: () => void }) {
         headers: { "Content-Type": "application/octet-stream" },
       });
     },
-    []
+    [refreshSessionMeta]
   );
 
   // ── Thread list ──────────────────────────────────────────────────────────
@@ -246,6 +297,15 @@ export function useGateway({ onAuthFailed }: { onAuthFailed: () => void }) {
       warn("agents.list failed:", e);
     }
 
+    // Fetch available models for the model selector
+    try {
+      const modelsResult = await socketRef.current?.request<ModelsListResult>("models.list");
+      setAvailableModels(modelsResult?.models ?? []);
+      log(`models.list → ${modelsResult?.models?.length ?? 0} model(s)`);
+    } catch (e) {
+      warn("models.list failed:", e);
+    }
+
     if (!agents.length) {
       knownAgentIdsRef.current = new Set(["main"]);
       return [{ id: "main", title: "Agent", createdAt: Date.now(), clawKind: "main", clawAgentId: "main" }];
@@ -253,6 +313,7 @@ export function useGateway({ onAuthFailed }: { onAuthFailed: () => void }) {
 
     knownAgentIdsRef.current = new Set(agents.map((a) => a.id));
     const items: ClawThreadListItem[] = [];
+    const metaUpdates = new Map<string, SessionRow>();
 
     for (const a of agents) {
       const mainKey = agentMainSessionKey(a.id);
@@ -270,6 +331,7 @@ export function useGateway({ onAuthFailed }: { onAuthFailed: () => void }) {
         );
         const seen = new Set<string>();
         for (const row of result?.sessions ?? []) {
+          metaUpdates.set(row.key, row);
           if (!row.key.endsWith(CLAW_SUFFIX) || row.key === mainKey || seen.has(row.key)) continue;
           seen.add(row.key);
           items.push({
@@ -283,6 +345,14 @@ export function useGateway({ onAuthFailed }: { onAuthFailed: () => void }) {
       } catch (e) {
         warn(`sessions.list failed for ${a.id}:`, e);
       }
+    }
+
+    if (metaUpdates.size > 0) {
+      setSessionMeta((prev) => {
+        const next = new Map(prev);
+        for (const [k, v] of metaUpdates) next.set(k, v);
+        return next;
+      });
     }
 
     return items;
@@ -359,5 +429,9 @@ export function useGateway({ onAuthFailed }: { onAuthFailed: () => void }) {
     deleteSession,
     renameSession,
     reconnect,
+    sessionMeta,
+    availableModels,
+    patchSession,
+    knownAgentIds: knownAgentIdsRef,
   };
 }

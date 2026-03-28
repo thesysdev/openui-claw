@@ -6,6 +6,21 @@ export interface SessionRow {
   displayName?: string | null;
   derivedTitle?: string | null;
   updatedAt?: number | null;
+  thinkingLevel?: string | null;
+  model?: string | null;
+  modelProvider?: string | null;
+}
+
+export interface ModelChoice {
+  id: string;
+  name: string;
+  provider: string;
+  contextWindow?: number;
+  reasoning?: boolean;
+}
+
+export interface ModelsListResult {
+  models: ModelChoice[];
 }
 
 export interface SessionsListResult {
