@@ -1,7 +1,7 @@
-/**
- * Phase 1 stub: always returns "markdown".
- * Phase 3: will detect OpenUI Lang via /^root\s*=\s*\w+\(/ on first non-empty line.
- */
-export function detectFormat(_text: string): "openui" | "markdown" {
+export function detectFormat(text: string): "openui" | "markdown" {
+  const firstLine = text.split("\n").find((l) => l.trim() !== "");
+  if (firstLine && /^root\s*=\s*\w+\(/.test(firstLine.trim())) {
+    return "openui";
+  }
   return "markdown";
 }

@@ -25,6 +25,9 @@ importers:
       '@openuidev/react-ui':
         specifier: '*'
         version: 0.9.20(@openuidev/react-headless@0.7.10(react@19.2.4)(zustand@4.5.7(@types/react@19.2.14)(react@19.2.4)))(@openuidev/react-lang@0.1.4(react@19.2.4))(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(zustand@4.5.7(@types/react@19.2.14)(react@19.2.4))
+      lucide-react:
+        specifier: ^1.7.0
+        version: 1.7.0(react@19.2.4)
       next:
         specifier: ^15.2.0
         version: 15.5.14(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
@@ -2782,6 +2785,11 @@ packages:
 
   lucide-react@0.562.0:
     resolution: {integrity: sha512-82hOAu7y0dbVuFfmO4bYF1XEwYk/mEbM5E+b1jgci/udUBEE/R7LF5Ip0CCEmXe8AybRM8L+04eP+LGZeDvkiw==}
+    peerDependencies:
+      react: ^16.5.1 || ^17.0.0 || ^18.0.0 || ^19.0.0
+
+  lucide-react@1.7.0:
+    resolution: {integrity: sha512-yI7BeItCLZJTXikmK4KNUGCKoGzSvbKlfCvw44bU4fXAL6v3gYS4uHD1jzsLkfwODYwI6Drw5Tu9Z5ulDe0TSg==}
     peerDependencies:
       react: ^16.5.1 || ^17.0.0 || ^18.0.0 || ^19.0.0
 
@@ -7067,6 +7075,10 @@ snapshots:
   lru-cache@7.18.3: {}
 
   lucide-react@0.562.0(react@19.2.4):
+    dependencies:
+      react: 19.2.4
+
+  lucide-react@1.7.0(react@19.2.4):
     dependencies:
       react: 19.2.4
 

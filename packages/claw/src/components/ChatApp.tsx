@@ -7,6 +7,7 @@ import { Shell, ThemeProvider } from "@openuidev/react-ui";
 import { useGateway } from "@/lib/chat/useGateway";
 import { openClawAdapter } from "@/lib/chat/openClawAdapter";
 import { AssistantMessage } from "@/components/rendering/AssistantMessage";
+import { UserMessage } from "@/components/rendering/UserMessage";
 import { AppSidebar } from "@/components/layout/AppSidebar";
 import { SettingsDialog } from "@/components/settings/SettingsDialog";
 import { getSettings } from "@/lib/storage";
@@ -72,7 +73,7 @@ export default function ChatApp() {
             <Shell.MobileHeader />
             <Shell.ScrollArea>
               {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-              <Shell.Messages assistantMessage={AssistantMessage as any} loader={<Shell.MessageLoading />} />
+              <Shell.Messages assistantMessage={AssistantMessage} userMessage={UserMessage as any} loader={<Shell.MessageLoading />} />
             </Shell.ScrollArea>
             <Shell.Composer />
           </Shell.ThreadContainer>
