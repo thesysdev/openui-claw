@@ -8,7 +8,7 @@ importers:
 
   .: {}
 
-  packages/claw:
+  packages/claw-client:
     dependencies:
       '@noble/ed25519':
         specifier: ^2.3.0

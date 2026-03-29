@@ -22,7 +22,11 @@ The `openclaw` package does **not** export gateway protocol types publicly — o
 - **Protocol frame schemas** (TypeBox definitions for all RPC payloads):
   [`src/gateway/protocol/schema/protocol-schemas.ts`](https://github.com/openclaw/openclaw/blob/main/src/gateway/protocol/schema/protocol-schemas.ts)
 
-In this repo these are inlined into `packages/claw/src/lib/gateway/types.ts` with a comment pointing back to the source.
+In this repo these are inlined into `packages/claw-client/src/lib/gateway/types.ts` with a comment pointing back to the source.
+
+## How plugin detection works
+
+The Claw client appends `:openui-claw` to its session key (e.g. `agent:main:main:openui-claw`). The plugin's `before_prompt_build` hook checks for this suffix and, when present, prepends the OpenUI Lang system prompt. The agent then streams back component markup which the client renders in real time. Sessions from other clients are unaffected.
 
 ## Agents → Sessions → Threads mental model
 
