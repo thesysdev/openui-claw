@@ -13,6 +13,7 @@ const DOT_CLASS: Record<ConnectionState, string> = {
   [ConnectionState.CONNECTING]: "bg-yellow-400 animate-pulse",
   [ConnectionState.CONNECTED]: "bg-green-400",
   [ConnectionState.AUTH_FAILED]: "bg-red-500",
+  [ConnectionState.PAIRING]: "bg-amber-400 animate-pulse",
 };
 
 const STATUS_LABEL: Record<ConnectionState, string> = {
@@ -20,6 +21,7 @@ const STATUS_LABEL: Record<ConnectionState, string> = {
   [ConnectionState.CONNECTING]: "Connecting…",
   [ConnectionState.CONNECTED]: "Connected",
   [ConnectionState.AUTH_FAILED]: "Auth failed",
+  [ConnectionState.PAIRING]: "Pairing…",
 };
 
 type AgentGroup = {

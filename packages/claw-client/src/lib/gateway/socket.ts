@@ -28,6 +28,7 @@ export interface GatewaySocketOptions {
   getDevice: () => Promise<DeviceIdentity>;
   onHelloOk: (hello: HelloOk) => void;
   onAuthFailed: () => void;
+  onPairingRequired: (deviceId: string) => void;
   onEvent: (frame: EventFrame) => void;
   onStateChange: (connecting: boolean) => void;
 }
@@ -35,6 +36,7 @@ export interface GatewaySocketOptions {
 export class GatewaySocket {
   private ws: WebSocket | null = null;
   private stopped = false;
+  private pairingDetected = false;
   private reconnectDelay = RECONNECT_BASE_MS;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private pendingRpcs = new Map<
@@ -99,7 +101,9 @@ export class GatewaySocket {
     }
 
     log(`connecting to ${settings.gatewayUrl}`);
-    this.opts.onStateChange(true);
+    if (!this.pairingDetected) {
+      this.opts.onStateChange(true);
+    }
 
     try {
       this.ws = new WebSocket(settings.gatewayUrl);
@@ -150,6 +154,15 @@ export class GatewaySocket {
     } catch (e) {
       warn(`connect RPC failed — raw error:`, e);
       const error = this.parseError(e instanceof Error ? e.cause ?? e.message : e);
+      if (this.isPairingRequired(error)) {
+        warn("device not paired — invoking onPairingRequired");
+        this.pairingDetected = true;
+        const displayId = error.details?.requestId ?? device.deviceId;
+        this.opts.onPairingRequired(displayId);
+        this.closeWs();
+        this.scheduleReconnect();
+        return;
+      }
       if (this.isAuthFatal(error)) {
         warn("auth fatal — invoking onAuthFailed");
         this.handleAuthError(settings);
@@ -161,6 +174,7 @@ export class GatewaySocket {
     }
 
     this.reconnectDelay = RECONNECT_BASE_MS;
+    this.pairingDetected = false;
     const gotDeviceToken = !!(hello as { auth?: { deviceToken?: string } }).auth?.deviceToken;
     log(`hello-ok  protocol=${hello.protocol}  newDeviceToken=${gotDeviceToken}`);
     this.opts.onHelloOk(hello);
@@ -231,6 +245,13 @@ export class GatewaySocket {
 
     if (this.stopped) return;
 
+    // If pairing was already detected via the RPC error, don't treat the
+    // subsequent auth-close as a fatal auth failure — just let reconnect run.
+    if (this.pairingDetected) {
+      warn("close after pairing detection — ignoring auth close code");
+      return;
+    }
+
     if (AUTH_CLOSE_CODES.has(code)) {
       const settings = this.opts.getSettings();
       if (settings) this.handleAuthError(settings);
@@ -255,6 +276,15 @@ export class GatewaySocket {
     return { message: String(raw) };
   }
 
+  /** Matches the NOT_PAIRED / PAIRING_REQUIRED error from the gateway. */
+  private isPairingRequired(error: GatewayError): boolean {
+    const raw = error as Record<string, unknown>;
+    if (raw.code === "NOT_PAIRED") return true;
+    if (error.details?.code === "PAIRING_REQUIRED") return true;
+    if (error.message === "pairing required") return true;
+    return false;
+  }
+
   /** Returns true if the error means "stop retrying, credentials are wrong". */
   private isAuthFatal(error: GatewayError): boolean {
     const step = error.details?.recommendedNextStep;
@@ -266,7 +296,9 @@ export class GatewaySocket {
 
   private scheduleReconnect(): void {
     if (this.stopped) return;
-    this.opts.onStateChange(true);
+    if (!this.pairingDetected) {
+      this.opts.onStateChange(true);
+    }
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
       this.connect();

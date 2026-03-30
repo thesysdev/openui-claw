@@ -89,8 +89,11 @@ export function useGateway({ onAuthFailed }: { onAuthFailed: () => void }) {
       );
     }
     log("connected ✓");
+    setPairingDeviceId(null);
     setConnectionState(ConnectionState.CONNECTED);
   }, []);
+
+  const [pairingDeviceId, setPairingDeviceId] = useState<string | null>(null);
 
   const socketRef = useRef<GatewaySocket | null>(null);
   const knownAgentIdsRef = useRef<Set<string>>(new Set());
@@ -122,15 +125,22 @@ export function useGateway({ onAuthFailed }: { onAuthFailed: () => void }) {
           onAuthFailedRef.current();
         }
       },
+      onPairingRequired: (deviceId: string) => {
+        log(`pairing required — device ${deviceId}`);
+        setPairingDeviceId(deviceId);
+        setConnectionState(ConnectionState.PAIRING);
+      },
       onEvent: handleEvent,
       onStateChange: (connecting: boolean) => {
         log(`state → ${connecting ? "CONNECTING" : "DISCONNECTED"}`);
         setConnectionState(
-          connecting ? ConnectionState.CONNECTING : ConnectionState.DISCONNECTED
+          connecting
+            ? ConnectionState.CONNECTING
+            : ConnectionState.DISCONNECTED,
         );
       },
     }),
-    [handleEvent, handleHelloOk]
+    [handleEvent, handleHelloOk],
   );
 
   useEffect(() => {
@@ -421,6 +431,7 @@ export function useGateway({ onAuthFailed }: { onAuthFailed: () => void }) {
 
   return {
     connectionState,
+    pairingDeviceId,
     settings,
     processMessage,
     fetchThreadList,

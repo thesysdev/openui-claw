@@ -11,6 +11,9 @@ import { homedir } from "os";
 import { join } from "path";
 import { execSync } from "child_process";
 
+const PLUGIN_DIR = join(homedir(), ".openclaw", "openui", "claw-plugin");
+const PLUGIN_REPO = "thesysdev/openui/packages/claw-plugin";
+
 const PREFIX = "[openui-claw]";
 const DEFAULT_API_BASE = "https://app.generativeui.cloud";
 const DEFAULT_DOMAIN = "generativeui.cloud";
@@ -142,6 +145,12 @@ function installCloudflared() {
   const platform = process.platform;
 
   if (platform === "darwin") {
+    if (!commandExists("brew")) {
+      fatal(
+        "Homebrew is required to install cloudflared on macOS.\n" +
+          "           Install it from https://brew.sh then re-run this script.",
+      );
+    }
     log("    Installing via Homebrew...");
     execSync("brew install cloudflared", { stdio: "inherit" });
   } else if (platform === "linux") {
@@ -167,19 +176,39 @@ function installCloudflared() {
 
 function installCloudflaredService(tunnelToken) {
   log("==> Installing cloudflared service...");
-  execSync(`sudo cloudflared service install ${tunnelToken}`, {
+  execSync(`sudo cloudflared service install "${tunnelToken}"`, {
     stdio: "inherit",
   });
   log("    Service installed.");
 }
 
-const PLUGIN_DIR = join(homedir(), ".openclaw", "openui", "claw-plugin");
+function downloadPlugin() {
+  log("==> Downloading OpenUI Claw plugin...");
+  log(`    From: ${PLUGIN_REPO}`);
+
+  mkdirSync(join(homedir(), ".openclaw", "openui"), { recursive: true });
+
+  if (existsSync(PLUGIN_DIR)) {
+    execSync(`rm -rf "${PLUGIN_DIR}"`, { stdio: "inherit" });
+  }
+
+  try {
+    execSync(`npx -y degit ${PLUGIN_REPO} "${PLUGIN_DIR}"`, {
+      stdio: "inherit",
+    });
+  } catch {
+    fatal(
+      `Failed to download plugin from ${PLUGIN_REPO}. Check your network connection and that npx is available.`,
+    );
+  }
+  log(`    Downloaded to ${PLUGIN_DIR}`);
+}
 
 function installPlugin() {
   log("==> Installing OpenUI Claw plugin...");
 
   try {
-    execSync("openclaw plugins install @openuidev/openui-claw-plugin", {
+    execSync(`openclaw plugins install "${PLUGIN_DIR}"`, {
       stdio: "inherit",
     });
     log("    Plugin installed.");
@@ -343,6 +372,12 @@ function removeSavedConfig() {
 }
 
 async function install(args) {
+  if (!commandExists("openclaw")) {
+    fatal(
+      "OpenClaw CLI not found. Install it first: https://openclaw.com/docs/install",
+    );
+  }
+
   const { port, token } = readOpenClawConfig();
 
   let tunnelId, tunnelToken, gatewayUrl;
@@ -361,6 +396,7 @@ async function install(args) {
   }
 
   addAllowedOrigin(args.apiBase);
+  downloadPlugin();
   installPlugin();
   restartGateway();
   installCloudflared();
@@ -374,6 +410,9 @@ async function install(args) {
   console.log();
   console.log(`    ${setupUrl}`);
   console.log();
+  log(
+    "    The UI will show a pairing command — run it on this machine to approve the device.",
+  );
 }
 
 async function uninstall(args) {

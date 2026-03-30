@@ -54,6 +54,7 @@ export interface RequestFrame {
 export interface GatewayErrorDetails {
   code?: string;
   reason?: string;
+  requestId?: string;
   canRetryWithDeviceToken?: boolean;
   /** retry_with_device_token | update_auth_configuration | update_auth_credentials | wait_then_retry | review_auth_configuration */
   recommendedNextStep?: string;
@@ -226,6 +227,7 @@ export const ConnectionState = {
   CONNECTING: "CONNECTING",
   CONNECTED: "CONNECTED",
   AUTH_FAILED: "AUTH_FAILED",
+  PAIRING: "PAIRING",
 } as const;
 
 export type ConnectionState = (typeof ConnectionState)[keyof typeof ConnectionState];

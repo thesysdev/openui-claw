@@ -5,6 +5,7 @@ import { ChatProvider, useThreadList } from "@openuidev/react-headless";
 import type { Message, Thread } from "@openuidev/react-headless";
 import { Shell, ThemeProvider } from "@openuidev/react-ui";
 import { useGateway, resolveChatSessionKey } from "@/lib/chat/useGateway";
+import { ConnectionState } from "@/lib/gateway/types";
 import { openClawAdapter } from "@/lib/chat/openClawAdapter";
 import { AssistantMessage } from "@/components/rendering/AssistantMessage";
 import { UserMessage } from "@/components/rendering/UserMessage";
@@ -70,6 +71,7 @@ export default function ChatApp() {
 
   const {
     connectionState,
+    pairingDeviceId,
     settings,
     processMessage,
     fetchThreadList,
@@ -149,6 +151,44 @@ export default function ChatApp() {
             setSettingsOpen(false);
           }}
         />
+
+        {connectionState === ConnectionState.PAIRING && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+            <div className="bg-white dark:bg-zinc-900 rounded-xl shadow-2xl p-6 max-w-md w-full mx-4 text-center">
+              <div className="w-10 h-10 mx-auto mb-4 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
+                <svg className="w-5 h-5 text-amber-600 dark:text-amber-400" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z" />
+                </svg>
+              </div>
+              <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 mb-2">
+                Device Pairing Required
+              </h2>
+              <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-4">
+                This device needs to be approved on your server before it can connect.
+              </p>
+              <div className="relative group">
+                <code className="block px-3 py-2 pr-10 bg-zinc-100 dark:bg-zinc-800 rounded text-xs font-mono text-zinc-700 dark:text-zinc-300 break-all select-all text-left">
+                  openclaw devices approve {pairingDeviceId}
+                </code>
+                <button
+                  type="button"
+                  className="absolute top-1.5 right-1.5 p-1 rounded hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors"
+                  onClick={() => {
+                    navigator.clipboard.writeText(`openclaw devices approve ${pairingDeviceId}`);
+                  }}
+                  title="Copy to clipboard"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15.666 3.888A2.25 2.25 0 0 0 13.5 2.25h-3c-1.03 0-1.9.693-2.166 1.638m7.332 0c.055.194.084.4.084.612v0a.75.75 0 0 1-.75.75H9.75a.75.75 0 0 1-.75-.75v0c0-.212.03-.418.084-.612m7.332 0c.646.049 1.288.11 1.927.184 1.1.128 1.907 1.077 1.907 2.185V19.5a2.25 2.25 0 0 1-2.25 2.25H6.75A2.25 2.25 0 0 1 4.5 19.5V6.257c0-1.108.806-2.057 1.907-2.185a48.208 48.208 0 0 1 1.927-.184" />
+                  </svg>
+                </button>
+              </div>
+              <p className="text-xs text-zinc-400 dark:text-zinc-500 mt-4">
+                Retrying automatically&hellip;
+              </p>
+            </div>
+          </div>
+        )}
       </ChatProvider>
     </ThemeProvider>
   );

@@ -28,6 +28,10 @@ const STATES: Record<
     label: "Auth failed — click to reconfigure",
     dot: "bg-red-500",
   },
+  [ConnectionState.PAIRING]: {
+    label: "Device pairing required",
+    dot: "bg-amber-400 animate-pulse",
+  },
 };
 
 export function ConnectionStatus({ state, onSettingsClick }: Props) {
