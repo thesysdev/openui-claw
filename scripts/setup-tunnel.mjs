@@ -190,6 +190,73 @@ function installPlugin() {
   }
 }
 
+const OPENCLAW_CONFIG_PATH = join(homedir(), ".openclaw", "openclaw.json");
+
+function restartGateway() {
+  log("==> Restarting OpenClaw gateway...");
+  try {
+    execSync("openclaw restart", { stdio: "inherit" });
+    log("    Gateway restarted.");
+  } catch {
+    log(
+      "    WARNING: Could not restart gateway automatically. Please run: openclaw restart",
+    );
+  }
+}
+
+function addAllowedOrigin(apiBase) {
+  log("==> Configuring gateway allowed origins...");
+
+  if (!existsSync(OPENCLAW_CONFIG_PATH)) {
+    log("    WARNING: OpenClaw config not found, skipping.");
+    return;
+  }
+
+  const config = JSON.parse(readFileSync(OPENCLAW_CONFIG_PATH, "utf8"));
+  const origin = new URL(apiBase).origin;
+
+  if (!config.gateway) config.gateway = {};
+  if (!config.gateway.controlUi) config.gateway.controlUi = {};
+
+  const origins = Array.isArray(config.gateway.controlUi.allowedOrigins)
+    ? config.gateway.controlUi.allowedOrigins
+    : [];
+
+  if (origins.includes(origin)) {
+    log(`    ${origin} already allowed, skipping.`);
+    return;
+  }
+
+  origins.push(origin);
+  config.gateway.controlUi.allowedOrigins = origins;
+
+  writeFileSync(OPENCLAW_CONFIG_PATH, JSON.stringify(config, null, 4) + "\n");
+  log(`    Added ${origin} to gateway.controlUi.allowedOrigins`);
+}
+
+function removeAllowedOrigin(apiBase) {
+  log("==> Removing gateway allowed origin...");
+
+  if (!existsSync(OPENCLAW_CONFIG_PATH)) {
+    log("    WARNING: OpenClaw config not found, skipping.");
+    return;
+  }
+
+  const config = JSON.parse(readFileSync(OPENCLAW_CONFIG_PATH, "utf8"));
+  const origin = new URL(apiBase).origin;
+  const origins = config.gateway?.controlUi?.allowedOrigins;
+
+  if (!Array.isArray(origins) || !origins.includes(origin)) {
+    log(`    ${origin} not in allowedOrigins, skipping.`);
+    return;
+  }
+
+  config.gateway.controlUi.allowedOrigins = origins.filter((o) => o !== origin);
+
+  writeFileSync(OPENCLAW_CONFIG_PATH, JSON.stringify(config, null, 4) + "\n");
+  log(`    Removed ${origin} from gateway.controlUi.allowedOrigins`);
+}
+
 function saveConfig({ tunnelId, gatewayUrl, apiBase }) {
   log("==> Saving config...");
 
@@ -252,7 +319,7 @@ function removePlugin() {
   log("==> Removing OpenUI Claw plugin...");
 
   try {
-    execSync("openclaw plugins uninstall openui-claw", { stdio: "inherit" });
+    execSync("openclaw plugins uninstall openui-claw-plugin", { stdio: "inherit" });
     log("    Plugin unregistered.");
   } catch {
     log("    WARNING: Plugin unregister failed (may not have been installed).");
@@ -293,9 +360,11 @@ async function install(args) {
     ));
   }
 
+  addAllowedOrigin(args.apiBase);
+  installPlugin();
+  restartGateway();
   installCloudflared();
   installCloudflaredService(tunnelToken);
-  installPlugin();
   saveConfig({ tunnelId, gatewayUrl, apiBase: args.apiBase });
 
   const setupUrl = `${args.apiBase}/setup#gateway=${encodeURIComponent(gatewayUrl)}&token=${encodeURIComponent(token)}`;
@@ -317,6 +386,8 @@ async function uninstall(args) {
   uninstallCloudflaredService();
   await deprovision(apiBase, tunnelId);
   removePlugin();
+  removeAllowedOrigin(apiBase);
+  restartGateway();
   removeSavedConfig();
 
   console.log();
