@@ -33,10 +33,10 @@ export async function POST(req: Request) {
     const tunnelName = `claw-${Date.now()}`;
 
     const { tunnelId } = await createTunnel(tunnelName);
-    const hostname = `${tunnelId}.gw.${domain}`;
+    const hostname = `${tunnelId}-gw.${domain}`;
 
     await configureTunnelIngress(tunnelId, hostname, port);
-    await createDnsCname(`${tunnelId}.gw`, tunnelId);
+    await createDnsCname(`${tunnelId}-gw`, tunnelId);
     const tunnelToken = await getTunnelToken(tunnelId);
 
     const gatewayUrl = `wss://${hostname}`;
@@ -64,7 +64,7 @@ export async function DELETE(req: Request) {
     }
 
     const domain = getDomain();
-    const dnsName = `${tunnelId}.gw.${domain}`;
+    const dnsName = `${tunnelId}-gw.${domain}`;
 
     const dnsRecord = await findDnsRecord(dnsName);
     if (dnsRecord) {

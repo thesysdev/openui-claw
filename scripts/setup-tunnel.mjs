@@ -284,7 +284,7 @@ async function install(args) {
     log("==> Using provided tunnel credentials (skipping provisioning)...");
     tunnelId = args.tunnelId;
     tunnelToken = args.tunnelToken;
-    gatewayUrl = `wss://${tunnelId}.gw.${DEFAULT_DOMAIN}`;
+    gatewayUrl = `wss://${tunnelId}-gw.${DEFAULT_DOMAIN}`;
     log(`    Tunnel ID: ${tunnelId}`);
   } else {
     ({ tunnelId, tunnelToken, gatewayUrl } = await provision(
