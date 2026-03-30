@@ -3,20 +3,25 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --port 18790",
     "build": "next build",
-    "start": "next start"
+    "dev": "next dev --port 18790",
+    "start": "next start --port 18790",
+    "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview --port 18790",
+    "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
+    "upload": "opennextjs-cloudflare build && opennextjs-cloudflare upload",
+    "cf-typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts"
   },
   "dependencies": {
     "@noble/ed25519": "^2.3.0",
     "@noble/hashes": "^1.8.0",
+    "@opennextjs/cloudflare": "^1.18.0",
     "@openuidev/react-headless": "^0.7.11",
     "@openuidev/react-lang": "^0.1.4",
     "@openuidev/react-ui": "^0.9.20",
     "@radix-ui/react-dropdown-menu": "^2.1.16",
     "cloudflare": "^5.2.0",
     "lucide-react": "^1.7.0",
-    "next": "^15.5.14",
+    "next": "^16",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "react-markdown": "^9.1.0",
@@ -30,6 +35,7 @@
     "autoprefixer": "^10.4.27",
     "postcss": "^8.5.8",
     "tailwindcss": "^3.4.19",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "wrangler": "^4.78.0"
   }
 }

@@ -7,7 +7,7 @@ function env(key: string): string {
 }
 
 function getClient(): Cloudflare {
-  return new Cloudflare({ apiToken: env("CF_API_TOKEN") });
+  return new Cloudflare({ apiToken: env("CF_TUNNELS_API_TOKEN") });
 }
 
 // ── Tunnel operations ───────────────────────────────────────────────────────
@@ -17,7 +17,7 @@ export async function createTunnel(
 ): Promise<{ tunnelId: string }> {
   const cf = getClient();
   const tunnel = await cf.zeroTrust.tunnels.cloudflared.create({
-    account_id: env("CF_ACCOUNT_ID"),
+    account_id: env("CF_TUNNELS_ACCOUNT_ID"),
     name,
     tunnel_secret: Buffer.from(
       crypto.getRandomValues(new Uint8Array(32)),
@@ -33,7 +33,7 @@ export async function configureTunnelIngress(
 ): Promise<void> {
   const cf = getClient();
   await cf.zeroTrust.tunnels.cloudflared.configurations.update(tunnelId, {
-    account_id: env("CF_ACCOUNT_ID"),
+    account_id: env("CF_TUNNELS_ACCOUNT_ID"),
     config: {
       ingress: [
         { hostname, service: `http://localhost:${localPort}` },
@@ -46,7 +46,7 @@ export async function configureTunnelIngress(
 export async function getTunnelToken(tunnelId: string): Promise<string> {
   const cf = getClient();
   const result = await cf.zeroTrust.tunnels.cloudflared.token.get(tunnelId, {
-    account_id: env("CF_ACCOUNT_ID"),
+    account_id: env("CF_TUNNELS_ACCOUNT_ID"),
   });
   return result as unknown as string;
 }
@@ -56,7 +56,7 @@ export async function findTunnelByName(
 ): Promise<{ tunnelId: string } | null> {
   const cf = getClient();
   const tunnels = await cf.zeroTrust.tunnels.cloudflared.list({
-    account_id: env("CF_ACCOUNT_ID"),
+    account_id: env("CF_TUNNELS_ACCOUNT_ID"),
     name,
     is_deleted: false,
   });
@@ -69,7 +69,7 @@ export async function findTunnelByName(
 export async function deleteTunnel(tunnelId: string): Promise<void> {
   const cf = getClient();
   await cf.zeroTrust.tunnels.cloudflared.delete(tunnelId, {
-    account_id: env("CF_ACCOUNT_ID"),
+    account_id: env("CF_TUNNELS_ACCOUNT_ID"),
   });
 }
 
@@ -81,7 +81,7 @@ export async function createDnsCname(
 ): Promise<{ dnsRecordId: string }> {
   const cf = getClient();
   const record = await cf.dns.records.create({
-    zone_id: env("CF_ZONE_ID"),
+    zone_id: env("CF_TUNNELS_ZONE_ID"),
     type: "CNAME",
     name: subdomain,
     content: `${tunnelId}.cfargotunnel.com`,
@@ -96,7 +96,7 @@ export async function findDnsRecord(
 ): Promise<{ recordId: string } | null> {
   const cf = getClient();
   const records = await cf.dns.records.list({
-    zone_id: env("CF_ZONE_ID"),
+    zone_id: env("CF_TUNNELS_ZONE_ID"),
     name: { exact: fqdn },
     type: "CNAME",
   });
@@ -109,6 +109,6 @@ export async function findDnsRecord(
 export async function deleteDnsRecord(recordId: string): Promise<void> {
   const cf = getClient();
   await cf.dns.records.delete(recordId, {
-    zone_id: env("CF_ZONE_ID"),
+    zone_id: env("CF_TUNNELS_ZONE_ID"),
   });
 }
