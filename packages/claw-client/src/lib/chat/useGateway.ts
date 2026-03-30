@@ -15,11 +15,13 @@ import { getOrCreateDeviceIdentity } from "@/lib/gateway/device-identity";
 import { EventType } from "@openuidev/react-headless";
 import { createOpenClawAGUIMapper } from "./openclaw-agui-mapper";
 import { mergeHistoryMessages } from "./history-merger";
+import { normalizeSessionPatch } from "@/lib/models";
 import type {
   AgentsListResult,
   ClawThreadListItem,
   ModelChoice,
   ModelsListResult,
+  SessionGetResult,
   SessionRow,
   SessionsListResult,
 } from "@/types/gateway-responses";
@@ -80,6 +82,17 @@ export function useGateway({ onAuthFailed }: { onAuthFailed: () => void }) {
     }
   }, []);
 
+  const refreshModels = useCallback(async () => {
+    try {
+      const modelsResult =
+        await socketRef.current?.request<ModelsListResult>("models.list");
+      setAvailableModels(modelsResult?.models ?? []);
+      log(`models.list → ${modelsResult?.models?.length ?? 0} model(s)`);
+    } catch (e) {
+      warn("models.list failed:", e);
+    }
+  }, []);
+
   const handleHelloOk = useCallback((hello: HelloOk) => {
     if (hello.auth?.deviceToken) {
       log("saving new deviceToken from hello-ok");
@@ -91,7 +104,8 @@ export function useGateway({ onAuthFailed }: { onAuthFailed: () => void }) {
     log("connected ✓");
     setPairingDeviceId(null);
     setConnectionState(ConnectionState.CONNECTED);
-  }, []);
+    void refreshModels();
+  }, [refreshModels]);
 
   const [pairingDeviceId, setPairingDeviceId] = useState<string | null>(null);
 
@@ -166,20 +180,13 @@ export function useGateway({ onAuthFailed }: { onAuthFailed: () => void }) {
   // ── Session metadata helpers ─────────────────────────────────────────────
 
   const refreshSessionMeta = useCallback((sessionKey: string) => {
-    const agentId = sessionKey.split(":")[1] ?? "main";
     socketRef.current
-      ?.request<SessionsListResult>("sessions.list", { agentId, limit: 50 })
+      ?.request<SessionGetResult>("sessions.get", { key: sessionKey })
       .then((result) => {
-        const rows = result?.sessions ?? [];
-        setSessionMeta((prev) => {
-          const next = new Map(prev);
-          for (const row of rows) {
-            next.set(row.key, row);
-          }
-          return next;
-        });
+        if (!result?.session) return;
+        setSessionMeta((prev) => new Map(prev).set(sessionKey, result.session));
       })
-      .catch((e) => warn("refreshSessionMeta failed:", e));
+      .catch((e) => warn("sessions.get failed:", e));
   }, []);
 
   const patchSession = useCallback(
@@ -187,10 +194,11 @@ export function useGateway({ onAuthFailed }: { onAuthFailed: () => void }) {
       log("patchSession", sessionKey, patch);
       try {
         await socketRef.current?.request("sessions.patch", { key: sessionKey, ...patch });
+        const localPatch = normalizeSessionPatch(patch);
         setSessionMeta((prev) => {
           const next = new Map(prev);
           const existing = next.get(sessionKey);
-          next.set(sessionKey, { ...existing, key: sessionKey, ...patch } as SessionRow);
+          next.set(sessionKey, { ...existing, key: sessionKey, ...localPatch } as SessionRow);
           return next;
         });
         return true;
@@ -307,15 +315,6 @@ export function useGateway({ onAuthFailed }: { onAuthFailed: () => void }) {
       warn("agents.list failed:", e);
     }
 
-    // Fetch available models for the model selector
-    try {
-      const modelsResult = await socketRef.current?.request<ModelsListResult>("models.list");
-      setAvailableModels(modelsResult?.models ?? []);
-      log(`models.list → ${modelsResult?.models?.length ?? 0} model(s)`);
-    } catch (e) {
-      warn("models.list failed:", e);
-    }
-
     if (!agents.length) {
       knownAgentIdsRef.current = new Set(["main"]);
       return [{ id: "main", title: "Agent", createdAt: Date.now(), clawKind: "main", clawAgentId: "main" }];
@@ -346,7 +345,7 @@ export function useGateway({ onAuthFailed }: { onAuthFailed: () => void }) {
           seen.add(row.key);
           items.push({
             id: row.key,
-            title: row.displayName || row.derivedTitle || row.key,
+            title: row.label || row.displayName || row.derivedTitle || row.key,
             createdAt: row.updatedAt ?? Date.now(),
             clawKind: "extra",
             clawAgentId: a.id,

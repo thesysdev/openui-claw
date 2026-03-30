@@ -3,12 +3,18 @@
 
 export interface SessionRow {
   key: string;
+  label?: string | null;
   displayName?: string | null;
   derivedTitle?: string | null;
   updatedAt?: number | null;
   thinkingLevel?: string | null;
   model?: string | null;
   modelProvider?: string | null;
+  totalTokens?: number | null;
+  totalTokensFresh?: boolean | null;
+  contextTokens?: number | null;
+  inputTokens?: number | null;
+  outputTokens?: number | null;
 }
 
 export interface ModelChoice {
@@ -25,6 +31,10 @@ export interface ModelsListResult {
 
 export interface SessionsListResult {
   sessions: SessionRow[];
+}
+
+export interface SessionGetResult {
+  session: SessionRow;
 }
 
 export interface AgentIdentity {

@@ -126,6 +126,16 @@ export interface HelloOk {
   features?: Record<string, unknown>;
 }
 
+// Normalized token usage returned on chat.final events.
+// Field names are normalized by the gateway (see normalizeUsage in OpenClaw source).
+export interface ChatUsage {
+  input?: number;
+  output?: number;
+  cacheRead?: number;
+  cacheWrite?: number;
+  total?: number;
+}
+
 // event:chat payload — run lifecycle
 export interface ChatEvent {
   runId: string;
@@ -134,7 +144,7 @@ export interface ChatEvent {
   state: "delta" | "final" | "aborted" | "error";
   message?: unknown;
   errorMessage?: string;
-  usage?: unknown;
+  usage?: ChatUsage;
   stopReason?: string;
 }
 

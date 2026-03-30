@@ -3,6 +3,7 @@
 import { useCallback } from "react";
 import { Brain, Cpu } from "lucide-react";
 import type { ModelChoice, SessionRow } from "@/types/gateway-responses";
+import { qualifyModel } from "@/lib/models";
 
 const THINKING_LEVELS = [
   { value: "", label: "Default" },
@@ -13,6 +14,10 @@ const THINKING_LEVELS = [
   { value: "high", label: "High" },
   { value: "xhigh", label: "Extra High" },
 ] as const;
+
+function formatK(n: number): string {
+  return n >= 1000 ? `${Math.round(n / 100) / 10}k` : String(n);
+}
 
 interface Props {
   meta: SessionRow | undefined;
@@ -25,7 +30,23 @@ export function ComposerToolbar({ meta, models, onPatch, sessionKey }: Props) {
   if (!sessionKey) return null;
 
   const currentThinking = meta?.thinkingLevel ?? "";
-  const currentModel = meta?.model ?? "";
+
+  const currentModelValue = meta?.model
+    ? qualifyModel(meta.model, meta.modelProvider ?? "")
+    : "";
+
+  const usedTokens = meta?.totalTokens ?? null;
+  const contextTokens = meta?.contextTokens ?? null;
+
+  const usagePct = usedTokens !== null && contextTokens
+    ? Math.min(100, (usedTokens / contextTokens) * 100)
+    : null;
+
+  const usageColor =
+    usagePct === null ? "" :
+    usagePct >= 90 ? "#ef4444" :
+    usagePct >= 70 ? "#f59e0b" :
+    "#22c55e";
 
   const handleThinkingChange = useCallback(
     (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -36,7 +57,8 @@ export function ComposerToolbar({ meta, models, onPatch, sessionKey }: Props) {
 
   const handleModelChange = useCallback(
     (e: React.ChangeEvent<HTMLSelectElement>) => {
-      onPatch(sessionKey, { model: e.target.value || null });
+      const nextModelId = e.target.value;
+      onPatch(sessionKey, { model: nextModelId || null });
     },
     [onPatch, sessionKey]
   );
@@ -63,19 +85,48 @@ export function ComposerToolbar({ meta, models, onPatch, sessionKey }: Props) {
           <div className="composer-toolbar__select-group">
             <Cpu className="composer-toolbar__icon" />
             <select
-              value={currentModel}
+              value={currentModelValue}
               onChange={handleModelChange}
               className="composer-toolbar__select composer-toolbar__select--model"
             >
               <option value="">Default</option>
               {models.map((m) => (
-                <option key={m.id} value={m.id}>
+                <option key={qualifyModel(m.id, m.provider)} value={qualifyModel(m.id, m.provider)}>
                   {m.name} ({m.provider})
                 </option>
               ))}
             </select>
           </div>
         </div>
+
+        {usedTokens !== null && contextTokens !== null && (() => {
+          const r = 7;
+          const circ = 2 * Math.PI * r;
+          const dash = ((usagePct ?? 0) / 100) * circ;
+          return (
+            <div
+              className="composer-toolbar__context-usage"
+              title={`${usedTokens.toLocaleString()} / ${contextTokens.toLocaleString()} tokens (${Math.round(usagePct!)}%)`}
+            >
+              <svg width="18" height="18" viewBox="0 0 18 18" className="composer-toolbar__context-ring">
+                <circle cx="9" cy="9" r={r} fill="none" stroke="var(--openui-border-default, #e4e4e7)" strokeWidth="2" />
+                <circle
+                  cx="9" cy="9" r={r}
+                  fill="none"
+                  stroke={usageColor}
+                  strokeWidth="2"
+                  strokeDasharray={`${dash} ${circ}`}
+                  strokeLinecap="round"
+                  transform="rotate(-90 9 9)"
+                  style={{ transition: "stroke-dasharray 0.3s ease, stroke 0.3s ease" }}
+                />
+              </svg>
+              <span className="composer-toolbar__context-label">
+                {formatK(usedTokens)}/{formatK(contextTokens)}
+              </span>
+            </div>
+          );
+        })()}
       </div>
     </div>
   );

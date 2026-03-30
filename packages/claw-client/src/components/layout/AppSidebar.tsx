@@ -64,6 +64,34 @@ export function AppSidebar({
     useThreadList();
   const threadsCast = threads as ClawThread[];
 
+  const [titleOverrides, setTitleOverrides] = useState<Map<string, string>>(() => new Map());
+  const [deletedIds, setDeletedIds] = useState<Set<string>>(() => new Set());
+
+  const displayThreads = useMemo<ClawThread[]>(() =>
+    threadsCast
+      .filter((t) => !deletedIds.has(t.id))
+      .map((t) => {
+        const override = titleOverrides.get(t.id);
+        return override ? { ...t, title: override } : t;
+      }),
+    [threadsCast, deletedIds, titleOverrides]
+  );
+
+  // Clear stale local overrides/deletions when server data refreshes
+  useEffect(() => {
+    if (isLoadingThreads) return;
+    const serverIds = new Set(threadsCast.map((t) => t.id));
+    setTitleOverrides((prev) => {
+      const next = new Map(prev);
+      for (const id of next.keys()) if (!serverIds.has(id)) next.delete(id);
+      return next.size === prev.size ? prev : next;
+    });
+    setDeletedIds((prev) => {
+      const next = new Set([...prev].filter((id) => serverIds.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [isLoadingThreads, threadsCast]);
+
   const [expandedByAgent, setExpandedByAgent] = useState<Record<string, boolean>>({});
   const [creatingForAgent, setCreatingForAgent] = useState<string | null>(null);
   const [editingThreadId, setEditingThreadId] = useState<string | null>(null);
@@ -80,7 +108,7 @@ export function AppSidebar({
     }
   }, [connectionState, loadThreads]);
 
-  const groups = useMemo(() => buildAgentGroups(threadsCast), [threadsCast]);
+  const groups = useMemo(() => buildAgentGroups(displayThreads), [displayThreads]);
 
   useEffect(() => {
     setExpandedByAgent((prev) => {
@@ -95,20 +123,20 @@ export function AppSidebar({
   }, [groups]);
 
   useEffect(() => {
-    if (!isLoadingThreads && threads.length > 0 && !selectedThreadId) {
-      selectThread(threads[0].id);
+    if (!isLoadingThreads && displayThreads.length > 0 && !selectedThreadId) {
+      selectThread(displayThreads[0].id);
     }
-  }, [isLoadingThreads, threads, selectedThreadId, selectThread]);
+  }, [isLoadingThreads, displayThreads, selectedThreadId, selectThread]);
 
   useEffect(() => {
     if (!isLoadingThreads && pendingSelectRef.current) {
       const id = pendingSelectRef.current;
-      if (threads.some((t) => t.id === id)) {
+      if (displayThreads.some((t) => t.id === id)) {
         pendingSelectRef.current = null;
         selectThread(id);
       }
     }
-  }, [isLoadingThreads, threads, selectThread]);
+  }, [isLoadingThreads, displayThreads, selectThread]);
 
   const runAfterRefresh = useCallback(
     (selectId: string) => {
@@ -156,7 +184,10 @@ export function AppSidebar({
       setRenamingThreadId(threadId);
       try {
         const ok = await renameSession(threadId, trimmed);
-        if (ok) loadThreads();
+        if (ok) {
+          setTitleOverrides((prev) => new Map(prev).set(threadId, trimmed));
+          loadThreads();
+        }
       } finally {
         setRenamingThreadId(null);
       }
@@ -169,12 +200,19 @@ export function AppSidebar({
       setDeletingThreadId(threadId);
       try {
         const ok = await deleteSession(threadId);
-        if (ok) loadThreads();
+        if (ok) {
+          setDeletedIds((prev) => new Set(prev).add(threadId));
+          if (selectedThreadId === threadId) {
+            const next = displayThreads.find((t) => t.id !== threadId);
+            if (next) selectThread(next.id);
+          }
+          loadThreads();
+        }
       } finally {
         setDeletingThreadId(null);
       }
     },
-    [deleteSession, loadThreads]
+    [deleteSession, displayThreads, selectedThreadId, selectThread, loadThreads]
   );
 
   return (
@@ -183,7 +221,7 @@ export function AppSidebar({
       <Shell.SidebarSeparator />
 
       <Shell.SidebarContent>
-        {isLoadingThreads && threads.length === 0 && (
+        {isLoadingThreads && displayThreads.length === 0 && (
           <p className="px-3 py-2 text-xs text-zinc-400">Loading agents…</p>
         )}
         {groups.map((g) => {

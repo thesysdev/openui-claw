@@ -85,3 +85,19 @@ body {
 .composer-toolbar__select--model {
   max-width: 180px;
 }
+
+.composer-toolbar__context-usage {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.composer-toolbar__context-ring {
+  flex-shrink: 0;
+}
+
+.composer-toolbar__context-label {
+  font: var(--openui-text-label-sm, 11px/1.2 system-ui);
+  color: var(--openui-text-neutral-secondary, #71717a);
+  white-space: nowrap;
+}
