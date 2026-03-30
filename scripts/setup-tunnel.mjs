@@ -83,16 +83,35 @@ function readOpenClawConfig() {
 async function provision(apiBase, port) {
   log("==> Provisioning tunnel...");
 
-  const res = await fetch(`${apiBase}/api/provision`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ port }),
-  });
+  const url = `${apiBase}/api/provision`;
+  let res;
+  try {
+    res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ port }),
+    });
+  } catch (err) {
+    fatal(
+      `Could not reach ${url} — ${err.cause?.code || err.message}. ` +
+        "Check your network/firewall and that the API is running.",
+    );
+  }
 
-  const body = await res.json();
+  let body;
+  try {
+    body = await res.json();
+  } catch {
+    const text = await res.text().catch(() => "<unreadable>");
+    fatal(
+      `Provisioning API returned non-JSON (HTTP ${res.status}). Body: ${text.slice(0, 200)}`,
+    );
+  }
 
   if (!res.ok) {
-    fatal(`Provisioning failed: ${body.error || res.statusText}`);
+    fatal(
+      `Provisioning failed (HTTP ${res.status}): ${body.error || res.statusText}`,
+    );
   }
 
   log(`    Tunnel ID: ${body.tunnelId}`);

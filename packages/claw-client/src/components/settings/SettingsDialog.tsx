@@ -3,9 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { saveSettings } from "@/lib/storage";
 import type { Settings } from "@/lib/storage";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@openuidev/react-ui";
 import { AutomatedSetup } from "./AutomatedSetup";
-
-type Tab = "manual" | "automated";
 
 interface Props {
   open: boolean;
@@ -17,7 +16,6 @@ interface Props {
 export function SettingsDialog({ open, currentSettings, onClose, onSave }: Props) {
   const [gatewayUrl, setGatewayUrl] = useState(currentSettings?.gatewayUrl ?? "");
   const [token, setToken] = useState(currentSettings?.token ?? "");
-  const [tab, setTab] = useState<Tab>("manual");
   const dialogRef = useRef<HTMLDialogElement>(null);
 
   useEffect(() => {
@@ -48,13 +46,6 @@ export function SettingsDialog({ open, currentSettings, onClose, onSave }: Props
     onClose();
   };
 
-  const tabClass = (t: Tab) =>
-    `flex-1 px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
-      tab === t
-        ? "bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900"
-        : "text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800"
-    }`;
-
   return (
     <dialog
       ref={dialogRef}
@@ -63,17 +54,13 @@ export function SettingsDialog({ open, currentSettings, onClose, onSave }: Props
     >
       <h2 className="text-lg font-semibold mb-3">Gateway Settings</h2>
 
-      <div className="flex gap-1 p-1 mb-4 rounded-lg bg-zinc-100 dark:bg-zinc-800">
-        <button type="button" className={tabClass("manual")} onClick={() => setTab("manual")}>
-          Manual
-        </button>
-        <button type="button" className={tabClass("automated")} onClick={() => setTab("automated")}>
-          Automated
-        </button>
-      </div>
+      <Tabs defaultValue="automated">
+        <TabsList className="mb-4">
+          <TabsTrigger value="automated" text="Automated" />
+          <TabsTrigger value="manual" text="Manual" />
+        </TabsList>
 
-      {tab === "manual" ? (
-        <>
+        <TabsContent value="manual">
           <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-4">
             Connect Claw to your OpenClaw gateway. Run{" "}
             <code className="font-mono bg-zinc-100 dark:bg-zinc-800 px-1 rounded">
@@ -138,9 +125,9 @@ export function SettingsDialog({ open, currentSettings, onClose, onSave }: Props
               </button>
             </div>
           </form>
-        </>
-      ) : (
-        <>
+        </TabsContent>
+
+        <TabsContent value="automated">
           <AutomatedSetup />
           <div className="flex justify-end mt-4">
             <button
@@ -151,8 +138,8 @@ export function SettingsDialog({ open, currentSettings, onClose, onSave }: Props
               Close
             </button>
           </div>
-        </>
-      )}
+        </TabsContent>
+      </Tabs>
     </dialog>
   );
 }
