@@ -12,7 +12,7 @@ import { join } from "path";
 import { execSync } from "child_process";
 
 const PLUGIN_DIR = join(homedir(), ".openclaw", "openui", "claw-plugin");
-const PLUGIN_REPO = "thesysdev/openui/packages/claw-plugin";
+const PLUGIN_REPO = "thesysdev/openui-claw/packages/claw-plugin";
 
 const PREFIX = "[openui-claw]";
 const DEFAULT_API_BASE = "https://app.generativeui.cloud";
@@ -32,6 +32,7 @@ function parseArgs() {
   const args = {
     command: "install",
     apiBase: DEFAULT_API_BASE,
+    apiBaseProvided: false,
     tunnelToken: null,
     tunnelId: null,
   };
@@ -41,6 +42,7 @@ function parseArgs() {
       args.command = "uninstall";
     } else if (arg.startsWith("--api-base=")) {
       args.apiBase = arg.slice("--api-base=".length);
+      args.apiBaseProvided = true;
     } else if (arg.startsWith("--tunnel-token=")) {
       args.tunnelToken = arg.slice("--tunnel-token=".length);
     } else if (arg.startsWith("--tunnel-id=")) {
@@ -176,6 +178,18 @@ function installCloudflared() {
 
 function installCloudflaredService(tunnelToken) {
   log("==> Installing cloudflared service...");
+  if (isCloudflaredServiceInstalled()) {
+    log("    Service already installed, skipping.");
+    return;
+  }
+
+  if (!tunnelToken) {
+    fatal(
+      "Tunnel token is required to install the cloudflared service. " +
+        "Provide --tunnel-token/--tunnel-id or run uninstall first.",
+    );
+  }
+
   execSync(`sudo cloudflared service install "${tunnelToken}"`, {
     stdio: "inherit",
   });
@@ -189,6 +203,7 @@ function downloadPlugin() {
   mkdirSync(join(homedir(), ".openclaw", "openui"), { recursive: true });
 
   if (existsSync(PLUGIN_DIR)) {
+    log("    Removing previous plugin source...");
     execSync(`rm -rf "${PLUGIN_DIR}"`, { stdio: "inherit" });
   }
 
@@ -201,30 +216,61 @@ function downloadPlugin() {
       `Failed to download plugin from ${PLUGIN_REPO}. Check your network connection and that npx is available.`,
     );
   }
+
+  const pluginManifest = join(PLUGIN_DIR, "openclaw.plugin.json");
+  if (!existsSync(pluginManifest)) {
+    fatal(
+      `Plugin download produced an invalid directory at ${PLUGIN_DIR} (missing openclaw.plugin.json). ` +
+        `Repository path may be wrong or inaccessible: ${PLUGIN_REPO}`,
+    );
+  }
+
   log(`    Downloaded to ${PLUGIN_DIR}`);
 }
 
 function installPlugin() {
   log("==> Installing OpenUI Claw plugin...");
-
-  try {
-    execSync(`openclaw plugins install "${PLUGIN_DIR}"`, {
-      stdio: "inherit",
-    });
-    log("    Plugin installed.");
-  } catch (err) {
-    log(
-      `    WARNING: Plugin install failed (${err.message}). You can install it manually later.`,
-    );
+  if (isPluginRegistered()) {
+    log("    Plugin already registered, reinstalling to pick up updates...");
+    try {
+      execSync("openclaw plugins uninstall openui-claw-plugin", {
+        stdio: "inherit",
+      });
+      log("    Existing plugin unregistered.");
+    } catch {
+      log("    WARNING: Could not unregister existing plugin; continuing.");
+    }
   }
+
+  execSync(`openclaw plugins install -l "${PLUGIN_DIR}"`, {
+    stdio: "inherit",
+  });
+  log("    Plugin installed.");
 }
 
 const OPENCLAW_CONFIG_PATH = join(homedir(), ".openclaw", "openclaw.json");
+const CLOUD_FLARED_SERVICE_FILES = [
+  "/Library/LaunchDaemons/com.cloudflare.cloudflared.plist",
+  "/etc/systemd/system/cloudflared.service",
+];
+
+function isCloudflaredServiceInstalled() {
+  return CLOUD_FLARED_SERVICE_FILES.some((path) => existsSync(path));
+}
+
+function isPluginRegistered() {
+  try {
+    const output = execSync("openclaw plugins list", { encoding: "utf8" });
+    return output.includes("openui-claw-plugin");
+  } catch {
+    return false;
+  }
+}
 
 function restartGateway() {
   log("==> Restarting OpenClaw gateway...");
   try {
-    execSync("openclaw restart", { stdio: "inherit" });
+    execSync("openclaw gateway restart", { stdio: "inherit" });
     log("    Gateway restarted.");
   } catch {
     log(
@@ -286,7 +332,7 @@ function removeAllowedOrigin(apiBase) {
   log(`    Removed ${origin} from gateway.controlUi.allowedOrigins`);
 }
 
-function saveConfig({ tunnelId, gatewayUrl, apiBase }) {
+function saveConfig({ tunnelId, gatewayUrl, apiBase, tunnelToken }) {
   log("==> Saving config...");
 
   const dir = join(homedir(), ".openclaw", "openui");
@@ -297,6 +343,7 @@ function saveConfig({ tunnelId, gatewayUrl, apiBase }) {
     tunnelId,
     gatewayUrl,
     apiBase,
+    tunnelToken: tunnelToken || null,
     createdAt: new Date().toISOString(),
   };
 
@@ -308,23 +355,38 @@ const CONFIG_PATH = join(homedir(), ".openclaw", "openui", "config.json");
 
 function readSavedConfig() {
   if (!existsSync(CONFIG_PATH)) {
-    fatal(
-      "No saved config found at ~/.openclaw/openui/config.json. Nothing to uninstall.",
-    );
+    return null;
   }
   return JSON.parse(readFileSync(CONFIG_PATH, "utf8"));
 }
 
 async function deprovision(apiBase, tunnelId) {
   log("==> Removing tunnel and DNS...");
+  if (!tunnelId) {
+    log("    No tunnel ID found, skipping deprovision.");
+    return;
+  }
 
-  const res = await fetch(`${apiBase}/api/provision`, {
-    method: "DELETE",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ tunnelId }),
-  });
+  let res;
+  try {
+    res = await fetch(`${apiBase}/api/provision`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tunnelId }),
+    });
+  } catch (err) {
+    log(
+      `    WARNING: Could not reach deprovision API — ${err.cause?.code || err.message}`,
+    );
+    return;
+  }
 
-  const body = await res.json();
+  let body = {};
+  try {
+    body = await res.json();
+  } catch {
+    // Keep uninstall idempotent even if API returns non-JSON.
+  }
 
   if (!res.ok) {
     log(`    WARNING: Deprovision failed: ${body.error || res.statusText}`);
@@ -379,6 +441,9 @@ async function install(args) {
   }
 
   const { port, token } = readOpenClawConfig();
+  const saved = readSavedConfig();
+  const apiBase =
+    !args.apiBaseProvided && saved?.apiBase ? saved.apiBase : args.apiBase;
 
   let tunnelId, tunnelToken, gatewayUrl;
 
@@ -388,22 +453,37 @@ async function install(args) {
     tunnelToken = args.tunnelToken;
     gatewayUrl = `wss://${tunnelId}-gw.${DEFAULT_DOMAIN}`;
     log(`    Tunnel ID: ${tunnelId}`);
+  } else if (saved?.tunnelId) {
+    log("==> Reusing saved tunnel config (skipping provisioning)...");
+    tunnelId = saved.tunnelId;
+    tunnelToken = saved.tunnelToken || null;
+    gatewayUrl = saved.gatewayUrl || `wss://${tunnelId}-gw.${DEFAULT_DOMAIN}`;
+    log(`    Tunnel ID: ${tunnelId}`);
   } else {
-    ({ tunnelId, tunnelToken, gatewayUrl } = await provision(
-      args.apiBase,
-      port,
-    ));
+    ({ tunnelId, tunnelToken, gatewayUrl } = await provision(apiBase, port));
   }
 
-  addAllowedOrigin(args.apiBase);
+  addAllowedOrigin(apiBase);
   downloadPlugin();
   installPlugin();
   restartGateway();
   installCloudflared();
-  installCloudflaredService(tunnelToken);
-  saveConfig({ tunnelId, gatewayUrl, apiBase: args.apiBase });
+  installCloudflaredService(
+    args.tunnelToken ||
+      (saved?.tunnelId === tunnelId ? saved.tunnelToken : null) ||
+      tunnelToken,
+  );
+  saveConfig({
+    tunnelId,
+    gatewayUrl,
+    apiBase,
+    tunnelToken:
+      args.tunnelToken ||
+      (saved?.tunnelId === tunnelId ? saved.tunnelToken : null) ||
+      tunnelToken,
+  });
 
-  const setupUrl = `${args.apiBase}/setup#gateway=${encodeURIComponent(gatewayUrl)}&token=${encodeURIComponent(token)}`;
+  const setupUrl = `${apiBase}/setup#gateway=${encodeURIComponent(gatewayUrl)}&token=${encodeURIComponent(token)}`;
 
   console.log();
   log("==> Setup complete! Open this link in your browser:");
@@ -417,10 +497,17 @@ async function install(args) {
 
 async function uninstall(args) {
   const saved = readSavedConfig();
-  const apiBase = args.apiBase !== DEFAULT_API_BASE ? args.apiBase : saved.apiBase || DEFAULT_API_BASE;
-  const tunnelId = saved.tunnelId;
+  const apiBase =
+    args.apiBase !== DEFAULT_API_BASE
+      ? args.apiBase
+      : saved?.apiBase || DEFAULT_API_BASE;
+  const tunnelId = saved?.tunnelId;
 
-  log(`    Tunnel ID: ${tunnelId}`);
+  if (tunnelId) {
+    log(`    Tunnel ID: ${tunnelId}`);
+  } else {
+    log("    No saved tunnel ID found.");
+  }
 
   uninstallCloudflaredService();
   await deprovision(apiBase, tunnelId);
