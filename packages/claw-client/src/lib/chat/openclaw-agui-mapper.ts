@@ -11,8 +11,12 @@
  * AG-UI events emitted (EventType from @ag-ui/core via @openuidev/react-headless):
  *   TEXT_MESSAGE_START / TEXT_MESSAGE_CONTENT / TEXT_MESSAGE_END
  *   TOOL_CALL_START / TOOL_CALL_ARGS / TOOL_CALL_END
- *   REASONING_MESSAGE_CONTENT   (emitted per spec; not consumed by processStreamedMessage)
+ *   REASONING_MESSAGE_START / REASONING_MESSAGE_CONTENT / REASONING_MESSAGE_END
  *   RUN_FINISHED / RUN_ERROR
+ *
+ * Reasoning lifecycle: REASONING_MESSAGE_START is emitted on the first thinking delta,
+ * REASONING_MESSAGE_END is emitted when the first tool or assistant delta arrives (via
+ * ensureMessageStarted), closing the reasoning block before the assistant turn begins.
  */
 
 import { EventType } from "@openuidev/react-headless";
@@ -22,8 +26,17 @@ export function createOpenClawAGUIMapper(
   onEvent: (event: Record<string, unknown>) => void
 ): { onAgentEvent: (evt: AgentEvent) => void; onChatEvent: (evt: ChatEvent) => void } {
   let messageId: string | null = null;
+  let reasoningMessageId: string | null = null;
+
+  const closeReasoning = () => {
+    if (reasoningMessageId) {
+      onEvent({ type: EventType.REASONING_MESSAGE_END, messageId: reasoningMessageId });
+      reasoningMessageId = null;
+    }
+  };
 
   const ensureMessageStarted = (runId: string) => {
+    closeReasoning();
     if (!messageId) {
       messageId = runId;
       onEvent({ type: EventType.TEXT_MESSAGE_START, messageId, role: "assistant" });
@@ -34,7 +47,13 @@ export function createOpenClawAGUIMapper(
     onAgentEvent(evt: AgentEvent) {
       if (evt.stream === "thinking") {
         const delta = evt.data.delta || evt.data.text || "";
-        if (delta) onEvent({ type: EventType.REASONING_MESSAGE_CONTENT, delta });
+        if (delta) {
+          if (!reasoningMessageId) {
+            reasoningMessageId = crypto.randomUUID();
+            onEvent({ type: EventType.REASONING_MESSAGE_START, messageId: reasoningMessageId, role: "reasoning" });
+          }
+          onEvent({ type: EventType.REASONING_MESSAGE_CONTENT, messageId: reasoningMessageId, delta });
+        }
         return;
       }
 
@@ -67,6 +86,7 @@ export function createOpenClawAGUIMapper(
           onEvent({ type: EventType.TEXT_MESSAGE_CONTENT, messageId, delta: evt.message });
         }
       } else if (evt.state === "final" || evt.state === "aborted") {
+        closeReasoning();
         ensureMessageStarted(evt.runId);
         onEvent({ type: EventType.TEXT_MESSAGE_END, messageId });
         onEvent({ type: EventType.RUN_FINISHED });

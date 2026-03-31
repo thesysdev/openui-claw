@@ -103,12 +103,18 @@ export default function ChatApp() {
   const adaptedLoadThread = useCallback(
     async (threadId: string): Promise<Message[]> => {
       const msgs = await loadThread(threadId);
-      return msgs.map((m) => ({
-        id: m.id,
-        role: m.role,
-        content: m.content ?? undefined,
-        ...(m.toolCalls?.length ? { toolCalls: m.toolCalls } : {}),
-      })) as Message[];
+      return msgs.map((m) => {
+        if (m.role === "reasoning")
+          return { id: m.id, role: "reasoning" as const, content: m.content };
+        if (m.role === "activity")
+          return { id: m.id, role: "activity" as const, activityType: m.activityType, content: m.content };
+        return {
+          id: m.id,
+          role: m.role,
+          content: m.content ?? undefined,
+          ...(m.toolCalls?.length ? { toolCalls: m.toolCalls } : {}),
+        };
+      }) as Message[];
     },
     [loadThread]
   );

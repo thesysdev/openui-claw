@@ -411,7 +411,11 @@ export function useGateway({ onAuthFailed }: { onAuthFailed: () => void }) {
 
   // ── Load thread = load agent's chat history ────────────────────────────────
   const loadThread = useCallback(async (threadId: string): Promise<
-    { id: string; role: "user" | "assistant"; content: string | null; toolCalls?: { id: string; type: "function"; function: { name: string; arguments: string } }[] }[]
+    (
+      | { id: string; role: "user" | "assistant"; content: string | null; toolCalls?: { id: string; type: "function"; function: { name: string; arguments: string } }[] }
+      | { id: string; role: "reasoning"; content: string }
+      | { id: string; role: "activity"; activityType: string; content: Record<string, unknown> }
+    )[]
   > => {
     const sessionKey = resolveChatSessionKey(threadId, knownAgentIdsRef.current);
     log(`loadThread  threadId=${threadId}  sessionKey=${sessionKey}`);
