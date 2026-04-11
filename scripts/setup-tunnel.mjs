@@ -267,6 +267,42 @@ function isPluginRegistered() {
   }
 }
 
+// TODO: openclaw onboard sets tools.profile="coding" by default, which blocks all plugin tools
+// via applyToolPolicyPipeline unless tools.alsoAllow includes "group:plugins" or the plugin id.
+// Ideally openclaw's onboarding wizard (or `openclaw plugins install`) should detect a restrictive
+// profile and prompt the user to add alsoAllow, similar to how addAllowedOrigin works here.
+// Tracked: remove this workaround once openclaw handles it natively.
+function ensurePluginToolsAllowed() {
+  log("==> Ensuring plugin tools are accessible...");
+
+  if (!existsSync(OPENCLAW_CONFIG_PATH)) {
+    log("    WARNING: OpenClaw config not found, skipping.");
+    return;
+  }
+
+  const config = JSON.parse(readFileSync(OPENCLAW_CONFIG_PATH, "utf8"));
+  const profile = config.tools?.profile;
+  const alsoAllow = config.tools?.alsoAllow ?? [];
+
+  // Only needed when a restrictive profile is active (coding / minimal).
+  // "full" and no-profile configs already allow all tools.
+  if (!profile || profile === "full") {
+    log("    No restrictive profile set, skipping.");
+    return;
+  }
+
+  if (alsoAllow.includes("group:plugins")) {
+    log(`    tools.alsoAllow already includes "group:plugins", skipping.`);
+    return;
+  }
+
+  if (!config.tools) config.tools = {};
+  config.tools.alsoAllow = [...alsoAllow, "group:plugins"];
+
+  writeFileSync(OPENCLAW_CONFIG_PATH, JSON.stringify(config, null, 4) + "\n");
+  log(`    Added "group:plugins" to tools.alsoAllow (profile=${profile})`);
+}
+
 function restartGateway() {
   log("==> Restarting OpenClaw gateway...");
   try {
@@ -466,6 +502,7 @@ async function install(args) {
   addAllowedOrigin(apiBase);
   downloadPlugin();
   installPlugin();
+  ensurePluginToolsAllowed();
   restartGateway();
   installCloudflared();
   installCloudflaredService(

@@ -1,12 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ChevronRight, EllipsisVertical, Pencil, Plus, Settings, Trash2 } from "lucide-react";
+import { ChevronRight, EllipsisVertical, Archive, Pencil, Plus, Settings, Trash2 } from "lucide-react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { useThreadList } from "@openuidev/react-headless";
 import { Button, Shell } from "@openuidev/react-ui";
 import { ConnectionState } from "@/lib/gateway/types";
 import type { ClawThread } from "@/types/claw-thread";
+import { useHashRoute, navigate, artifactsHash } from "@/lib/hooks/useHashRoute";
 
 const DOT_CLASS: Record<ConnectionState, string> = {
   [ConnectionState.DISCONNECTED]: "bg-zinc-400",
@@ -63,6 +64,9 @@ export function AppSidebar({
   const { threads, isLoadingThreads, selectedThreadId, loadThreads, selectThread } =
     useThreadList();
   const threadsCast = threads as ClawThread[];
+
+  const route = useHashRoute();
+  const artifactsActive = route?.view === "artifacts" || route?.view === "artifact";
 
   const [titleOverrides, setTitleOverrides] = useState<Map<string, string>>(() => new Map());
   const [deletedIds, setDeletedIds] = useState<Set<string>>(() => new Set());
@@ -125,6 +129,7 @@ export function AppSidebar({
   useEffect(() => {
     if (!isLoadingThreads && displayThreads.length > 0 && !selectedThreadId) {
       selectThread(displayThreads[0].id);
+      navigate({ view: "chat", sessionId: displayThreads[0].id });
     }
   }, [isLoadingThreads, displayThreads, selectedThreadId, selectThread]);
 
@@ -153,6 +158,7 @@ export function AppSidebar({
         const id = await createSession(agentId);
         if (id) {
           runAfterRefresh(id);
+          navigate({ view: "chat", sessionId: id });
         }
       } finally {
         setCreatingForAgent(null);
@@ -221,6 +227,18 @@ export function AppSidebar({
       <Shell.SidebarSeparator />
 
       <Shell.SidebarContent>
+        <a
+          href={artifactsHash()}
+          className={`mx-1 mb-2 flex items-center gap-2 rounded-md px-2 py-1.5 text-xs font-medium transition-colors ${
+            artifactsActive
+              ? "bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100"
+              : "text-zinc-500 hover:bg-zinc-50 hover:text-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-900/40 dark:hover:text-zinc-300"
+          }`}
+        >
+          <Archive className="h-3.5 w-3.5 shrink-0" />
+          Artifacts
+        </a>
+
         {isLoadingThreads && displayThreads.length === 0 && (
           <p className="px-3 py-2 text-xs text-zinc-400">Loading agents…</p>
         )}
@@ -286,7 +304,10 @@ export function AppSidebar({
                           <>
                             <button
                               type="button"
-                              onClick={() => selectThread(t.id)}
+                              onClick={() => {
+                                selectThread(t.id);
+                                navigate({ view: "chat", sessionId: t.id });
+                              }}
                               onDoubleClick={
                                 isExtra && !isBusy
                                   ? (e) => {

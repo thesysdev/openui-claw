@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChatProvider, useThreadList } from "@openuidev/react-headless";
 import type { Message, Thread } from "@openuidev/react-headless";
 import { Shell, ThemeProvider } from "@openuidev/react-ui";
@@ -12,8 +12,13 @@ import { UserMessage } from "@/components/rendering/UserMessage";
 import { AppSidebar } from "@/components/layout/AppSidebar";
 import { ComposerToolbar } from "@/components/session/SessionControls";
 import { SettingsDialog } from "@/components/settings/SettingsDialog";
+import { ArtifactsView } from "@/components/artifacts/ArtifactsView";
+import { ArtifactDetail } from "@/components/artifacts/ArtifactDetail";
+import { useHashRoute, navigate } from "@/lib/hooks/useHashRoute";
 import { getSettings } from "@/lib/storage";
 import type { ClawThreadListItem, SessionRow, ModelChoice } from "@/types/gateway-responses";
+import type { ArtifactStore } from "@/lib/engines/types";
+import type { ClawThread } from "@/types/claw-thread";
 
 // Same default used by FullScreen — swap for a custom Claw logo later.
 const LOGO_URL = "https://www.openui.com/favicon.svg";
@@ -66,6 +71,86 @@ function ThreadArea({
   );
 }
 
+interface ChatAppInnerProps {
+  connectionState: ConnectionState;
+  onSettingsClick: () => void;
+  createSession: (agentId: string) => Promise<string | null>;
+  renameSession: (threadId: string, label: string) => Promise<boolean>;
+  deleteSession: (threadId: string) => Promise<boolean>;
+  sessionMeta: Map<string, SessionRow>;
+  availableModels: ModelChoice[];
+  patchSession: (key: string, patch: Record<string, unknown>) => Promise<boolean>;
+  knownAgentIds: React.RefObject<Set<string>>;
+  artifacts: ArtifactStore | undefined;
+}
+
+function ChatAppInner({
+  connectionState,
+  onSettingsClick,
+  createSession,
+  renameSession,
+  deleteSession,
+  sessionMeta,
+  availableModels,
+  patchSession,
+  knownAgentIds,
+  artifacts,
+}: ChatAppInnerProps) {
+  const route = useHashRoute();
+  const { threads, isLoadingThreads, selectedThreadId, selectThread } = useThreadList();
+
+  // Sync hash route → selected thread
+  useEffect(() => {
+    if (route?.view === "chat" && route.sessionId !== selectedThreadId) {
+      selectThread(route.sessionId);
+    }
+  }, [route, selectedThreadId, selectThread]);
+
+  // Auto-navigate to first thread if there is no route yet
+  useEffect(() => {
+    if (!route && !isLoadingThreads && threads.length > 0) {
+      navigate({ view: "chat", sessionId: threads[0].id });
+    }
+  }, [route, isLoadingThreads, threads]);
+
+  let mainContent: React.ReactNode;
+  if (route?.view === "artifacts" && artifacts) {
+    mainContent = (
+      <Shell.ThreadContainer>
+        <ArtifactsView artifacts={artifacts} />
+      </Shell.ThreadContainer>
+    );
+  } else if (route?.view === "artifact" && artifacts) {
+    mainContent = (
+      <Shell.ThreadContainer>
+        <ArtifactDetail artifactId={route.artifactId} artifacts={artifacts} />
+      </Shell.ThreadContainer>
+    );
+  } else {
+    mainContent = (
+      <ThreadArea
+        sessionMeta={sessionMeta}
+        availableModels={availableModels}
+        patchSession={patchSession}
+        knownAgentIds={knownAgentIds}
+      />
+    );
+  }
+
+  return (
+    <Shell.Container agentName="Claw" logoUrl={LOGO_URL}>
+      <AppSidebar
+        connectionState={connectionState}
+        onSettingsClick={onSettingsClick}
+        createSession={createSession}
+        renameSession={renameSession}
+        deleteSession={deleteSession}
+      />
+      {mainContent}
+    </Shell.Container>
+  );
+}
+
 export default function ChatApp() {
   const [settingsOpen, setSettingsOpen] = useState(false);
 
@@ -84,6 +169,7 @@ export default function ChatApp() {
     availableModels,
     patchSession,
     knownAgentIds,
+    artifacts,
   } = useGateway({ onAuthFailed: () => setSettingsOpen(true) });
 
   // Auto-open settings on first visit (no gateway URL configured)
@@ -103,18 +189,25 @@ export default function ChatApp() {
   const adaptedLoadThread = useCallback(
     async (threadId: string): Promise<Message[]> => {
       const msgs = await loadThread(threadId);
-      return msgs.map((m) => {
-        if (m.role === "reasoning")
-          return { id: m.id, role: "reasoning" as const, content: m.content };
-        if (m.role === "activity")
-          return { id: m.id, role: "activity" as const, activityType: m.activityType, content: m.content };
-        return {
-          id: m.id,
-          role: m.role,
-          content: m.content ?? undefined,
-          ...(m.toolCalls?.length ? { toolCalls: m.toolCalls } : {}),
-        };
-      }) as Message[];
+      const result: Message[] = [];
+      for (const m of msgs) {
+        if (m.role === "assistant") {
+          if (m.reasoning) {
+            result.push({ id: m.id + ":reasoning", role: "reasoning" as const, content: m.reasoning });
+          }
+          result.push({
+            id: m.id,
+            role: "assistant" as const,
+            content: m.content ?? undefined,
+            ...(m.toolCalls?.length ? { toolCalls: m.toolCalls } : {}),
+          });
+        } else if (m.role === "activity") {
+          result.push({ id: m.id, role: "activity" as const, activityType: m.activityType, content: m.content });
+        } else {
+          result.push({ id: m.id, role: m.role, content: m.content });
+        }
+      }
+      return result as Message[];
     },
     [loadThread]
   );
@@ -129,22 +222,18 @@ export default function ChatApp() {
         processMessage={processMessage as any}
         streamProtocol={openClawAdapter()}
       >
-        <Shell.Container agentName="Claw" logoUrl={LOGO_URL}>
-          <AppSidebar
-            connectionState={connectionState}
-            onSettingsClick={() => setSettingsOpen(true)}
-            createSession={createSession}
-            renameSession={renameSession}
-            deleteSession={deleteSession}
-          />
-
-          <ThreadArea
-            sessionMeta={sessionMeta}
-            availableModels={availableModels}
-            patchSession={patchSession}
-            knownAgentIds={knownAgentIds}
-          />
-        </Shell.Container>
+        <ChatAppInner
+          connectionState={connectionState}
+          onSettingsClick={() => setSettingsOpen(true)}
+          createSession={createSession}
+          renameSession={renameSession}
+          deleteSession={deleteSession}
+          sessionMeta={sessionMeta}
+          availableModels={availableModels}
+          patchSession={patchSession}
+          knownAgentIds={knownAgentIds}
+          artifacts={artifacts}
+        />
 
         <SettingsDialog
           open={settingsOpen}
