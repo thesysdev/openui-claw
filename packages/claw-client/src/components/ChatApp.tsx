@@ -106,6 +106,25 @@ function ChatAppInner({
     }
   }, [route, selectedThreadId, selectThread]);
 
+  // Re-fetch history once the engine is actually connected.
+  // The first selectThread fires before the engine exists (child effects
+  // run before the parent's useGateway effect), so loadThread returns [].
+  // When connectionState transitions to CONNECTED the engine is ready —
+  // re-select the same thread to load real messages.
+  const prevConnected = useRef(false);
+  useEffect(() => {
+    const justConnected =
+      connectionState === ConnectionState.CONNECTED && !prevConnected.current;
+    prevConnected.current = connectionState === ConnectionState.CONNECTED;
+    if (
+      justConnected &&
+      route?.view === "chat" &&
+      route.sessionId === selectedThreadId
+    ) {
+      selectThread(route.sessionId);
+    }
+  }, [connectionState, route, selectedThreadId, selectThread]);
+
   // Auto-navigate to first thread if there is no route yet
   useEffect(() => {
     if (!route && !isLoadingThreads && threads.length > 0) {

@@ -127,11 +127,10 @@ export function AppSidebar({
   }, [groups]);
 
   useEffect(() => {
-    if (!isLoadingThreads && displayThreads.length > 0 && !selectedThreadId) {
+    if (!isLoadingThreads && displayThreads.length > 0 && !selectedThreadId && !artifactsActive) {
       selectThread(displayThreads[0].id);
-      navigate({ view: "chat", sessionId: displayThreads[0].id });
     }
-  }, [isLoadingThreads, displayThreads, selectedThreadId, selectThread]);
+  }, [isLoadingThreads, displayThreads, selectedThreadId, selectThread, artifactsActive]);
 
   useEffect(() => {
     if (!isLoadingThreads && pendingSelectRef.current) {
@@ -281,7 +280,7 @@ export function AppSidebar({
                     return (
                       <div
                         key={t.id}
-                        className={`openui-shell-thread-button${selectedThreadId === t.id ? " openui-shell-thread-button--selected" : ""}`}
+                        className={`openui-shell-thread-button${!artifactsActive && selectedThreadId === t.id ? " openui-shell-thread-button--selected" : ""}`}
                       >
                         {isEditing ? (
                           <input

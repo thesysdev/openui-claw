@@ -135,6 +135,24 @@ export class OpenClawEngine implements Engine {
   private _availableModels: ModelChoice[] = [];
   private events: OpenClawEngineEvents;
 
+  private _isReady = false;
+  private _readyDeferred: {
+    promise: Promise<void>;
+    resolve: () => void;
+    reject: (e: Error) => void;
+  } | null = null;
+
+  /** Resolves immediately if hello-ok already fired, otherwise waits. */
+  private get _engineReady(): Promise<void> {
+    if (this._isReady) return Promise.resolve();
+    if (!this._readyDeferred) {
+      let resolve!: () => void, reject!: (e: Error) => void;
+      const promise = new Promise<void>((res, rej) => { resolve = res; reject = rej; });
+      this._readyDeferred = { promise, resolve, reject };
+    }
+    return this._readyDeferred.promise;
+  }
+
   constructor(
     config: OpenClawEngineConfig,
     events: OpenClawEngineEvents
@@ -164,7 +182,7 @@ export class OpenClawEngine implements Engine {
   readonly artifacts: ArtifactStore = {
     listArtifacts: async (kind?: string): Promise<ArtifactSummary[]> => {
       try {
-        const result = await this.socket?.request<{ artifacts: ArtifactSummary[] }>(
+        const result = await this._request<{ artifacts: ArtifactSummary[] }>(
           "artifacts.list",
           { kind },
         );
@@ -176,7 +194,7 @@ export class OpenClawEngine implements Engine {
 
     getArtifact: async (artifactId: string): Promise<ArtifactRecord | null> => {
       try {
-        const result = await this.socket?.request<{ artifact: ArtifactRecord | null }>(
+        const result = await this._request<{ artifact: ArtifactRecord | null }>(
           "artifacts.get",
           { id: artifactId },
         );
@@ -187,7 +205,7 @@ export class OpenClawEngine implements Engine {
     },
 
     deleteArtifact: async (artifactId: string): Promise<void> => {
-      await this.socket?.request("artifacts.delete", { id: artifactId });
+      await this._request("artifacts.delete", { id: artifactId });
     },
   };
 
@@ -199,11 +217,17 @@ export class OpenClawEngine implements Engine {
   }
 
   async disconnect(): Promise<void> {
+    this._isReady = false;
+    this._readyDeferred?.reject(new Error("disconnected"));
+    this._readyDeferred = null;
     this.socket?.stop();
     this.socket = null;
   }
 
   reconnect(newSettings: Settings): void {
+    this._isReady = false;
+    this._readyDeferred?.reject(new Error("reconnecting"));
+    this._readyDeferred = null;
     this._settings = newSettings;
     this.events.onSettingsChanged(newSettings);
     this.socket?.stop();
@@ -215,7 +239,7 @@ export class OpenClawEngine implements Engine {
 
   async listAgents(): Promise<AgentInfo[]> {
     try {
-      const result = await this.socket?.request<AgentsListResult>("agents.list");
+      const result = await this._request<AgentsListResult>("agents.list");
       return (result?.agents ?? []).map((a) => ({
         id: a.id,
         name: a.identity?.name ?? a.id,
@@ -359,7 +383,7 @@ export class OpenClawEngine implements Engine {
   async fetchThreadList(): Promise<ClawThreadListItem[]> {
     let agents: NonNullable<AgentsListResult["agents"]> = [];
     try {
-      const result = await this.socket?.request<AgentsListResult>("agents.list");
+      const result = await this._request<AgentsListResult>("agents.list");
       agents = result?.agents ?? [];
       log(`agents.list → ${agents.length} agent(s)`);
     } catch (e) {
@@ -389,7 +413,7 @@ export class OpenClawEngine implements Engine {
       });
 
       try {
-        const result = await this.socket?.request<SessionsListResult>(
+        const result = await this._request<SessionsListResult>(
           "sessions.list",
           { agentId: a.id, limit: 50 }
         );
@@ -425,7 +449,7 @@ export class OpenClawEngine implements Engine {
   ): Promise<boolean> {
     log("patchSession", sessionKey, patch);
     try {
-      await this.socket?.request("sessions.patch", { key: sessionKey, ...patch });
+      await this._request("sessions.patch", { key: sessionKey, ...patch });
       const localPatch = normalizeSessionPatch(patch);
       this._sessionMeta.set(sessionKey, {
         ...this._sessionMeta.get(sessionKey),
@@ -448,6 +472,17 @@ export class OpenClawEngine implements Engine {
   get availableModels(): ModelChoice[] { return this._availableModels; }
 
   // ── Private helpers ───────────────────────────────────────────────────────
+
+  /**
+   * Awaits engine readiness (socket creation + hello-ok handshake) then
+   * delegates to socket.request. Use for all data RPCs so they automatically
+   * wait even when called before connect() has run (e.g. from child component
+   * effects that fire before the parent's useGateway effect).
+   */
+  private async _request<T>(method: string, params?: unknown): Promise<T> {
+    await this._engineReady;
+    return this.socket!.request<T>(method, params);
+  }
 
   private _createSocket(settings: Settings | null): GatewaySocket {
     return new GatewaySocket({
@@ -504,6 +539,8 @@ export class OpenClawEngine implements Engine {
     log("connected ✓");
     this.events.onPairingRequired(null);
     this._setConnectionState(ConnectionState.CONNECTED);
+    this._isReady = true;
+    this._readyDeferred?.resolve();
     void this._refreshModels();
   };
 
@@ -521,13 +558,16 @@ export class OpenClawEngine implements Engine {
       warn("all auth credentials failed — prompting user");
       clearAuthCredentials();
       this._setConnectionState(ConnectionState.AUTH_FAILED);
+      this._isReady = false;
+      this._readyDeferred?.reject(new Error("auth failed"));
+      this._readyDeferred = null;
       this.events.onAuthFailed();
     }
   };
 
   private async _refreshModels(): Promise<void> {
     try {
-      const result = await this.socket?.request<ModelsListResult>("models.list");
+      const result = await this._request<ModelsListResult>("models.list");
       this._availableModels = result?.models ?? [];
       this.events.onModelsChanged(this._availableModels);
       log(`models.list → ${this._availableModels.length} model(s)`);
@@ -537,8 +577,7 @@ export class OpenClawEngine implements Engine {
   }
 
   private _refreshSessionMeta(sessionKey: string): void {
-    this.socket
-      ?.request<SessionGetResult>("sessions.get", { key: sessionKey })
+    this._request<SessionGetResult>("sessions.get", { key: sessionKey })
       .then((result) => {
         if (!result?.session) return;
         this._sessionMeta.set(sessionKey, result.session);
@@ -551,7 +590,7 @@ export class OpenClawEngine implements Engine {
 
   private async _listSessions(agentId?: string): Promise<SessionInfo[]> {
     try {
-      const result = await this.socket?.request<SessionsListResult>(
+      const result = await this._request<SessionsListResult>(
         "sessions.list",
         agentId ? { agentId, limit: 100 } : { limit: 100 }
       );
@@ -571,7 +610,7 @@ export class OpenClawEngine implements Engine {
   private async _getSession(sessionId: string): Promise<SessionInfo | null> {
     const sessionKey = resolveChatSessionKey(sessionId, this.knownAgentIds);
     try {
-      const result = await this.socket?.request<SessionGetResult>(
+      const result = await this._request<SessionGetResult>(
         "sessions.get",
         { key: sessionKey }
       );
@@ -597,7 +636,7 @@ export class OpenClawEngine implements Engine {
     const key = `agent:${agentId}:${crypto.randomUUID()}${CLAW_SUFFIX}`;
     log("createSession", agentId, key);
     try {
-      await this.socket?.request("sessions.create", { agentId, key });
+      await this._request("sessions.create", { agentId, key });
     } catch (e) {
       warn("sessions.create failed:", e);
     }
@@ -606,7 +645,7 @@ export class OpenClawEngine implements Engine {
 
   private async _deleteSessionRecord(sessionId: string): Promise<void> {
     const sessionKey = resolveChatSessionKey(sessionId, this.knownAgentIds);
-    await this.socket?.request("sessions.delete", {
+    await this._request("sessions.delete", {
       key: sessionKey,
       deleteTranscript: true,
     });
@@ -617,14 +656,14 @@ export class OpenClawEngine implements Engine {
     title: string
   ): Promise<void> {
     const sessionKey = resolveChatSessionKey(sessionId, this.knownAgentIds);
-    await this.socket?.request("sessions.patch", { key: sessionKey, label: title });
+    await this._request("sessions.patch", { key: sessionKey, label: title });
   }
 
   private async _loadHistory(sessionId: string): Promise<StoredMessage[]> {
     const sessionKey = resolveChatSessionKey(sessionId, this.knownAgentIds);
     log(`loadHistory  sessionId=${sessionId}  sessionKey=${sessionKey}`);
     try {
-      const result = await this.socket?.request<{
+      const result = await this._request<{
         messages?: ChatHistoryMessage[];
       }>("chat.history", { sessionKey, limit: 100 });
       const raw = result?.messages ?? [];
@@ -641,7 +680,7 @@ export class OpenClawEngine implements Engine {
   ): Promise<Record<string, string>> {
     const sessionKey = resolveChatSessionKey(sessionId, this.knownAgentIds);
     try {
-      const result = await this.socket?.request<SessionGetResult>(
+      const result = await this._request<SessionGetResult>(
         "sessions.get",
         { key: sessionKey }
       );

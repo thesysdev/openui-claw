@@ -45,8 +45,26 @@ export class GatewaySocket {
   >();
   private challengeResolve: ((nonce: string) => void) | null = null;
   private rpcCounter = 0;
+  private _readyPromise: Promise<void> | null = null;
+  private _readyResolve: (() => void) | null = null;
+  private _readyReject: ((e: Error) => void) | null = null;
 
   constructor(private opts: GatewaySocketOptions) {}
+
+  /**
+   * Resolves once the socket has completed the hello-ok handshake.
+   * Rejects (and resets) on disconnect or stop, so the next connection
+   * cycle produces a fresh promise.
+   */
+  get ready(): Promise<void> {
+    if (!this._readyPromise) {
+      this._readyPromise = new Promise<void>((resolve, reject) => {
+        this._readyResolve = resolve;
+        this._readyReject = reject;
+      });
+    }
+    return this._readyPromise;
+  }
 
   start(): void {
     log("start()");
@@ -57,6 +75,7 @@ export class GatewaySocket {
   stop(): void {
     log("stop()");
     this.stopped = true;
+    this.rejectReady(new Error("socket stopped"));
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
@@ -178,6 +197,7 @@ export class GatewaySocket {
     const gotDeviceToken = !!(hello as { auth?: { deviceToken?: string } }).auth?.deviceToken;
     log(`hello-ok  protocol=${hello.protocol}  newDeviceToken=${gotDeviceToken}`);
     this.opts.onHelloOk(hello);
+    this.resolveReady();
   }
 
   private waitForChallenge(): Promise<string> {
@@ -241,6 +261,7 @@ export class GatewaySocket {
     const label = AUTH_CLOSE_CODES.has(code) ? " [AUTH]" : "";
     warn(`ws closed  code=${code}${label}  reason="${reason}"`);
     this.rejectAllPending(new Error(`WebSocket closed: ${code} ${reason}`));
+    this.rejectReady(new Error(`WebSocket closed: ${code} ${reason}`));
     this.challengeResolve = null;
 
     if (this.stopped) return;
@@ -320,6 +341,21 @@ export class GatewaySocket {
       }
       this.ws = null;
     }
+  }
+
+  private resolveReady(): void {
+    this._readyResolve?.();
+    this._readyResolve = null;
+    this._readyReject = null;
+    // _readyPromise stays set (already-resolved promise is fine to re-await)
+  }
+
+  private rejectReady(err: Error): void {
+    this._readyReject?.(err);
+    // Reset so the next connection cycle gets a fresh promise
+    this._readyPromise = null;
+    this._readyResolve = null;
+    this._readyReject = null;
   }
 
   private rejectAllPending(err: Error): void {
