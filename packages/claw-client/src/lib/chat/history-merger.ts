@@ -21,6 +21,8 @@ export type ToolCallOutput = {
   function: { name: string; arguments: string };
 };
 
+export const ERROR_SENTINEL = "<!--AGENT_ERROR-->";
+
 export type MergedMessage =
   | { id: string; role: "user" | "assistant"; content: string | null; toolCalls?: ToolCallOutput[] }
   | { id: string; role: "reasoning"; content: string }
@@ -112,6 +114,16 @@ export function mergeHistoryMessages(raw: ChatHistoryMessage[]): MergedMessage[]
           role: "reasoning",
           content: thinking,
         });
+      }
+
+      if (!text && allTools.length === 0 && m.stopReason === "error" && m.errorMessage) {
+        flush();
+        pending = {
+          id: m.__openclaw?.id ?? m.id ?? crypto.randomUUID(),
+          role: "assistant",
+          content: `${ERROR_SENTINEL}${m.errorMessage}`,
+        };
+        continue;
       }
 
       // Aborted/thinking-only: no text and no tool calls — skip creating an empty assistant bubble

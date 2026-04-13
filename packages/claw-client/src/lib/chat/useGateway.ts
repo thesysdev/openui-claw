@@ -10,7 +10,7 @@ import {
   OpenClawEngine,
   resolveChatSessionKey,
 } from "@/lib/engines/openclaw/OpenClawEngine";
-import type { StoredMessage, ArtifactStore } from "@/lib/engines/types";
+import type { StoredMessage, ArtifactStore, AppStore, AppSummary } from "@/lib/engines/types";
 
 export type { ClawThreadListItem } from "@/types/gateway-responses";
 export type { SessionRow, ModelChoice } from "@/types/gateway-responses";
@@ -27,6 +27,7 @@ export function useGateway({ onAuthFailed }: { onAuthFailed: () => void }) {
   );
   const [availableModels, setAvailableModels] = useState<ModelChoice[]>([]);
   const [artifacts, setArtifacts] = useState<ArtifactStore | undefined>(undefined);
+  const [apps, setApps] = useState<AppStore | undefined>(undefined);
 
   const onAuthFailedRef = useRef(onAuthFailed);
   useEffect(() => {
@@ -62,6 +63,7 @@ export function useGateway({ onAuthFailed }: { onAuthFailed: () => void }) {
     );
     engineRef.current = engine;
     setArtifacts(engine.artifacts);
+    setApps(engine.apps);
     void engine.connect();
     return () => { void engine.disconnect(); };
     // Only run once on mount
@@ -162,5 +164,6 @@ export function useGateway({ onAuthFailed }: { onAuthFailed: () => void }) {
     patchSession,
     knownAgentIds,
     artifacts,
+    apps,
   };
 }

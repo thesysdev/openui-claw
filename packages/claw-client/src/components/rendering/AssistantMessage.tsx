@@ -3,7 +3,7 @@
 import { Renderer, BuiltinActionType } from "@openuidev/react-lang";
 import type { ActionEvent } from "@openuidev/react-lang";
 import { openuiChatLibrary } from "@openuidev/react-ui/genui-lib";
-import { Shell, BehindTheScenes, ToolCallComponent } from "@openuidev/react-ui";
+import { Shell, BehindTheScenes, ToolCallComponent, Callout } from "@openuidev/react-ui";
 import { useThread } from "@openuidev/react-headless";
 import type { AssistantMessage as AssistantMsg } from "@openuidev/react-headless";
 import ReactMarkdown from "react-markdown";
@@ -11,6 +11,7 @@ import remarkGfm from "remark-gfm";
 import { useCallback, useMemo } from "react";
 import { detectFormat } from "@/lib/detection";
 import { separateContentAndContext, wrapContent, wrapContext } from "@/lib/content-parser";
+import { ERROR_SENTINEL } from "@/lib/chat/history-merger";
 
 interface Props {
   message: AssistantMsg;
@@ -84,7 +85,11 @@ export function AssistantMessage({ message }: Props) {
     [processMessage]
   );
 
-  const textContent = openuiCode ?? message.content ?? "";
+  const rawContent = openuiCode ?? message.content ?? "";
+  const errorIdx = rawContent.indexOf(ERROR_SENTINEL);
+  const isError = errorIdx !== -1;
+  const textContent = isError ? rawContent.slice(0, errorIdx) : rawContent;
+  const errorMessage = isError ? rawContent.slice(errorIdx + ERROR_SENTINEL.length) : null;
   const format = detectFormat(textContent);
 
   return (
@@ -102,7 +107,7 @@ export function AssistantMessage({ message }: Props) {
           ))}
         </BehindTheScenes>
       )}
-      {format === "openui" ? (
+      {textContent && format === "openui" ? (
         <Renderer
           library={openuiChatLibrary}
           response={openuiCode}
@@ -116,6 +121,13 @@ export function AssistantMessage({ message }: Props) {
           <ReactMarkdown remarkPlugins={[remarkGfm]}>{textContent}</ReactMarkdown>
         </div>
       ) : null}
+      {errorMessage && (
+        <Callout
+          variant="danger"
+          title="Something went wrong"
+          description={errorMessage}
+        />
+      )}
     </Shell.AssistantMessageContainer>
   );
 }

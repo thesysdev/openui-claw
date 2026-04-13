@@ -1,13 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ChevronRight, EllipsisVertical, Archive, Pencil, Plus, Settings, Trash2 } from "lucide-react";
+import { ChevronRight, EllipsisVertical, Archive, LayoutDashboard, Pencil, Plus, Settings, Trash2 } from "lucide-react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { useThreadList } from "@openuidev/react-headless";
 import { Button, Shell } from "@openuidev/react-ui";
 import { ConnectionState } from "@/lib/gateway/types";
 import type { ClawThread } from "@/types/claw-thread";
-import { useHashRoute, navigate, artifactsHash } from "@/lib/hooks/useHashRoute";
+import { useHashRoute, navigate, artifactsHash, appHash } from "@/lib/hooks/useHashRoute";
+import type { AppSummary } from "@/lib/engines/types";
 
 const DOT_CLASS: Record<ConnectionState, string> = {
   [ConnectionState.DISCONNECTED]: "bg-zinc-400",
@@ -52,6 +53,8 @@ interface Props {
   createSession: (agentId: string) => Promise<string | null>;
   renameSession: (threadId: string, label: string) => Promise<boolean>;
   deleteSession: (threadId: string) => Promise<boolean>;
+  apps: AppSummary[];
+  onDeleteApp: (appId: string) => Promise<void>;
 }
 
 export function AppSidebar({
@@ -60,6 +63,8 @@ export function AppSidebar({
   createSession,
   renameSession,
   deleteSession,
+  apps,
+  onDeleteApp,
 }: Props) {
   const { threads, isLoadingThreads, selectedThreadId, loadThreads, selectThread } =
     useThreadList();
@@ -67,6 +72,10 @@ export function AppSidebar({
 
   const route = useHashRoute();
   const artifactsActive = route?.view === "artifacts" || route?.view === "artifact";
+  const activeAppId = route?.view === "app" ? route.appId : null;
+
+  const [appsExpanded, setAppsExpanded] = useState(true);
+  const [deletingAppId, setDeletingAppId] = useState<string | null>(null);
 
   const [titleOverrides, setTitleOverrides] = useState<Map<string, string>>(() => new Map());
   const [deletedIds, setDeletedIds] = useState<Set<string>>(() => new Set());
@@ -127,10 +136,10 @@ export function AppSidebar({
   }, [groups]);
 
   useEffect(() => {
-    if (!isLoadingThreads && displayThreads.length > 0 && !selectedThreadId && !artifactsActive) {
+    if (!isLoadingThreads && displayThreads.length > 0 && !selectedThreadId && !artifactsActive && !activeAppId) {
       selectThread(displayThreads[0].id);
     }
-  }, [isLoadingThreads, displayThreads, selectedThreadId, selectThread, artifactsActive]);
+  }, [isLoadingThreads, displayThreads, selectedThreadId, selectThread, artifactsActive, activeAppId]);
 
   useEffect(() => {
     if (!isLoadingThreads && pendingSelectRef.current) {
@@ -237,6 +246,70 @@ export function AppSidebar({
           <Archive className="h-3.5 w-3.5 shrink-0" />
           Artifacts
         </a>
+
+        {/* ── Apps section ── */}
+        <div className="mb-3 px-1">
+          <button
+            type="button"
+            className="flex w-full min-w-0 items-center gap-1.5 px-2 py-1.5 text-left text-[11px] font-semibold leading-snug tracking-tight text-zinc-500 hover:bg-zinc-50 dark:text-zinc-400 dark:hover:bg-zinc-900/40"
+            onClick={() => setAppsExpanded((prev) => !prev)}
+          >
+            <ChevronRight
+              className={`h-3 w-3 flex-shrink-0 text-zinc-400 transition-transform dark:text-zinc-500 ${appsExpanded ? "rotate-90" : ""}`}
+            />
+            <LayoutDashboard className="h-3 w-3 shrink-0" />
+            <span className="truncate">Apps</span>
+          </button>
+
+          {appsExpanded && (
+            <div className="ml-1.5 mt-1 border-l border-zinc-200 pl-2.5 dark:border-zinc-700">
+              {apps.length === 0 ? (
+                <p className="py-1.5 text-[11px] text-zinc-400 dark:text-zinc-500">
+                  No apps yet
+                </p>
+              ) : (
+                <div className="space-y-0.5">
+                  {apps.map((app) => {
+                    const isActive = activeAppId === app.id;
+                    const isDeleting = deletingAppId === app.id;
+                    return (
+                      <div
+                        key={app.id}
+                        className={`openui-shell-thread-button${isActive ? " openui-shell-thread-button--selected" : ""}`}
+                      >
+                        <a
+                          href={appHash(app.id)}
+                          className="openui-shell-thread-button-title"
+                          onClick={() => navigate({ view: "app", appId: app.id })}
+                        >
+                          {isDeleting ? "Deleting…" : app.title}
+                        </a>
+                        {!isDeleting && (
+                          <button
+                            className="openui-shell-thread-button-dropdown-trigger"
+                            title="Delete app"
+                            onClick={async (e) => {
+                              e.preventDefault();
+                              setDeletingAppId(app.id);
+                              try {
+                                await onDeleteApp(app.id);
+                                if (isActive) navigate({ view: "chat", sessionId: "" });
+                              } finally {
+                                setDeletingAppId(null);
+                              }
+                            }}
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
 
         {isLoadingThreads && displayThreads.length === 0 && (
           <p className="px-3 py-2 text-xs text-zinc-400">Loading agents…</p>

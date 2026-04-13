@@ -88,6 +88,21 @@ export type ArtifactSummary = Pick<
   "id" | "kind" | "title" | "source" | "createdAt" | "updatedAt"
 >;
 
+// ── App types ─────────────────────────────────────────────────────────────────
+
+export interface AppRecord {
+  id: string;
+  title: string;
+  /** OpenUI Lang markup rendered by the Renderer. */
+  content: string;
+  agentId: string;
+  sessionKey: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type AppSummary = Pick<AppRecord, "id" | "title" | "agentId" | "createdAt" | "updatedAt">;
+
 // ── Store interfaces ──────────────────────────────────────────────────────────
 
 export interface ConversationStore {
@@ -111,6 +126,15 @@ export interface ArtifactStore {
   deleteArtifact(artifactId: string): Promise<void>;
 }
 
+export interface AppStore {
+  listApps(): Promise<AppSummary[]>;
+  getApp(appId: string): Promise<AppRecord | null>;
+  deleteApp(appId: string): Promise<void>;
+  /** Invoke a tool by name with args via the gateway `tools.invoke` RPC.
+   * Pass sessionKey to scope the execution to the app's agent session. */
+  invokeTool(tool: string, args: Record<string, unknown>, sessionKey?: string): Promise<unknown>;
+}
+
 // ── Engine capabilities ───────────────────────────────────────────────────────
 
 export interface EngineCapabilities {
@@ -120,6 +144,7 @@ export interface EngineCapabilities {
   multiAgent?: boolean;
   sessionConfig?: boolean;
   artifacts?: boolean;
+  apps?: boolean;
 }
 
 // ── Engine interface ──────────────────────────────────────────────────────────
@@ -129,6 +154,7 @@ export interface Engine {
   readonly capabilities: EngineCapabilities;
   readonly conversations: ConversationStore;
   readonly artifacts?: ArtifactStore; // present when capabilities.artifacts
+  readonly apps?: AppStore;           // present when capabilities.apps
 
   // Lifecycle
   connect(): Promise<void>;

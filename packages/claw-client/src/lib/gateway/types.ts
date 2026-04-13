@@ -201,6 +201,18 @@ export interface ToolAgentEvent extends AgentEventBase {
   data: ToolStreamData;
 }
 
+export interface LifecycleStreamData {
+  phase: "error" | "started" | "completed";
+  error?: string;
+  livenessState?: string;
+  endedAt?: number;
+}
+
+export interface LifecycleAgentEvent extends AgentEventBase {
+  stream: "lifecycle";
+  data: LifecycleStreamData;
+}
+
 export interface OtherAgentEvent extends AgentEventBase {
   stream: string;
   data: Record<string, unknown>;
@@ -210,6 +222,7 @@ export type AgentEvent =
   | AssistantAgentEvent
   | ThinkingAgentEvent
   | ToolAgentEvent
+  | LifecycleAgentEvent
   | OtherAgentEvent;
 
 // Tool call shape as returned by chat.history on assistant messages
@@ -229,6 +242,8 @@ export interface ChatHistoryMessage {
   content?: unknown;
   tool_calls?: ChatHistoryToolCall[];
   tool_call_id?: string;
+  stopReason?: string;
+  errorMessage?: string;
   __openclaw?: { id: string; seq: number };
 }
 

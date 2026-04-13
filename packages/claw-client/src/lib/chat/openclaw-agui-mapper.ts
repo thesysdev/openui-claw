@@ -21,6 +21,7 @@
 
 import { EventType } from "@openuidev/react-headless";
 import type { AgentEvent, ChatEvent } from "@/lib/gateway/types";
+import { ERROR_SENTINEL } from "@/lib/chat/history-merger";
 
 export function createOpenClawAGUIMapper(
   onEvent: (event: Record<string, unknown>) => void
@@ -41,6 +42,14 @@ export function createOpenClawAGUIMapper(
       messageId = runId;
       onEvent({ type: EventType.TEXT_MESSAGE_START, messageId, role: "assistant" });
     }
+  };
+
+  const emitErrorAsMessage = (runId: string, error: string) => {
+    closeReasoning();
+    ensureMessageStarted(runId);
+    onEvent({ type: EventType.TEXT_MESSAGE_CONTENT, messageId, delta: `${ERROR_SENTINEL}${error}` });
+    onEvent({ type: EventType.TEXT_MESSAGE_END, messageId });
+    onEvent({ type: EventType.RUN_FINISHED });
   };
 
   return {
@@ -76,6 +85,14 @@ export function createOpenClawAGUIMapper(
         }
         return;
       }
+
+      if (evt.stream === "lifecycle") {
+        const ld = evt.data as import("@/lib/gateway/types").LifecycleStreamData;
+        if (ld.phase === "error") {
+          emitErrorAsMessage(evt.runId, ld.error ?? "Agent error");
+        }
+        return;
+      }
     },
 
     onChatEvent(evt: ChatEvent) {
@@ -91,7 +108,7 @@ export function createOpenClawAGUIMapper(
         onEvent({ type: EventType.TEXT_MESSAGE_END, messageId });
         onEvent({ type: EventType.RUN_FINISHED });
       } else if (evt.state === "error") {
-        onEvent({ type: EventType.RUN_ERROR, message: evt.errorMessage ?? "Agent error" });
+        emitErrorAsMessage(evt.runId, evt.errorMessage ?? "Agent error");
       }
     },
   };

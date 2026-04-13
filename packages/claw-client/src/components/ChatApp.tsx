@@ -14,10 +14,11 @@ import { ComposerToolbar } from "@/components/session/SessionControls";
 import { SettingsDialog } from "@/components/settings/SettingsDialog";
 import { ArtifactsView } from "@/components/artifacts/ArtifactsView";
 import { ArtifactDetail } from "@/components/artifacts/ArtifactDetail";
+import { AppDetail } from "@/components/apps/AppDetail";
 import { useHashRoute, navigate } from "@/lib/hooks/useHashRoute";
 import { getSettings } from "@/lib/storage";
 import type { ClawThreadListItem, SessionRow, ModelChoice } from "@/types/gateway-responses";
-import type { ArtifactStore } from "@/lib/engines/types";
+import type { ArtifactStore, AppStore, AppSummary } from "@/lib/engines/types";
 import type { ClawThread } from "@/types/claw-thread";
 
 // Same default used by FullScreen — swap for a custom Claw logo later.
@@ -82,6 +83,10 @@ interface ChatAppInnerProps {
   patchSession: (key: string, patch: Record<string, unknown>) => Promise<boolean>;
   knownAgentIds: React.RefObject<Set<string>>;
   artifacts: ArtifactStore | undefined;
+  apps: AppStore | undefined;
+  appList: AppSummary[];
+  onDeleteApp: (appId: string) => Promise<void>;
+  onAppListRefresh: () => void;
 }
 
 function ChatAppInner({
@@ -95,6 +100,10 @@ function ChatAppInner({
   patchSession,
   knownAgentIds,
   artifacts,
+  apps,
+  appList,
+  onDeleteApp,
+  onAppListRefresh,
 }: ChatAppInnerProps) {
   const route = useHashRoute();
   const { threads, isLoadingThreads, selectedThreadId, selectThread } = useThreadList();
@@ -145,6 +154,19 @@ function ChatAppInner({
         <ArtifactDetail artifactId={route.artifactId} artifacts={artifacts} />
       </Shell.ThreadContainer>
     );
+  } else if (route?.view === "app" && apps) {
+    mainContent = (
+      <Shell.ThreadContainer>
+        <AppDetail
+          appId={route.appId}
+          apps={apps}
+          onDeleted={() => {
+            onAppListRefresh();
+            navigate({ view: "chat", sessionId: threads[0]?.id ?? "" });
+          }}
+        />
+      </Shell.ThreadContainer>
+    );
   } else {
     mainContent = (
       <ThreadArea
@@ -164,6 +186,8 @@ function ChatAppInner({
         createSession={createSession}
         renameSession={renameSession}
         deleteSession={deleteSession}
+        apps={appList}
+        onDeleteApp={onDeleteApp}
       />
       {mainContent}
     </Shell.Container>
@@ -189,7 +213,28 @@ export default function ChatApp() {
     patchSession,
     knownAgentIds,
     artifacts,
+    apps,
   } = useGateway({ onAuthFailed: () => setSettingsOpen(true) });
+
+  // App list — fetched once on mount, refreshable
+  const [appList, setAppList] = useState<AppSummary[]>([]);
+  const refreshAppList = useCallback(async () => {
+    if (!apps) return;
+    const list = await apps.listApps();
+    setAppList(list);
+  }, [apps]);
+
+  useEffect(() => {
+    if (apps) void refreshAppList();
+  }, [apps, refreshAppList]);
+
+  const handleDeleteApp = useCallback(
+    async (appId: string) => {
+      await apps?.deleteApp(appId);
+      void refreshAppList();
+    },
+    [apps, refreshAppList]
+  );
 
   // Auto-open settings on first visit (no gateway URL configured)
   useEffect(() => {
@@ -252,6 +297,10 @@ export default function ChatApp() {
           patchSession={patchSession}
           knownAgentIds={knownAgentIds}
           artifacts={artifacts}
+          apps={apps}
+          appList={appList}
+          onDeleteApp={handleDeleteApp}
+          onAppListRefresh={refreshAppList}
         />
 
         <SettingsDialog

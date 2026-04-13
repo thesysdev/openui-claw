@@ -31,6 +31,9 @@ import type {
 } from "@/types/gateway-responses";
 import type {
   AgentInfo,
+  AppRecord,
+  AppStore,
+  AppSummary,
   ArtifactRecord,
   ArtifactStore,
   ArtifactSummary,
@@ -123,6 +126,7 @@ export class OpenClawEngine implements Engine {
     multiAgent: true,
     sessionConfig: true,
     artifacts: true,
+    apps: true,
   };
 
   private socket: GatewaySocket | null = null;
@@ -206,6 +210,39 @@ export class OpenClawEngine implements Engine {
 
     deleteArtifact: async (artifactId: string): Promise<void> => {
       await this._request("artifacts.delete", { id: artifactId });
+    },
+  };
+
+  readonly apps: AppStore = {
+    listApps: async (): Promise<AppSummary[]> => {
+      try {
+        const result = await this._request<{ apps: AppSummary[] }>("apps.list", {});
+        return result?.apps ?? [];
+      } catch {
+        return [];
+      }
+    },
+
+    getApp: async (appId: string): Promise<AppRecord | null> => {
+      try {
+        const result = await this._request<{ app: AppRecord | null }>("apps.get", { id: appId });
+        return result?.app ?? null;
+      } catch {
+        return null;
+      }
+    },
+
+    deleteApp: async (appId: string): Promise<void> => {
+      await this._request("apps.delete", { id: appId });
+    },
+
+    invokeTool: async (tool: string, args: Record<string, unknown>, sessionKey?: string): Promise<unknown> => {
+      const result = await this._request<{ result: unknown }>("tools.invoke", {
+        tool_name: tool,
+        tool_args: args,
+        ...(sessionKey ? { sessionKey } : {}),
+      });
+      return result?.result ?? null;
     },
   };
 
@@ -521,6 +558,12 @@ export class OpenClawEngine implements Engine {
     if (!payload) return;
     if (frame.event === "agent") {
       this.runListener.onAgentEvent(payload as unknown as AgentEvent);
+      if (
+        (payload as { stream?: string }).stream === "lifecycle" &&
+        ((payload as { data?: { phase?: string } }).data?.phase === "error")
+      ) {
+        this.runListener.onClose();
+      }
     } else if (frame.event === "chat") {
       this.runListener.onChatEvent(payload as unknown as ChatEvent);
     }
