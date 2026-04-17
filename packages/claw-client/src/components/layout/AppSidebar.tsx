@@ -1,14 +1,32 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ChevronRight, EllipsisVertical, Archive, LayoutDashboard, Pencil, Plus, Settings, Trash2 } from "lucide-react";
+import {
+  ChevronRight,
+  EllipsisVertical,
+  Home,
+  LayoutDashboard,
+  Pencil,
+  Pin,
+  Plus,
+  ScrollText,
+  Settings,
+  Trash2,
+} from "lucide-react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { useThreadList } from "@openuidev/react-headless";
 import { Button, Shell } from "@openuidev/react-ui";
 import { ConnectionState } from "@/lib/gateway/types";
 import type { ClawThread } from "@/types/claw-thread";
-import { useHashRoute, navigate, artifactsHash, appHash } from "@/lib/hooks/useHashRoute";
-import type { AppSummary } from "@/lib/engines/types";
+import {
+  useHashRoute,
+  navigate,
+  artifactsHash,
+  artifactHash,
+  appHash,
+  homeHash,
+} from "@/lib/hooks/useHashRoute";
+import type { AppSummary, ArtifactSummary } from "@/lib/engines/types";
 
 const DOT_CLASS: Record<ConnectionState, string> = {
   [ConnectionState.DISCONNECTED]: "bg-zinc-400",
@@ -54,6 +72,10 @@ interface Props {
   renameSession: (threadId: string, label: string) => Promise<boolean>;
   deleteSession: (threadId: string) => Promise<boolean>;
   apps: AppSummary[];
+  artifacts: ArtifactSummary[];
+  unreadNotificationCount: number;
+  pinnedAppIds: Set<string>;
+  onTogglePinned: (appId: string) => void;
   onDeleteApp: (appId: string) => Promise<void>;
 }
 
@@ -64,6 +86,10 @@ export function AppSidebar({
   renameSession,
   deleteSession,
   apps,
+  artifacts,
+  unreadNotificationCount,
+  pinnedAppIds,
+  onTogglePinned,
   onDeleteApp,
 }: Props) {
   const { threads, isLoadingThreads, selectedThreadId, loadThreads, selectThread } =
@@ -71,14 +97,22 @@ export function AppSidebar({
   const threadsCast = threads as ClawThread[];
 
   const route = useHashRoute();
+  const homeActive = route?.view === "home";
   const artifactsActive = route?.view === "artifacts" || route?.view === "artifact";
   const activeAppId = route?.view === "app" ? route.appId : null;
+  const activeChatId = route?.view === "chat" ? route.sessionId : null;
 
+  const [pinnedExpanded, setPinnedExpanded] = useState(true);
   const [appsExpanded, setAppsExpanded] = useState(true);
+  const [artifactsExpanded, setArtifactsExpanded] = useState(true);
   const [deletingAppId, setDeletingAppId] = useState<string | null>(null);
 
   const [titleOverrides, setTitleOverrides] = useState<Map<string, string>>(() => new Map());
   const [deletedIds, setDeletedIds] = useState<Set<string>>(() => new Set());
+  const serverThreadIdsKey = useMemo(
+    () => threadsCast.map((t) => t.id).join("\u0000"),
+    [threadsCast],
+  );
 
   const displayThreads = useMemo<ClawThread[]>(() =>
     threadsCast
@@ -93,17 +127,25 @@ export function AppSidebar({
   // Clear stale local overrides/deletions when server data refreshes
   useEffect(() => {
     if (isLoadingThreads) return;
-    const serverIds = new Set(threadsCast.map((t) => t.id));
+    const serverIds = new Set(
+      serverThreadIdsKey.length > 0 ? serverThreadIdsKey.split("\u0000") : [],
+    );
     setTitleOverrides((prev) => {
       const next = new Map(prev);
-      for (const id of next.keys()) if (!serverIds.has(id)) next.delete(id);
-      return next.size === prev.size ? prev : next;
+      let changed = false;
+      for (const id of next.keys()) {
+        if (!serverIds.has(id)) {
+          next.delete(id);
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
     });
     setDeletedIds((prev) => {
-      const next = new Set([...prev].filter((id) => serverIds.has(id)));
-      return next.size === prev.size ? prev : next;
+      const nextValues = [...prev].filter((id) => serverIds.has(id));
+      return nextValues.length === prev.size ? prev : new Set(nextValues);
     });
-  }, [isLoadingThreads, threadsCast]);
+  }, [isLoadingThreads, serverThreadIdsKey]);
 
   const [expandedByAgent, setExpandedByAgent] = useState<Record<string, boolean>>({});
   const [creatingForAgent, setCreatingForAgent] = useState<string | null>(null);
@@ -122,24 +164,36 @@ export function AppSidebar({
   }, [connectionState, loadThreads]);
 
   const groups = useMemo(() => buildAgentGroups(displayThreads), [displayThreads]);
+  const groupIdsKey = useMemo(
+    () => groups.map((group) => group.agentId).join("\u0000"),
+    [groups],
+  );
 
   useEffect(() => {
+    const agentIds = groupIdsKey.length > 0 ? groupIdsKey.split("\u0000") : [];
     setExpandedByAgent((prev) => {
       const next = { ...prev };
-      for (const g of groups) {
-        if (next[g.agentId] === undefined) {
-          next[g.agentId] = true;
+      let changed = false;
+      for (const agentId of agentIds) {
+        if (next[agentId] === undefined) {
+          next[agentId] = true;
+          changed = true;
         }
       }
-      return next;
+      return changed ? next : prev;
     });
-  }, [groups]);
+  }, [groupIdsKey]);
 
   useEffect(() => {
-    if (!isLoadingThreads && displayThreads.length > 0 && !selectedThreadId && !artifactsActive && !activeAppId) {
+    if (
+      route?.view === "chat" &&
+      !isLoadingThreads &&
+      displayThreads.length > 0 &&
+      !selectedThreadId
+    ) {
       selectThread(displayThreads[0].id);
     }
-  }, [isLoadingThreads, displayThreads, selectedThreadId, selectThread, artifactsActive, activeAppId]);
+  }, [route, isLoadingThreads, displayThreads, selectedThreadId, selectThread]);
 
   useEffect(() => {
     if (!isLoadingThreads && pendingSelectRef.current) {
@@ -229,23 +283,134 @@ export function AppSidebar({
     [deleteSession, displayThreads, selectedThreadId, selectThread, loadThreads]
   );
 
+  const pinnedApps = useMemo(
+    () => apps.filter((app) => pinnedAppIds.has(app.id)),
+    [apps, pinnedAppIds],
+  );
+
   return (
     <Shell.SidebarContainer>
       <Shell.SidebarHeader />
       <Shell.SidebarSeparator />
 
       <Shell.SidebarContent>
+        <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+        <a
+          href={homeHash()}
+          className={`mx-1 mb-2 flex items-center gap-2 rounded-md px-2 py-1.5 text-xs font-medium transition-colors ${
+            homeActive
+              ? "bg-zinc-900 text-white ring-1 ring-zinc-900/10 dark:bg-zinc-100 dark:text-zinc-900 dark:ring-zinc-100/20"
+              : "text-zinc-500 hover:bg-zinc-50 hover:text-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-900/40 dark:hover:text-zinc-300"
+          }`}
+        >
+          <Home className="h-3.5 w-3.5 shrink-0" />
+          Home
+          {unreadNotificationCount > 0 ? (
+            <span className="ml-auto inline-flex min-w-5 items-center justify-center rounded-full bg-zinc-900 px-1.5 py-0.5 text-[10px] font-semibold text-white dark:bg-zinc-100 dark:text-zinc-900">
+              {unreadNotificationCount}
+            </span>
+          ) : null}
+        </a>
+
+        {pinnedApps.length > 0 && (
+          <div className="mb-3 px-1">
+            <button
+              type="button"
+              className="flex w-full min-w-0 items-center gap-1.5 px-2 py-1.5 text-left text-[11px] font-semibold leading-snug tracking-tight text-zinc-500 hover:bg-zinc-50 dark:text-zinc-400 dark:hover:bg-zinc-900/40"
+              onClick={() => setPinnedExpanded((prev) => !prev)}
+            >
+              <ChevronRight
+                className={`h-3 w-3 flex-shrink-0 text-zinc-400 transition-transform dark:text-zinc-500 ${pinnedExpanded ? "rotate-90" : ""}`}
+              />
+              <Pin className="h-3 w-3 shrink-0" />
+              <span className="truncate">Pinned</span>
+            </button>
+
+            {pinnedExpanded && (
+              <div className="ml-1.5 mt-1 border-l border-zinc-200 pl-2.5 dark:border-zinc-700">
+                <div className="space-y-0.5">
+                  {pinnedApps.map((app) => (
+                    <div
+                      key={app.id}
+                      className={`openui-shell-thread-button${activeAppId === app.id ? " openui-shell-thread-button--selected" : ""}`}
+                    >
+                      <a
+                        href={appHash(app.id)}
+                        className="openui-shell-thread-button-title"
+                        onClick={() => navigate({ view: "app", appId: app.id })}
+                      >
+                        {app.title}
+                      </a>
+                      <button
+                        type="button"
+                        className="openui-shell-thread-button-dropdown-trigger"
+                        title="Unpin app"
+                        onClick={(event) => {
+                          event.preventDefault();
+                          onTogglePinned(app.id);
+                        }}
+                      >
+                        <Pin size={14} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         <a
           href={artifactsHash()}
           className={`mx-1 mb-2 flex items-center gap-2 rounded-md px-2 py-1.5 text-xs font-medium transition-colors ${
             artifactsActive
-              ? "bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100"
+              ? "bg-sky-50 text-sky-900 ring-1 ring-sky-200/80 dark:bg-sky-500/10 dark:text-sky-100 dark:ring-sky-500/30"
               : "text-zinc-500 hover:bg-zinc-50 hover:text-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-900/40 dark:hover:text-zinc-300"
           }`}
         >
-          <Archive className="h-3.5 w-3.5 shrink-0" />
+          <ScrollText className="h-3.5 w-3.5 shrink-0" />
           Artifacts
         </a>
+
+        <div className="mb-3 px-1">
+          <button
+            type="button"
+            className="flex w-full min-w-0 items-center gap-1.5 px-2 py-1.5 text-left text-[11px] font-semibold leading-snug tracking-tight text-zinc-500 hover:bg-zinc-50 dark:text-zinc-400 dark:hover:bg-zinc-900/40"
+            onClick={() => setArtifactsExpanded((prev) => !prev)}
+          >
+            <ChevronRight
+              className={`h-3 w-3 flex-shrink-0 text-zinc-400 transition-transform dark:text-zinc-500 ${artifactsExpanded ? "rotate-90" : ""}`}
+            />
+            <ScrollText className="h-3 w-3 shrink-0" />
+            <span className="truncate">Recent Artifacts</span>
+          </button>
+
+          {artifactsExpanded && (
+            <div className="ml-1.5 mt-1 border-l border-zinc-200 pl-2.5 dark:border-zinc-700">
+              {artifacts.length === 0 ? (
+                <p className="py-1.5 text-[11px] text-zinc-400 dark:text-zinc-500">
+                  No artifacts yet
+                </p>
+              ) : (
+                <div className="space-y-0.5">
+                  {artifacts.slice(0, 8).map((artifact) => (
+                    <a
+                      key={artifact.id}
+                      href={artifactHash(artifact.id)}
+                      className={`openui-shell-thread-button${route?.view === "artifact" && route.artifactId === artifact.id ? " openui-shell-thread-button--selected" : ""}`}
+                      onClick={() => navigate({ view: "artifact", artifactId: artifact.id })}
+                    >
+                      <span className="openui-shell-thread-button-title">{artifact.title}</span>
+                      <span className="rounded px-1.5 py-0.5 text-[10px] text-zinc-400">
+                        {artifact.kind}
+                      </span>
+                    </a>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
 
         {/* ── Apps section ── */}
         <div className="mb-3 px-1">
@@ -272,6 +437,7 @@ export function AppSidebar({
                   {apps.map((app) => {
                     const isActive = activeAppId === app.id;
                     const isDeleting = deletingAppId === app.id;
+                    const isPinned = pinnedAppIds.has(app.id);
                     return (
                       <div
                         key={app.id}
@@ -285,22 +451,36 @@ export function AppSidebar({
                           {isDeleting ? "Deleting…" : app.title}
                         </a>
                         {!isDeleting && (
-                          <button
-                            className="openui-shell-thread-button-dropdown-trigger"
-                            title="Delete app"
-                            onClick={async (e) => {
-                              e.preventDefault();
-                              setDeletingAppId(app.id);
-                              try {
-                                await onDeleteApp(app.id);
-                                if (isActive) navigate({ view: "chat", sessionId: "" });
-                              } finally {
-                                setDeletingAppId(null);
-                              }
-                            }}
-                          >
-                            <Trash2 size={14} />
-                          </button>
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              className="openui-shell-thread-button-dropdown-trigger"
+                              title={isPinned ? "Unpin app" : "Pin app"}
+                              onClick={(event) => {
+                                event.preventDefault();
+                                onTogglePinned(app.id);
+                              }}
+                            >
+                              <Pin size={14} className={isPinned ? "text-sky-500" : undefined} />
+                            </button>
+                            <button
+                              type="button"
+                              className="openui-shell-thread-button-dropdown-trigger"
+                              title="Delete app"
+                              onClick={async (e) => {
+                                e.preventDefault();
+                                setDeletingAppId(app.id);
+                                try {
+                                  await onDeleteApp(app.id);
+                                  if (isActive) navigate({ view: "home" });
+                                } finally {
+                                  setDeletingAppId(null);
+                                }
+                              }}
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
                         )}
                       </div>
                     );
@@ -353,7 +533,7 @@ export function AppSidebar({
                     return (
                       <div
                         key={t.id}
-                        className={`openui-shell-thread-button${!artifactsActive && selectedThreadId === t.id ? " openui-shell-thread-button--selected" : ""}`}
+                        className={`openui-shell-thread-button${activeChatId === t.id ? " openui-shell-thread-button--selected" : ""}`}
                       >
                         {isEditing ? (
                           <input
@@ -448,6 +628,7 @@ export function AppSidebar({
             </div>
           );
         })}
+        </div>
       </Shell.SidebarContent>
 
       <div className="mt-auto flex items-center gap-2 border-t border-zinc-200 px-3 py-3 dark:border-zinc-800">

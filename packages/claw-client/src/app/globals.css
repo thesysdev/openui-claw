@@ -6,6 +6,10 @@ html,
 body {
   height: 100%;
   overflow: hidden;
+  background:
+    radial-gradient(circle at top left, rgba(148, 163, 184, 0.12), transparent 24%),
+    radial-gradient(circle at top right, rgba(56, 189, 248, 0.1), transparent 20%),
+    linear-gradient(to bottom, #fafafa, #f8fafc);
 }
 
 /* ── Composer toolbar (session controls) ──────────────────────────────────── */
@@ -31,11 +35,13 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  background-color: var(--openui-foreground, #fff);
-  border: 1px solid var(--openui-border-interactive, #e4e4e7);
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.92));
+  border: 1px solid rgba(228, 228, 231, 0.9);
   border-bottom: none;
   border-radius: var(--openui-radius-2xl, 24px) var(--openui-radius-2xl, 24px) 0 0;
   padding: 6px 12px;
+  box-shadow: 0 18px 40px -32px rgba(15, 23, 42, 0.35);
 }
 
 /* Remove top border-radius from composer card when toolbar is present */
@@ -100,4 +106,87 @@ body {
   font: var(--openui-text-label-sm, 11px/1.2 system-ui);
   color: var(--openui-text-neutral-secondary, #71717a);
   white-space: nowrap;
+}
+
+/* ── Thread layout when session workspace pane is visible ─────────────────── */
+
+.openui-claw-thread-container .openui-shell-thread-scroll-area {
+  padding-left: 16px;
+  padding-right: 16px;
+  background:
+    radial-gradient(circle at top, rgba(148, 163, 184, 0.08), transparent 26%),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0));
+}
+
+.openui-claw-thread-container .openui-shell-thread-messages {
+  max-width: none;
+  margin: 0;
+  padding-top: 12px;
+  padding-bottom: 8px;
+}
+
+.openui-claw-thread-container .openui-shell-thread-message-assistant {
+  padding-right: 0;
+}
+
+.openui-claw-thread-container .openui-shell-thread-message-user {
+  padding-left: 0;
+  padding-right: 0;
+  margin-top: 10px;
+}
+
+.openui-claw-thread-container .openui-shell-thread-message-user__content {
+  max-width: min(100%, 720px);
+  padding: 12px 18px;
+}
+
+.openui-claw-thread-container .openui-shell-thread-error {
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.openui-claw-thread-container .composer-toolbar,
+.openui-claw-thread-container .openui-claw-session-composer {
+  max-width: 980px;
+  margin: 0 auto;
+}
+
+.openui-claw-session-composer > div {
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.88));
+  border-color: rgba(228, 228, 231, 0.9);
+  box-shadow: 0 20px 40px -34px rgba(15, 23, 42, 0.36);
+}
+
+.dark body {
+  background:
+    radial-gradient(circle at top left, rgba(71, 85, 105, 0.14), transparent 24%),
+    radial-gradient(circle at top right, rgba(14, 165, 233, 0.1), transparent 18%),
+    linear-gradient(to bottom, #09090b, #111827);
+}
+
+.dark .composer-toolbar__inner,
+.dark .openui-claw-session-composer > div {
+  background:
+    linear-gradient(145deg, rgba(24, 24, 27, 0.96), rgba(23, 37, 84, 0.78));
+  border-color: rgba(63, 63, 70, 0.9);
+}
+
+.openui-claw-thread-container .composer-toolbar {
+  padding: 0 16px;
+}
+
+@media (max-width: 640px) {
+  .openui-claw-thread-container .composer-toolbar,
+  .openui-claw-thread-container .openui-claw-session-composer {
+    max-width: none;
+  }
+
+  .openui-claw-thread-container .composer-toolbar {
+    padding: 0 12px;
+  }
+
+  .openui-claw-thread-container .openui-shell-thread-message-user__content {
+    max-width: 100%;
+  }
 }

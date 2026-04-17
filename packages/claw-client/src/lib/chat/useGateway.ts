@@ -10,11 +10,62 @@ import {
   OpenClawEngine,
   resolveChatSessionKey,
 } from "@/lib/engines/openclaw/OpenClawEngine";
-import type { StoredMessage, ArtifactStore, AppStore, AppSummary } from "@/lib/engines/types";
+import type { StoredMessage, ArtifactStore, AppStore } from "@/lib/engines/types";
+import type { NotificationRecord } from "@/lib/notifications";
+import type { CronJobRecord, CronRunEntry, CronStatusRecord } from "@/lib/cron";
+import { separateContentAndContext } from "@/lib/content-parser";
+import { deriveTitleFromText, isOpaqueSessionTitle } from "@/lib/thread-titles";
 
 export type { ClawThreadListItem } from "@/types/gateway-responses";
 export type { SessionRow, ModelChoice } from "@/types/gateway-responses";
 export { resolveChatSessionKey };
+
+function extractUserMessageText(content: unknown): string {
+  if (typeof content === "string") {
+    return separateContentAndContext(content).content ?? "";
+  }
+
+  if (!Array.isArray(content)) return "";
+
+  return content
+    .flatMap((part) => {
+      if (!part || typeof part !== "object") return [];
+      const candidate = part as { type?: string; text?: unknown };
+      return candidate.type === "text" && typeof candidate.text === "string"
+        ? [candidate.text]
+        : [];
+    })
+    .join(" ")
+    .trim();
+}
+
+function deriveThreadTitleFromMessages(messages: unknown[]): string | null {
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
+    const candidate = messages[i];
+    if (!candidate || typeof candidate !== "object") continue;
+
+    const messageLike = candidate as { role?: string; content?: unknown };
+    if (messageLike.role !== "user") continue;
+
+    const title = deriveTitleFromText(extractUserMessageText(messageLike.content));
+    if (title) return title;
+  }
+
+  return null;
+}
+
+function sessionRouteIdFromSessionKey(
+  sessionKey: string,
+  knownAgentIds: Set<string>,
+): string {
+  for (const agentId of knownAgentIds) {
+    if (resolveChatSessionKey(agentId, knownAgentIds) === sessionKey) {
+      return agentId;
+    }
+  }
+
+  return sessionKey;
+}
 
 export function useGateway({ onAuthFailed }: { onAuthFailed: () => void }) {
   const [connectionState, setConnectionState] = useState<ConnectionState>(
@@ -28,6 +79,10 @@ export function useGateway({ onAuthFailed }: { onAuthFailed: () => void }) {
   const [availableModels, setAvailableModels] = useState<ModelChoice[]>([]);
   const [artifacts, setArtifacts] = useState<ArtifactStore | undefined>(undefined);
   const [apps, setApps] = useState<AppStore | undefined>(undefined);
+  const [notifications, setNotifications] = useState<NotificationRecord[]>([]);
+  const [cronJobs, setCronJobs] = useState<CronJobRecord[]>([]);
+  const [cronRuns, setCronRuns] = useState<CronRunEntry[]>([]);
+  const [cronStatus, setCronStatus] = useState<CronStatusRecord | null>(null);
 
   const onAuthFailedRef = useRef(onAuthFailed);
   useEffect(() => {
@@ -35,7 +90,13 @@ export function useGateway({ onAuthFailed }: { onAuthFailed: () => void }) {
   }, [onAuthFailed]);
 
   const knownAgentIds = useRef<Set<string>>(new Set());
+  const attemptedAutoTitlesRef = useRef<Map<string, string>>(new Map());
   const engineRef = useRef<OpenClawEngine | null>(null);
+  const sessionMetaRef = useRef(sessionMeta);
+
+  useEffect(() => {
+    sessionMetaRef.current = sessionMeta;
+  }, [sessionMeta]);
 
   useEffect(() => {
     const s = getSettings();
@@ -99,6 +160,32 @@ export function useGateway({ onAuthFailed }: { onAuthFailed: () => void }) {
         );
       }
 
+      if (!knownAgentIds.current.has(threadId)) {
+        const sessionKey = resolveChatSessionKey(threadId, knownAgentIds.current);
+        const session = sessionMetaRef.current.get(sessionKey);
+        const serverTitle =
+          session?.label ?? session?.displayName ?? session?.derivedTitle ?? null;
+
+        if (!serverTitle || isOpaqueSessionTitle(serverTitle, sessionKey)) {
+          const derivedTitle = deriveThreadTitleFromMessages(messages);
+          const labelAlreadyUsed =
+            derivedTitle != null &&
+            Array.from(sessionMetaRef.current.entries()).some(
+              ([existingSessionKey, existingSession]) =>
+                existingSessionKey !== sessionKey &&
+                existingSession.label?.trim() === derivedTitle,
+            );
+          if (
+            derivedTitle &&
+            !labelAlreadyUsed &&
+            attemptedAutoTitlesRef.current.get(sessionKey) !== derivedTitle
+          ) {
+            attemptedAutoTitlesRef.current.set(sessionKey, derivedTitle);
+            void engineRef.current.patchSession(sessionKey, { label: derivedTitle });
+          }
+        }
+      }
+
       return engineRef.current.sendMessage(threadId, messages, abortController);
     },
     []
@@ -148,6 +235,165 @@ export function useGateway({ onAuthFailed }: { onAuthFailed: () => void }) {
     []
   );
 
+  const refreshNotifications = useCallback(async (): Promise<NotificationRecord[]> => {
+    const next = await engineRef.current?.listNotifications();
+    const list = next ?? [];
+    setNotifications(list);
+    return list;
+  }, []);
+
+  const markNotificationsRead = useCallback(
+    async (ids?: string[]): Promise<boolean> => {
+      const ok = await engineRef.current?.markNotificationsRead(ids);
+      if (ok) {
+        await refreshNotifications();
+      }
+      return ok ?? false;
+    },
+    [refreshNotifications],
+  );
+
+  const upsertNotification = useCallback(
+    async (
+      notification: Omit<
+        NotificationRecord,
+        "id" | "createdAt" | "updatedAt" | "unread" | "readAt"
+      >,
+    ): Promise<boolean> => {
+      const ok = await engineRef.current?.upsertNotification(notification);
+      if (ok) {
+        await refreshNotifications();
+      }
+      return ok ?? false;
+    },
+    [refreshNotifications],
+  );
+
+  const syncCronNotifications = useCallback(
+    async (runs: CronRunEntry[]): Promise<void> => {
+      const engine = engineRef.current;
+      if (!engine) return;
+      const existingNotifications = await engine.listNotifications();
+      const existingDedupeKeys = new Set(
+        (existingNotifications ?? [])
+          .map((notification) => notification.dedupeKey)
+          .filter((value): value is string => typeof value === "string" && value.length > 0),
+      );
+
+      const relevantRuns = runs
+        .filter(
+          (run) =>
+            run.status === "error" ||
+            run.status === "skipped" ||
+            (run.status === "ok" && typeof run.summary === "string" && run.summary.length > 0),
+        )
+        .slice(0, 12);
+
+      await Promise.all(
+        relevantRuns.map(async (run) => {
+          const dedupeKey = `cron-run:${run.jobId}:${run.ts}`;
+          if (existingDedupeKeys.has(dedupeKey)) {
+            return;
+          }
+
+          const threadId =
+            run.threadId ??
+            (run.sessionKey
+              ? sessionRouteIdFromSessionKey(run.sessionKey, knownAgentIds.current)
+              : undefined);
+
+          const message =
+            run.status === "error"
+              ? run.error ?? "Scheduled run failed."
+              : run.status === "skipped"
+                ? run.summary ?? "Scheduled run was skipped."
+                : run.summary ?? "Scheduled run completed.";
+
+          await engine.upsertNotification({
+            dedupeKey,
+            kind: run.status === "ok" ? "cron_completed" : "cron_attention",
+            title: run.jobName ?? run.jobId,
+            message,
+            target: threadId ? { view: "chat", sessionId: threadId } : { view: "home" },
+            source: {
+              cronId: run.jobId,
+              sessionKey: run.sessionKey,
+            },
+            metadata: {
+              status: run.status,
+              summary: run.summary,
+              error: run.error,
+              deliveryStatus: run.deliveryStatus,
+              runAtMs: run.runAtMs,
+              nextRunAtMs: run.nextRunAtMs,
+            },
+          });
+        }),
+      );
+    },
+    [],
+  );
+
+  const refreshCronData = useCallback(async () => {
+    const engine = engineRef.current;
+    if (!engine) {
+      setCronJobs([]);
+      setCronRuns([]);
+      setCronStatus(null);
+      return { jobs: [], runs: [], status: null };
+    }
+
+    const [jobs, runs, status] = await Promise.all([
+      engine.listCronJobs(),
+      engine.listCronRuns(),
+      engine.getCronStatus(),
+    ]);
+
+    const normalizedJobs = jobs
+      .map((job) => ({
+        ...job,
+        threadId: job.sessionKey
+          ? sessionRouteIdFromSessionKey(job.sessionKey, knownAgentIds.current)
+          : undefined,
+      }))
+      .sort((left, right) => {
+        const leftNext = left.state?.nextRunAtMs ?? Number.MAX_SAFE_INTEGER;
+        const rightNext = right.state?.nextRunAtMs ?? Number.MAX_SAFE_INTEGER;
+        return leftNext - rightNext;
+      });
+
+    const normalizedRuns = runs.map((run) => ({
+      ...run,
+      threadId: run.sessionKey
+        ? sessionRouteIdFromSessionKey(run.sessionKey, knownAgentIds.current)
+        : run.sessionId,
+    }));
+
+    setCronJobs(normalizedJobs);
+    setCronRuns(normalizedRuns);
+    setCronStatus(status);
+
+    await syncCronNotifications(normalizedRuns);
+    await refreshNotifications();
+
+    return {
+      jobs: normalizedJobs,
+      runs: normalizedRuns,
+      status,
+    };
+  }, [refreshNotifications, syncCronNotifications]);
+
+  useEffect(() => {
+    if (connectionState !== ConnectionState.CONNECTED) return;
+
+    const intervalId = window.setInterval(() => {
+      if (document.visibilityState === "hidden") return;
+      void refreshCronData();
+    }, 5000);
+
+    return () => window.clearInterval(intervalId);
+  }, [connectionState, refreshCronData]);
+
   return {
     connectionState,
     pairingDeviceId,
@@ -165,5 +411,13 @@ export function useGateway({ onAuthFailed }: { onAuthFailed: () => void }) {
     knownAgentIds,
     artifacts,
     apps,
+    notifications,
+    refreshNotifications,
+    markNotificationsRead,
+    upsertNotification,
+    cronJobs,
+    cronRuns,
+    cronStatus,
+    refreshCronData,
   };
 }

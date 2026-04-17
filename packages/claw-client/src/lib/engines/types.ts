@@ -1,3 +1,5 @@
+import type { AssistantTimelineSegment } from "@/lib/chat/timeline";
+
 // ── Domain types ──────────────────────────────────────────────────────────────
 
 export interface AgentInfo {
@@ -36,7 +38,8 @@ export interface SessionConfigOption {
 export type StopReason = "end_turn" | "cancelled" | "max_tokens" | "error";
 
 // ── Stored message ────────────────────────────────────────────────────────────
-// Reasoning is stored as a field on the assistant message, not a separate role.
+// Reasoning/tool chronology can be stored as a lightweight timeline on the
+// assistant message so replay matches the live stream.
 
 export type StoredMessage =
   | {
@@ -49,6 +52,7 @@ export type StoredMessage =
       role: "assistant";
       content: string | null;
       reasoning?: string;
+      timeline?: AssistantTimelineSegment[];
       toolCalls?: Array<{
         id: string;
         type: "function";
@@ -101,7 +105,10 @@ export interface AppRecord {
   updatedAt: string;
 }
 
-export type AppSummary = Pick<AppRecord, "id" | "title" | "agentId" | "createdAt" | "updatedAt">;
+export type AppSummary = Pick<
+  AppRecord,
+  "id" | "title" | "agentId" | "sessionKey" | "createdAt" | "updatedAt"
+>;
 
 // ── Store interfaces ──────────────────────────────────────────────────────────
 

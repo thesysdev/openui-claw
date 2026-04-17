@@ -2,6 +2,14 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { generateSecureUuid } from "openclaw/plugin-sdk/core";
 
+const MAX_VERSIONS = 25;
+
+export type VersionEntry = {
+  content: string;
+  timestamp: string;
+  source: "create" | "edit" | "restore";
+};
+
 export type StoredArtifact = {
   id: string;
   kind: string;
@@ -10,6 +18,8 @@ export type StoredArtifact = {
   metadata?: Record<string, unknown>;
   /** Internal source ref — agentId + full sessionKey from the tool context. */
   source: { agentId: string; sessionKey: string };
+  /** Append-only version history. */
+  versions: VersionEntry[];
   createdAt: string;
   updatedAt: string;
 };
@@ -30,13 +40,14 @@ export class ArtifactStore {
   }
 
   async create(
-    data: Omit<StoredArtifact, "id" | "createdAt" | "updatedAt">,
+    data: Omit<StoredArtifact, "id" | "createdAt" | "updatedAt" | "versions">,
   ): Promise<StoredArtifact> {
     await this.ensureDir();
     const now = new Date().toISOString();
     const record: StoredArtifact = {
       id: generateSecureUuid(),
       ...data,
+      versions: [{ content: data.content, timestamp: now, source: "create" }],
       createdAt: now,
       updatedAt: now,
     };
@@ -50,9 +61,45 @@ export class ArtifactStore {
   ): Promise<StoredArtifact> {
     const existing = await this.get(id);
     if (!existing) throw new Error(`Artifact not found: ${id}`);
+
+    const versions = existing.versions ?? [];
+    if (patch.content !== undefined && patch.content !== existing.content) {
+      versions.push({
+        content: existing.content,
+        timestamp: existing.updatedAt,
+        source: "edit",
+      });
+      while (versions.length > MAX_VERSIONS) versions.shift();
+    }
+
     const updated: StoredArtifact = {
       ...existing,
       ...patch,
+      versions,
+      updatedAt: new Date().toISOString(),
+    };
+    await fs.writeFile(this.filePath(id), JSON.stringify(updated, null, 2), "utf-8");
+    return updated;
+  }
+
+  async restore(id: string, versionIndex: number): Promise<StoredArtifact> {
+    const existing = await this.get(id);
+    if (!existing) throw new Error(`Artifact not found: ${id}`);
+    const versions = existing.versions ?? [];
+    const target = versions[versionIndex];
+    if (!target) throw new Error(`Version ${versionIndex} not found for artifact ${id}`);
+
+    versions.push({
+      content: existing.content,
+      timestamp: existing.updatedAt,
+      source: "restore",
+    });
+    while (versions.length > MAX_VERSIONS) versions.shift();
+
+    const updated: StoredArtifact = {
+      ...existing,
+      content: target.content,
+      versions,
       updatedAt: new Date().toISOString(),
     };
     await fs.writeFile(this.filePath(id), JSON.stringify(updated, null, 2), "utf-8");
@@ -87,7 +134,9 @@ export class ArtifactStore {
   async get(id: string): Promise<StoredArtifact | null> {
     try {
       const raw = await fs.readFile(this.filePath(id), "utf-8");
-      return JSON.parse(raw) as StoredArtifact;
+      const record = JSON.parse(raw) as StoredArtifact;
+      if (!record.versions) record.versions = [];
+      return record;
     } catch {
       return null;
     }

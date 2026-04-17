@@ -242,6 +242,7 @@ export interface ChatHistoryMessage {
   content?: unknown;
   tool_calls?: ChatHistoryToolCall[];
   tool_call_id?: string;
+  error?: string;
   stopReason?: string;
   errorMessage?: string;
   __openclaw?: { id: string; seq: number };
