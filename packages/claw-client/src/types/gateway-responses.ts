@@ -1,3 +1,5 @@
+import type { NotificationRecord } from "@/lib/notifications";
+
 // Gateway RPC response types (subset used by the Claw client).
 // Source of truth: OpenClaw AgentSummarySchema / sessions.list / agents.list
 
@@ -57,3 +59,7 @@ export type ClawThreadListItem = {
   clawKind: "main" | "extra";
   clawAgentId: string;
 };
+
+export interface NotificationsListResult {
+  notifications: NotificationRecord[];
+}

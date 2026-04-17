@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 
 export type Route =
+  | { view: "home" }
   | { view: "chat"; sessionId: string }
   | { view: "artifacts" }
   | { view: "artifact"; artifactId: string }
@@ -10,6 +11,7 @@ export type Route =
 
 function parseHash(hash: string): Route | null {
   const path = hash.replace(/^#/, "");
+  if (path === "" || path === "/" || path === "/home") return { view: "home" };
   if (path.startsWith("/chat/")) {
     const sessionId = decodeURIComponent(path.slice("/chat/".length));
     if (sessionId) return { view: "chat", sessionId };
@@ -24,6 +26,10 @@ function parseHash(hash: string): Route | null {
     if (appId) return { view: "app", appId };
   }
   return null;
+}
+
+export function homeHash(): string {
+  return "#/home";
 }
 
 export function chatHash(sessionId: string): string {
@@ -43,7 +49,9 @@ export function appHash(appId: string): string {
 }
 
 export function navigate(route: Route): void {
-  if (route.view === "chat") {
+  if (route.view === "home") {
+    window.location.hash = "/home";
+  } else if (route.view === "chat") {
     window.location.hash = `/chat/${encodeURIComponent(route.sessionId)}`;
   } else if (route.view === "artifacts") {
     window.location.hash = "/artifacts";

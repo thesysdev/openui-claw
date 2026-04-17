@@ -1,28 +1,46 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Trash2 } from "lucide-react";
+import { Code2, Eye, Pin, Sparkles, Trash2 } from "lucide-react";
 import { Renderer } from "@openuidev/react-lang";
 import { openuiLibrary } from "@openuidev/react-ui/genui-lib";
+import { Callout } from "@openuidev/react-ui";
 import type { AppRecord, AppStore } from "@/lib/engines/types";
 
 interface Props {
   appId: string;
   apps: AppStore;
-  onDeleted: () => void;
+  updatedAt?: string;
+  onDeleted?: () => void;
+  isPinned?: boolean;
+  onTogglePinned?: (appId: string) => void;
+  onRefine?: (record: AppRecord) => void | Promise<void>;
+  mode?: "page" | "panel";
 }
 
-export function AppDetail({ appId, apps, onDeleted }: Props) {
+export function AppDetail({
+  appId,
+  apps,
+  updatedAt,
+  onDeleted,
+  isPinned = false,
+  onTogglePinned,
+  onRefine,
+  mode = "page",
+}: Props) {
   const [record, setRecord] = useState<AppRecord | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [viewMode, setViewMode] = useState<"preview" | "code">("preview");
+  const [renderErrors, setRenderErrors] = useState<string[]>([]);
 
   useEffect(() => {
     setLoading(true);
     setNotFound(false);
     setRecord(null);
+    setRenderErrors([]);
     apps
       .getApp(appId)
       .then((r) => {
@@ -30,7 +48,7 @@ export function AppDetail({ appId, apps, onDeleted }: Props) {
         else setRecord(r);
       })
       .finally(() => setLoading(false));
-  }, [appId, apps]);
+  }, [appId, apps, updatedAt]);
 
   // Build a toolProvider that bridges Query/Mutation in the app markup to
   // gateway RPCs — no LLM hop; the plugin executes tools directly.
@@ -44,8 +62,19 @@ export function AppDetail({ appId, apps, onDeleted }: Props) {
           args.tool_args != null && typeof args.tool_args === "object" && !Array.isArray(args.tool_args)
             ? (args.tool_args as Record<string, unknown>)
             : {};
-        const result = await apps.invokeTool(toolName, toolArgs, record?.sessionKey);
-        return { result };
+        const result = await apps.invokeTool(toolName, toolArgs, record?.sessionKey) as Record<string, unknown> | null;
+        // Auto-parse stdout JSON so Query data flows directly as parsed objects
+        if (result && typeof result.stdout === "string") {
+          const trimmed = result.stdout.trim();
+          if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+            try {
+              return JSON.parse(trimmed);
+            } catch {
+              // fall through to raw result
+            }
+          }
+        }
+        return result;
       },
     }),
     [apps, record?.sessionKey],
@@ -75,7 +104,7 @@ export function AppDetail({ appId, apps, onDeleted }: Props) {
     setDeleting(true);
     try {
       await apps.deleteApp(appId);
-      onDeleted();
+      onDeleted?.();
     } catch {
       setDeleting(false);
       setConfirmDelete(false);
@@ -84,12 +113,72 @@ export function AppDetail({ appId, apps, onDeleted }: Props) {
 
   return (
     <div className="flex h-full flex-col">
-      {/* Header bar */}
-      <div className="flex shrink-0 items-center justify-between border-b border-zinc-200 px-4 py-2 dark:border-zinc-800">
-        <h1 className="truncate text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-          {record.title}
-        </h1>
+      {mode === "page" && (
+        <div className="border-b border-zinc-200 px-5 py-4 dark:border-zinc-800">
+          <div className="min-w-0">
+            <h1 className="truncate text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+              {record.title}
+            </h1>
+            <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+              Interactive app created by {record.agentId}
+            </p>
+          </div>
+        </div>
+      )}
+
+      <div className="flex shrink-0 items-center justify-between gap-3 border-b border-zinc-200 px-4 py-2 dark:border-zinc-800">
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium ${
+              viewMode === "preview"
+                ? "bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100"
+                : "text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
+            }`}
+            onClick={() => setViewMode("preview")}
+          >
+            <Eye className="h-3.5 w-3.5" />
+            Preview
+          </button>
+          <button
+            type="button"
+            className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium ${
+              viewMode === "code"
+                ? "bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100"
+                : "text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
+            }`}
+            onClick={() => setViewMode("code")}
+          >
+            <Code2 className="h-3.5 w-3.5" />
+            Code
+          </button>
+        </div>
+
         <div className="flex shrink-0 items-center gap-2">
+          {onTogglePinned && (
+            <button
+              type="button"
+              className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium ${
+                isPinned
+                  ? "bg-sky-50 text-sky-600 dark:bg-sky-500/10 dark:text-sky-300"
+                  : "text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
+              }`}
+              onClick={() => onTogglePinned(appId)}
+            >
+              <Pin className="h-3.5 w-3.5" />
+              {isPinned ? "Pinned" : "Pin"}
+            </button>
+          )}
+          {onRefine && (
+            <button
+              type="button"
+              className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
+              onClick={() => void onRefine(record)}
+            >
+              <Sparkles className="h-3.5 w-3.5" />
+              Refine
+            </button>
+          )}
           {confirmDelete ? (
             <>
               <button
@@ -108,6 +197,7 @@ export function AppDetail({ appId, apps, onDeleted }: Props) {
             </>
           ) : (
             <button
+              type="button"
               onClick={handleDelete}
               className="rounded-md p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-red-500 dark:hover:bg-zinc-800 dark:hover:text-red-400"
               title="Delete app"
@@ -118,9 +208,39 @@ export function AppDetail({ appId, apps, onDeleted }: Props) {
         </div>
       </div>
 
-      {/* App canvas */}
       <div className="min-h-0 flex-1 overflow-auto p-4">
-        <Renderer library={openuiLibrary} response={record.content} toolProvider={toolProvider} />
+        {renderErrors.length > 0 && (
+          <div className="mb-4">
+            <Callout
+              variant="danger"
+              title="This app has render errors"
+              description={renderErrors[0] ?? "Renderer error"}
+            />
+          </div>
+        )}
+
+        {viewMode === "preview" ? (
+          <Renderer
+            library={openuiLibrary}
+            response={record.content}
+            toolProvider={toolProvider}
+            onError={(errors) => {
+              setRenderErrors(
+                errors.map((error) =>
+                  typeof error === "string"
+                    ? error
+                    : error instanceof Error
+                    ? error.message
+                    : JSON.stringify(error),
+                ),
+              );
+            }}
+          />
+        ) : (
+          <pre className="overflow-auto rounded-2xl bg-zinc-950 p-4 text-xs text-zinc-100">
+            {record.content}
+          </pre>
+        )}
       </div>
     </div>
   );

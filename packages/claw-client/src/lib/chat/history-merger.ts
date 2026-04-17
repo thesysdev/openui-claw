@@ -7,13 +7,13 @@
  * with tool calls + final content together.
  *
  * Special cases:
- *   - assistant messages with type:"thinking" content blocks → emitted as standalone
- *     ReasoningMessage (role:"reasoning") before the assistant turn
- *   - aborted messages with only thinking (no text, no toolCalls) → reasoning only, no assistant bubble
+ *   - assistant messages with type:"thinking" content blocks → captured in a
+ *     lightweight assistant timeline so replay order matches the live stream.
  *   - model:"gateway-injected" messages (compaction summaries) → ActivityMessage (role:"activity")
  */
 
 import type { ChatHistoryMessage } from "@/lib/gateway/types";
+import type { AssistantTimelineSegment } from "@/lib/chat/timeline";
 
 export type ToolCallOutput = {
   id: string;
@@ -24,8 +24,13 @@ export type ToolCallOutput = {
 export const ERROR_SENTINEL = "<!--AGENT_ERROR-->";
 
 export type MergedMessage =
-  | { id: string; role: "user" | "assistant"; content: string | null; toolCalls?: ToolCallOutput[] }
-  | { id: string; role: "reasoning"; content: string }
+  | {
+      id: string;
+      role: "user" | "assistant";
+      content: string | null;
+      toolCalls?: ToolCallOutput[];
+      timeline?: AssistantTimelineSegment[];
+    }
   | { id: string; role: "activity"; activityType: string; content: Record<string, unknown> };
 
 function extractText(content: unknown): string | null {
@@ -59,14 +64,53 @@ function extractThinking(content: unknown): string | null {
   return parts.length ? parts.join("") : null;
 }
 
+function stringifyContent(content: unknown): string | null {
+  if (typeof content === "string") return content;
+
+  const text = extractText(content);
+  if (text !== null) return text;
+
+  if (content == null) return null;
+
+  try {
+    return JSON.stringify(content, null, 2);
+  } catch {
+    return String(content);
+  }
+}
+
+function resolveToolMessageOutput(
+  message: ChatHistoryMessage,
+): string | null {
+  const candidate = message as ChatHistoryMessage & {
+    result?: unknown;
+    output?: unknown;
+    payload?: unknown;
+    text?: unknown;
+    value?: unknown;
+  };
+
+  return (
+    stringifyContent(candidate.content) ??
+    stringifyContent(candidate.result) ??
+    stringifyContent(candidate.output) ??
+    stringifyContent(candidate.payload) ??
+    stringifyContent(candidate.text) ??
+    stringifyContent(candidate.value)
+  );
+}
+
 export function mergeHistoryMessages(raw: ChatHistoryMessage[]): MergedMessage[] {
   const output: MergedMessage[] = [];
   let pending: (MergedMessage & { role: "assistant" }) | null = null;
 
   const flush = () => {
     if (pending) {
-      // Skip empty assistant bubbles (aborted thinking-only messages)
-      if (pending.content !== null || (pending.toolCalls && pending.toolCalls.length > 0)) {
+      if (
+        pending.content !== null ||
+        (pending.toolCalls && pending.toolCalls.length > 0) ||
+        (pending.timeline && pending.timeline.length > 0)
+      ) {
         output.push(pending);
       }
       pending = null;
@@ -107,15 +151,6 @@ export function mergeHistoryMessages(raw: ChatHistoryMessage[]): MergedMessage[]
       }));
       const allTools = [...contentTools, ...legacyTools];
 
-      // Emit reasoning message at the start of a new turn (before creating pending)
-      if (thinking && !pending) {
-        output.push({
-          id: crypto.randomUUID(),
-          role: "reasoning",
-          content: thinking,
-        });
-      }
-
       if (!text && allTools.length === 0 && m.stopReason === "error" && m.errorMessage) {
         flush();
         pending = {
@@ -126,29 +161,104 @@ export function mergeHistoryMessages(raw: ChatHistoryMessage[]): MergedMessage[]
         continue;
       }
 
-      // Aborted/thinking-only: no text and no tool calls — skip creating an empty assistant bubble
-      if (!text && allTools.length === 0) {
+      if (!text && !thinking && allTools.length === 0) {
         continue;
       }
+
+      const hasInterleavedActivity = Boolean(thinking) || allTools.length > 0;
 
       if (!pending) {
         pending = {
           id: m.__openclaw?.id ?? m.id ?? crypto.randomUUID(),
           role: "assistant",
-          content: text,
+          content: null,
           ...(allTools.length ? { toolCalls: allTools } : {}),
+          timeline: [],
         };
       } else {
         if (allTools.length) {
           pending.toolCalls = [...(pending.toolCalls ?? []), ...allTools];
         }
-        if (text) {
-          pending.content = text;
+      }
+
+      if (hasInterleavedActivity) {
+        if (pending.content) {
+          pending.timeline = [
+            ...(pending.timeline ?? []),
+            {
+              type: "assistant_update",
+              text: pending.content,
+            },
+          ];
+          pending.content = null;
         }
+
+        if (text) {
+          pending.timeline = [
+            ...(pending.timeline ?? []),
+            {
+              type: "assistant_update",
+              text,
+            },
+          ];
+        }
+      } else if (text) {
+        pending.content = pending.content ? `${pending.content}${text}` : text;
+      }
+
+      if (thinking) {
+        pending.timeline = [
+          ...(pending.timeline ?? []),
+          {
+            type: "reasoning",
+            text: thinking,
+          },
+        ];
+      }
+
+      if (allTools.length > 0) {
+        pending.timeline = [
+          ...(pending.timeline ?? []),
+          ...allTools.map((toolCall) => ({
+            type: "tool_call" as const,
+            toolCallId: toolCall.id,
+            toolName: toolCall.function.name,
+            args: toolCall.function.arguments,
+          })),
+        ];
       }
       continue;
     }
-    // toolResult / system / etc. — skip (they sit between assistant messages in the same turn)
+
+    if (m.role === "tool") {
+      if (!pending) continue;
+
+      const toolCallId =
+        m.tool_call_id ??
+        pending.toolCalls?.[pending.toolCalls.length - 1]?.id ??
+        crypto.randomUUID();
+      const output = resolveToolMessageOutput(m);
+      const fallbackError =
+        typeof m.error === "string" && m.error.trim().length > 0
+          ? m.error.trim()
+          : typeof m.errorMessage === "string" && m.errorMessage.trim().length > 0
+            ? m.errorMessage.trim()
+            : null;
+      const resultText = [output, fallbackError].filter(Boolean).join("\n\n");
+
+      pending.timeline = [
+        ...(pending.timeline ?? []),
+        {
+          type: "tool_result",
+          toolCallId,
+          output: resultText || "Tool finished without output.",
+          ...(fallbackError ? { isError: true } : {}),
+        },
+      ];
+      continue;
+    }
+
+    // system / other roles — skip (they sit between assistant messages in the same turn)
   }
   flush();
   return output;

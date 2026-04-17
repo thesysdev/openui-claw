@@ -2,15 +2,25 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { generateSecureUuid } from "openclaw/plugin-sdk/core";
 
+const MAX_VERSIONS = 25;
+
+export type VersionEntry = {
+  content: string;
+  timestamp: string;
+  source: "create" | "edit" | "restore";
+};
+
 export type StoredApp = {
   id: string;
   title: string;
   /** OpenUI Lang markup — the live app content rendered by the Renderer. */
   content: string;
-  /** Session key of the sub-agent used to generate/update this app. */
+  /** Session key of the originating thread. */
   sessionKey: string;
-  /** agentId that owns the generation session. */
+  /** agentId that created this app. */
   agentId: string;
+  /** Append-only version history. */
+  versions: VersionEntry[];
   createdAt: string;
   updatedAt: string;
 };
@@ -30,12 +40,13 @@ export class AppStore {
     await fs.mkdir(this.dir, { recursive: true });
   }
 
-  async create(data: Omit<StoredApp, "id" | "createdAt" | "updatedAt">): Promise<StoredApp> {
+  async create(data: Omit<StoredApp, "id" | "createdAt" | "updatedAt" | "versions">): Promise<StoredApp> {
     await this.ensureDir();
     const now = new Date().toISOString();
     const record: StoredApp = {
       id: generateSecureUuid(),
       ...data,
+      versions: [{ content: data.content, timestamp: now, source: "create" }],
       createdAt: now,
       updatedAt: now,
     };
@@ -49,9 +60,47 @@ export class AppStore {
   ): Promise<StoredApp> {
     const existing = await this.get(id);
     if (!existing) throw new Error(`App not found: ${id}`);
+
+    // Push current content to version history before overwriting.
+    const versions = existing.versions ?? [];
+    if (patch.content !== undefined && patch.content !== existing.content) {
+      versions.push({
+        content: existing.content,
+        timestamp: existing.updatedAt,
+        source: "edit",
+      });
+      while (versions.length > MAX_VERSIONS) versions.shift();
+    }
+
     const updated: StoredApp = {
       ...existing,
       ...patch,
+      versions,
+      updatedAt: new Date().toISOString(),
+    };
+    await fs.writeFile(this.filePath(id), JSON.stringify(updated, null, 2), "utf-8");
+    return updated;
+  }
+
+  async restore(id: string, versionIndex: number): Promise<StoredApp> {
+    const existing = await this.get(id);
+    if (!existing) throw new Error(`App not found: ${id}`);
+    const versions = existing.versions ?? [];
+    const target = versions[versionIndex];
+    if (!target) throw new Error(`Version ${versionIndex} not found for app ${id}`);
+
+    // Restoring creates a new head — non-destructive.
+    versions.push({
+      content: existing.content,
+      timestamp: existing.updatedAt,
+      source: "restore",
+    });
+    while (versions.length > MAX_VERSIONS) versions.shift();
+
+    const updated: StoredApp = {
+      ...existing,
+      content: target.content,
+      versions,
       updatedAt: new Date().toISOString(),
     };
     await fs.writeFile(this.filePath(id), JSON.stringify(updated, null, 2), "utf-8");
@@ -85,7 +134,10 @@ export class AppStore {
   async get(id: string): Promise<StoredApp | null> {
     try {
       const raw = await fs.readFile(this.filePath(id), "utf-8");
-      return JSON.parse(raw) as StoredApp;
+      const record = JSON.parse(raw) as StoredApp;
+      // Backfill versions for old records that don't have them.
+      if (!record.versions) record.versions = [];
+      return record;
     } catch {
       return null;
     }

@@ -20,15 +20,19 @@ import { createOpenClawAGUIMapper } from "@/lib/chat/openclaw-agui-mapper";
 import { mergeHistoryMessages } from "@/lib/chat/history-merger";
 import type { MergedMessage } from "@/lib/chat/history-merger";
 import { normalizeSessionPatch } from "@/lib/models";
+import { resolveSessionTitle } from "@/lib/thread-titles";
 import type {
   AgentsListResult,
   ClawThreadListItem,
   ModelChoice,
   ModelsListResult,
+  NotificationsListResult,
   SessionGetResult,
   SessionRow,
   SessionsListResult,
 } from "@/types/gateway-responses";
+import type { NotificationRecord } from "@/lib/notifications";
+import type { CronJobRecord, CronRunEntry, CronStatusRecord } from "@/lib/cron";
 import type {
   AgentInfo,
   AppRecord,
@@ -52,6 +56,16 @@ const warn = (...args: unknown[]) =>
   console.warn("[claw:openclaw-engine]", ...args);
 
 const CLAW_SUFFIX = ":openui-claw";
+const FULL_VERBOSE_LEVEL = "full";
+
+function sessionRowTitle(row: Pick<SessionRow, "label" | "displayName" | "derivedTitle" | "key">): string {
+  return resolveSessionTitle({
+    label: row.label,
+    displayName: row.displayName,
+    derivedTitle: row.derivedTitle,
+    fallbackId: row.key,
+  });
+}
 
 export function agentMainSessionKey(agentId: string): string {
   return `agent:${agentId}:main${CLAW_SUFFIX}`;
@@ -65,18 +79,12 @@ export function resolveChatSessionKey(
   return threadId;
 }
 
-/** Convert MergedMessage[] → StoredMessage[], folding reasoning into assistant. */
+/** Convert merged history into StoredMessage[] for UI hydration. */
 function mergedToStored(merged: MergedMessage[]): StoredMessage[] {
   const result: StoredMessage[] = [];
-  let pendingReasoning: string | null = null;
 
   for (const m of merged) {
-    if (m.role === "reasoning") {
-      pendingReasoning = m.content;
-      continue;
-    }
     if (m.role === "user") {
-      pendingReasoning = null;
       result.push({ id: m.id, role: "user", content: m.content ?? "" });
       continue;
     }
@@ -85,15 +93,13 @@ function mergedToStored(merged: MergedMessage[]): StoredMessage[] {
         id: m.id,
         role: "assistant",
         content: m.content,
-        ...(pendingReasoning ? { reasoning: pendingReasoning } : {}),
+        ...(m.timeline?.length ? { timeline: m.timeline } : {}),
         ...(m.toolCalls?.length ? { toolCalls: m.toolCalls } : {}),
       });
-      pendingReasoning = null;
       continue;
     }
     if (m.role === "activity") {
       result.push(m);
-      pendingReasoning = null;
     }
   }
 
@@ -132,6 +138,7 @@ export class OpenClawEngine implements Engine {
   private socket: GatewaySocket | null = null;
   private runListener: RunListener | null = null;
   private knownAgentIds = new Set<string>();
+  private notificationMethodState: "unknown" | "supported" | "unsupported" = "unknown";
 
   private _connectionState: ConnectionState = ConnectionState.DISCONNECTED;
   private _settings: Settings | null;
@@ -249,6 +256,7 @@ export class OpenClawEngine implements Engine {
   // ── Lifecycle ─────────────────────────────────────────────────────────────
 
   async connect(): Promise<void> {
+    this.notificationMethodState = "unknown";
     this.socket = this._createSocket(this._settings);
     if (this._settings?.gatewayUrl) this.socket.start();
   }
@@ -265,6 +273,7 @@ export class OpenClawEngine implements Engine {
     this._isReady = false;
     this._readyDeferred?.reject(new Error("reconnecting"));
     this._readyDeferred = null;
+    this.notificationMethodState = "unknown";
     this._settings = newSettings;
     this.events.onSettingsChanged(newSettings);
     this.socket?.stop();
@@ -316,9 +325,33 @@ export class OpenClawEngine implements Engine {
             .map((c: unknown) => (c as { text?: string } | null)?.text ?? "")
             .join("")
         : "";
+    const attachments = Array.isArray((lastMsg as { attachments?: unknown[] } | null)?.attachments)
+      ? ((lastMsg as { attachments?: unknown[] }).attachments ?? [])
+          .map((item) => {
+            if (!item || typeof item !== "object") return null;
+            const candidate = item as Record<string, unknown>;
+            const mimeType =
+              typeof candidate.mimeType === "string" ? candidate.mimeType : "";
+            const fileName =
+              typeof candidate.fileName === "string" ? candidate.fileName : "";
+            const content =
+              typeof candidate.content === "string" ? candidate.content : "";
+
+            if (!mimeType || !fileName || !content) return null;
+            return {
+              ...(typeof candidate.type === "string" ? { type: candidate.type } : {}),
+              mimeType,
+              fileName,
+              content,
+            };
+          })
+          .filter((item): item is { type?: string; mimeType: string; fileName: string; content: string } => item !== null)
+      : [];
 
     const sessionKey = resolveChatSessionKey(sessionId, this.knownAgentIds);
     log(`sendMessage  sessionId=${sessionId}  sessionKey=${sessionKey}`);
+
+    await this.patchSession(sessionKey, { verboseLevel: FULL_VERBOSE_LEVEL });
 
     const encoder = new TextEncoder();
     let ctrl!: ReadableStreamDefaultController<Uint8Array>;
@@ -358,6 +391,7 @@ export class OpenClawEngine implements Engine {
       await this.socket?.request("chat.send", {
         sessionKey,
         message: messageText,
+        ...(attachments.length > 0 ? { attachments } : {}),
         idempotencyKey: crypto.randomUUID(),
       });
     } catch (err) {
@@ -461,7 +495,7 @@ export class OpenClawEngine implements Engine {
           seen.add(row.key);
           items.push({
             id: row.key,
-            title: row.label || row.displayName || row.derivedTitle || row.key,
+            title: sessionRowTitle(row),
             createdAt: row.updatedAt ?? Date.now(),
             clawKind: "extra",
             clawAgentId: a.id,
@@ -498,6 +532,110 @@ export class OpenClawEngine implements Engine {
     } catch (e) {
       warn("sessions.patch failed:", e);
       return false;
+    }
+  }
+
+  async listNotifications(): Promise<NotificationRecord[]> {
+    if (this.notificationMethodState === "unsupported") {
+      return [];
+    }
+
+    try {
+      const result = await this._request<NotificationsListResult>(
+        "notifications.list",
+      );
+      this.notificationMethodState = "supported";
+      return result?.notifications ?? [];
+    } catch (e) {
+      if (this.isUnknownMethodError(e, "notifications.list")) {
+        this.notificationMethodState = "unsupported";
+        warn("notifications.list unavailable on the current gateway runtime");
+        return [];
+      }
+      warn("notifications.list failed:", e);
+      return [];
+    }
+  }
+
+  async markNotificationsRead(ids?: string[]): Promise<boolean> {
+    if (this.notificationMethodState === "unsupported") {
+      return false;
+    }
+
+    try {
+      await this._request("notifications.read", {
+        ...(ids && ids.length > 0 ? { ids } : {}),
+      });
+      this.notificationMethodState = "supported";
+      return true;
+    } catch (e) {
+      if (this.isUnknownMethodError(e, "notifications.read")) {
+        this.notificationMethodState = "unsupported";
+        warn("notifications.read unavailable on the current gateway runtime");
+        return false;
+      }
+      warn("notifications.read failed:", e);
+      return false;
+    }
+  }
+
+  async upsertNotification(
+    notification: Omit<
+      NotificationRecord,
+      "id" | "createdAt" | "updatedAt" | "unread" | "readAt"
+    >,
+  ): Promise<boolean> {
+    if (this.notificationMethodState === "unsupported") {
+      return false;
+    }
+
+    try {
+      await this._request("notifications.upsert", notification);
+      this.notificationMethodState = "supported";
+      return true;
+    } catch (e) {
+      if (this.isUnknownMethodError(e, "notifications.upsert")) {
+        this.notificationMethodState = "unsupported";
+        warn("notifications.upsert unavailable on the current gateway runtime");
+        return false;
+      }
+      warn("notifications.upsert failed:", e);
+      return false;
+    }
+  }
+
+  async listCronJobs(): Promise<CronJobRecord[]> {
+    try {
+      const result = await this._request<{ jobs?: CronJobRecord[] }>("cron.list", {
+        limit: 20,
+        includeDisabled: true,
+      });
+      return Array.isArray(result?.jobs) ? result.jobs : [];
+    } catch (e) {
+      warn("cron.list failed:", e);
+      return [];
+    }
+  }
+
+  async listCronRuns(): Promise<CronRunEntry[]> {
+    try {
+      const result = await this._request<{ entries?: CronRunEntry[] }>("cron.runs", {
+        scope: "all",
+        limit: 20,
+      });
+      return Array.isArray(result?.entries) ? result.entries : [];
+    } catch (e) {
+      warn("cron.runs failed:", e);
+      return [];
+    }
+  }
+
+  async getCronStatus(): Promise<CronStatusRecord | null> {
+    try {
+      return await this._request<CronStatusRecord>("cron.status", {});
+    } catch (e) {
+      warn("cron.status failed:", e);
+      return null;
     }
   }
 
@@ -629,6 +767,23 @@ export class OpenClawEngine implements Engine {
       .catch((e) => warn("sessions.get failed:", e));
   }
 
+  private isUnknownMethodError(error: unknown, method: string): boolean {
+    if (!(error instanceof Error)) return false;
+
+    if (error.message.includes(`unknown method: ${method}`)) {
+      return true;
+    }
+
+    const causeMessage =
+      typeof (error as Error & { cause?: unknown }).cause === "object" &&
+      (error as Error & { cause?: { message?: string } }).cause &&
+      typeof (error as Error & { cause?: { message?: string } }).cause?.message === "string"
+        ? (error as Error & { cause?: { message?: string } }).cause?.message
+        : null;
+
+    return causeMessage?.includes(`unknown method: ${method}`) ?? false;
+  }
+
   // ── ConversationStore implementation ──────────────────────────────────────
 
   private async _listSessions(agentId?: string): Promise<SessionInfo[]> {
@@ -640,7 +795,7 @@ export class OpenClawEngine implements Engine {
       return (result?.sessions ?? []).map((row) => ({
         id: row.key,
         agentId: agentId ?? "",
-        title: row.label || row.displayName || row.derivedTitle || row.key,
+        title: sessionRowTitle(row),
         createdAt: new Date(row.updatedAt ?? Date.now()).toISOString(),
         updatedAt: row.updatedAt ? new Date(row.updatedAt).toISOString() : undefined,
       }));
@@ -662,7 +817,7 @@ export class OpenClawEngine implements Engine {
       return {
         id: sessionId,
         agentId: "",
-        title: row.label || row.displayName || row.derivedTitle || sessionId,
+        title: sessionRowTitle(row),
         createdAt: new Date(row.updatedAt ?? Date.now()).toISOString(),
         updatedAt: row.updatedAt ? new Date(row.updatedAt).toISOString() : undefined,
       };
@@ -679,7 +834,11 @@ export class OpenClawEngine implements Engine {
     const key = `agent:${agentId}:${crypto.randomUUID()}${CLAW_SUFFIX}`;
     log("createSession", agentId, key);
     try {
-      await this._request("sessions.create", { agentId, key });
+      await this._request("sessions.create", {
+        agentId,
+        key,
+        verboseLevel: FULL_VERBOSE_LEVEL,
+      });
     } catch (e) {
       warn("sessions.create failed:", e);
     }
