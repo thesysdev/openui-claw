@@ -25,7 +25,7 @@ The app is stored in the Apps panel. The user can open, refine, and return to it
 
 You have access to the host system via the `exec` tool. Apps run independently after creation — the runtime calls tools directly on every refresh with no LLM involved.
 
-> **CRITICAL — Query tool name:** The app runtime's `toolProvider` maps tool names directly to plugin handlers. Only `exec` and `read` are supported. Always use `Query("exec", {command: "..."})` — **never** `Query("tools_invoke", {tool_name: "exec", ...})`. The `tools_invoke` wrapper is for the agent's own tool calls, not for `Query()` in app markup.
+> **CRITICAL — Query tool name:** The app runtime's `toolProvider` maps tool names directly to plugin handlers. Supported direct tool names are `exec`, `read`, `db_query`, and `db_execute`. Always use `Query("exec", {command: "..."})`, `Query("read", {...})`, `Query("db_query", {...})`, or `Mutation("db_execute", {...})` directly — **never** `Query("tools_invoke", {tool_name: "...", ...})`. The `tools_invoke` wrapper is for the agent's own tool calls, not for `Query()` or `Mutation()` in app markup.
 
 #### Workflow: Discover → Script → Generate
 
@@ -79,10 +79,38 @@ data = Query("exec", {command: "node ~/.openclaw/workspace/scripts/my-data.js"},
 - Fourth arg: refresh interval in seconds
 
 - Access fields directly: `data.fieldA`, `data.fieldB` (no `.result` wrapper — stdout is auto-parsed)
-- Third arg is defaults — use the REAL JSON output from your test in step 2
-- Fourth arg is refresh interval in seconds
 - For multiple data sources, save multiple scripts and create multiple `Query()` statements
 - NEVER hardcode data that a script can provide — everything must flow through `Query()`
+
+#### Manual refresh buttons
+
+If the user wants a visible refresh control, re-run the declared `Query()` refs with `Action([@Run(...)])`:
+
+```openui-lang
+refreshBtn = Button("↻ Refresh", Action([@Run(overview), @Run(procs)]), "secondary", "normal", "small")
+```
+
+- Do NOT emit custom refresh actions like `{type: "refresh"}` or `{type: "refresh_data"}`.
+- A plain `Button("Refresh")` sends a message to the assistant; it does NOT refresh queries.
+- Manual refresh always targets declared query refs via `@Run(queryRef)`.
+
+#### Tables are column-oriented
+
+`Table()` takes a single array of `Col(...)` definitions. Each `Col` holds the data for one column.
+
+```openui-lang
+procsTable = Table([
+  Col("Process", procs.procs.name),
+  Col("PID", procs.procs.pid),
+  Col("CPU %", procs.procs.cpu, "number"),
+  Col("Mem %", procs.procs.mem, "number"),
+  Col("User", procs.procs.user)
+])
+```
+
+- Do NOT emit row-based tables like `Table(columns, rows)` in new app code.
+- The second `Col(...)` arg is the column data array, not a type label. `Col("Process", "string")` is wrong unless the literal text `"string"` is meant to render in every row.
+- For query results, prefer array pluck (`data.rows.field`) over constructing row arrays manually.
 
 ### Built-in Functions
 
@@ -102,6 +130,38 @@ data = Query("exec", {command: "node -e '...script using " + $days + "...' "}, {
 ```
 
 When the user changes the Select, `$days` updates and the Query re-fetches automatically.
+
+### Persistent App State (DB-backed apps)
+
+For apps that need durable state like todos, notes, saved filters, or simple CRUD data, use the built-in SQLite tools instead of faking state in markdown or local variables.
+
+#### Setup workflow
+
+1. In the agent turn, call `db_execute` to create the schema.
+2. In the app markup, use `Query("db_query", ...)` for reads.
+3. Use `Mutation("db_execute", ...)` for writes.
+4. Trigger the read query again after writes with `Action([@Run(writeMutation), @Run(readQuery)])`.
+
+Example setup tool call:
+
+```
+db_execute({sql: "CREATE TABLE IF NOT EXISTS todos (id INTEGER PRIMARY KEY, text TEXT NOT NULL, done INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)", namespace: "todos"})
+```
+
+Example app pattern:
+
+```openui-lang
+$text = ""
+todos = Query("db_query", {sql: "SELECT id, text, done, created_at FROM todos ORDER BY created_at DESC", namespace: "todos"}, {rows: []}, 5)
+createTodo = Mutation("db_execute", {sql: "INSERT INTO todos (text) VALUES ($text)", params: {text: $text}, namespace: "todos"})
+addButton = Button("Add", Action([@Run(createTodo), @Run(todos), @Reset($text)]))
+```
+
+Notes:
+- `db_query` returns `{namespace, rows: [...]}`.
+- `db_execute` returns `{namespace, changes, lastInsertRowid}`.
+- Use the same `namespace` across setup, reads, and writes for one app.
+- Prefer SQL parameters over string interpolation for user input.
 
 ### 1D Charts — Use Flat Arrays
 
