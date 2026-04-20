@@ -1,6 +1,9 @@
 "use client";
 
-import { AppDetail } from "@/components/apps/AppDetail";
+import {
+  AppDetail,
+  type AppContinueConversationHandler,
+} from "@/components/apps/AppDetail";
 import { ArtifactDetail } from "@/components/artifacts/ArtifactDetail";
 import { ArtifactsView } from "@/components/artifacts/ArtifactsView";
 import { CommandPalette } from "@/components/CommandPalette";
@@ -166,6 +169,7 @@ function ThreadArea({
   pendingPreviewOpen,
   onConsumePendingPreview,
   onRefineApp,
+  onAppContinueConversation,
   workspacePaneCollapsed,
   onToggleWorkspacePaneCollapsed,
   gatewayCommands,
@@ -197,6 +201,7 @@ function ThreadArea({
   pendingPreviewOpen: { threadId: string; previewId: string } | null;
   onConsumePendingPreview: () => void;
   onRefineApp: (record: AppRecord) => void | Promise<void>;
+  onAppContinueConversation: AppContinueConversationHandler;
   workspacePaneCollapsed: boolean;
   onToggleWorkspacePaneCollapsed: (collapsed: boolean) => void;
   gatewayCommands: GatewayCommand[];
@@ -613,6 +618,7 @@ function ThreadArea({
             pinnedAppIds={pinnedAppIds}
             onTogglePinned={onTogglePinned}
             onRefineApp={onRefineApp}
+            onAppContinueConversation={onAppContinueConversation}
             onRefreshApps={onRefreshSummaries}
             onRefreshArtifacts={onRefreshSummaries}
           />
@@ -779,6 +785,7 @@ function ChatAppInner({
   const route = useHashRoute() ?? { view: "home" as const };
   const { threads, selectedThreadId, selectThread, loadThreads } = useThreadList();
   const selectedThreadIsRunning = useThread((state) => state.isRunning);
+  const dispatchChatProcessMessage = useThread((state) => state.processMessage);
   const [mobileNotificationInboxOpen, setMobileNotificationInboxOpen] = useState(false);
   const [notificationPaneCollapsed, setNotificationPaneCollapsed] = useState(false);
   const [workspacePaneCollapsed, setWorkspacePaneCollapsed] = useState(false);
@@ -1041,6 +1048,63 @@ function ChatAppInner({
     ],
   );
 
+  /**
+   * `ContinueConversation` from inside a standalone app view mirrors the
+   * Refine flow: select the app's origin chat thread, pin the app as that
+   * thread's `linkedApp` workspace context, open the app preview pane on
+   * the right, navigate the URL to the chat view, and finally post the user
+   * message via the chat store's `processMessage`. If the app doesn't carry
+   * a known sessionKey, fall back to the currently selected thread rather
+   * than silently dropping the user's click.
+   */
+  const handleAppContinueConversation = useCallback(
+    async (payload: {
+      message: { role: "user"; content: string };
+      appRecord: AppRecord;
+    }) => {
+      const { appRecord, message } = payload;
+      const nextThreadId = appRecord.sessionKey
+        ? sessionRouteIdFromSessionKey(appRecord.sessionKey, knownAgentIds.current)
+        : await createSession(appRecord.agentId);
+      if (!nextThreadId) return;
+
+      onUpdateThreadWorkspace(nextThreadId, (current) => ({
+        ...current,
+        linkedApp: {
+          appId: appRecord.id,
+          title: appRecord.title,
+          agentId: appRecord.agentId,
+          sessionKey: appRecord.sessionKey,
+        },
+      }));
+      onSetPendingPreviewOpen({
+        threadId: nextThreadId,
+        previewId: sessionAppPreviewId(appRecord.id),
+      });
+      loadThreads();
+
+      // Always navigate to the chat view. The user may already have
+      // `selectedThreadId === nextThreadId` while viewing the app surface at
+      // `#/apps/<id>` — in that case skipping `navigate` would leave them
+      // stuck on the app route even though we've just posted a message.
+      selectThread(nextThreadId);
+      navigate({ view: "chat", sessionId: nextThreadId });
+
+      // Zustand's set is synchronous, so processMessage sees the new
+      // selectedThreadId on the very next call.
+      dispatchChatProcessMessage(message);
+    },
+    [
+      createSession,
+      dispatchChatProcessMessage,
+      knownAgentIds,
+      loadThreads,
+      onSetPendingPreviewOpen,
+      onUpdateThreadWorkspace,
+      selectThread,
+    ],
+  );
+
   const openNotification = useCallback(
     async (notification: NotificationRecord) => {
       switch (notification.target.view) {
@@ -1208,6 +1272,7 @@ function ChatAppInner({
           isPinned={pinnedAppIds.has(route.appId)}
           onTogglePinned={onTogglePinned}
           onRefine={handleRefineApp}
+          onContinueConversation={handleAppContinueConversation}
           onDeleted={() => {
             onRefreshApps();
             navigate({ view: "home" });
@@ -1250,6 +1315,7 @@ function ChatAppInner({
         pendingPreviewOpen={pendingPreviewOpen}
         onConsumePendingPreview={onConsumePendingPreview}
         onRefineApp={handleRefineApp}
+        onAppContinueConversation={handleAppContinueConversation}
         workspacePaneCollapsed={workspacePaneCollapsed}
         onToggleWorkspacePaneCollapsed={setWorkspacePaneCollapsed}
         gatewayCommands={gatewayCommands}

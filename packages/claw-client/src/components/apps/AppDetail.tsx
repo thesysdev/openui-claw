@@ -1,11 +1,28 @@
 "use client";
 
 import type { AppRecord, AppStore } from "@/lib/engines/types";
+import {
+  buildContinueConversationPayload,
+  handleOpenUrlAction,
+} from "@/lib/renderer-actions";
+import type { ActionEvent } from "@openuidev/react-lang";
 import { Renderer } from "@openuidev/react-lang";
 import { Callout } from "@openuidev/react-ui";
 import { openuiLibrary } from "@openuidev/react-ui/genui-lib";
 import { Code2, Eye, Pin, Sparkles, Trash2 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+
+/**
+ * Called when a `ContinueConversation` action fires inside a standalone app
+ * view. Implementations are expected to route the message to the app's
+ * origin chat session, pin the app into that session's workspace, and open
+ * the app preview on the side (mirroring the Refine flow) — see
+ * `ChatAppInner.handleAppContinueConversation`.
+ */
+export type AppContinueConversationHandler = (payload: {
+  message: { role: "user"; content: string };
+  appRecord: AppRecord;
+}) => void;
 
 function normalizeToolResult(result: unknown): unknown {
   if (result && typeof result === "object" && !Array.isArray(result)) {
@@ -33,6 +50,12 @@ interface Props {
   isPinned?: boolean;
   onTogglePinned?: (appId: string) => void;
   onRefine?: (record: AppRecord) => void | Promise<void>;
+  /**
+   * Handler invoked when the app emits a `ContinueConversation` action
+   * (e.g. a Button with `Action([@ToAssistant("...")])`). The parent is
+   * responsible for routing the message to the app's origin thread.
+   */
+  onContinueConversation?: AppContinueConversationHandler;
   mode?: "page" | "panel";
 }
 
@@ -44,6 +67,7 @@ export function AppDetail({
   isPinned = false,
   onTogglePinned,
   onRefine,
+  onContinueConversation,
   mode = "page",
 }: Props) {
   const [record, setRecord] = useState<AppRecord | null>(null);
@@ -67,6 +91,25 @@ export function AppDetail({
       })
       .finally(() => setLoading(false));
   }, [appId, apps, updatedAt]);
+
+  // Route built-in Renderer actions through the shared handler module.
+  //   - `OpenUrl`              → open in a new tab.
+  //   - `ContinueConversation` → delegated to the parent via
+  //     `onContinueConversation`, which is expected to select the app's
+  //     origin thread and post the message there. Silently no-ops when the
+  //     parent didn't supply a handler (e.g. a preview surface that doesn't
+  //     own routing).
+  const handleAction = useCallback(
+    (event: ActionEvent) => {
+      if (handleOpenUrlAction(event)) return;
+
+      const payload = buildContinueConversationPayload(event);
+      if (payload && onContinueConversation && record) {
+        onContinueConversation({ message: payload, appRecord: record });
+      }
+    },
+    [onContinueConversation, record],
+  );
 
   // Build a toolProvider that bridges Query/Mutation in the app markup to
   // gateway RPCs — no LLM hop; the plugin executes tools directly.
@@ -233,6 +276,7 @@ export function AppDetail({
             library={openuiLibrary}
             response={record.content}
             toolProvider={toolProvider}
+            onAction={handleAction}
             onError={(errors) => {
               setRenderErrors(
                 errors.map((error) =>

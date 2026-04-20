@@ -1,6 +1,9 @@
 "use client";
 
-import { AppDetail } from "@/components/apps/AppDetail";
+import {
+  AppDetail,
+  type AppContinueConversationHandler,
+} from "@/components/apps/AppDetail";
 import { ArtifactContentView } from "@/components/artifacts/ArtifactContentView";
 import { ArtifactDetail } from "@/components/artifacts/ArtifactDetail";
 import type {
@@ -77,6 +80,7 @@ export function SessionPreviewPanels({
   pinnedAppIds,
   onTogglePinned,
   onRefineApp,
+  onAppContinueConversation,
   onRefreshApps,
   onRefreshArtifacts,
 }: {
@@ -91,6 +95,7 @@ export function SessionPreviewPanels({
   pinnedAppIds: Set<string>;
   onTogglePinned: (appId: string) => void;
   onRefineApp: (record: AppRecord) => void | Promise<void>;
+  onAppContinueConversation?: AppContinueConversationHandler;
   onRefreshApps: () => void;
   onRefreshArtifacts: () => void;
 }) {
@@ -147,6 +152,7 @@ export function SessionPreviewPanels({
                 isPinned={pinnedAppIds.has(app.id)}
                 onTogglePinned={onTogglePinned}
                 onRefine={onRefineApp}
+                onContinueConversation={onAppContinueConversation}
                 onDeleted={onRefreshApps}
               />
             </div>

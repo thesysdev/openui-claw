@@ -2,12 +2,16 @@
 
 import { ERROR_SENTINEL } from "@/lib/chat/history-merger";
 import { extractAssistantTimeline } from "@/lib/chat/timeline";
-import { separateContentAndContext, wrapContent, wrapContext } from "@/lib/content-parser";
+import { separateContentAndContext, wrapContext } from "@/lib/content-parser";
 import { parseInlineResponse } from "@/lib/detection";
+import {
+  buildContinueConversationPayload,
+  handleOpenUrlAction,
+} from "@/lib/renderer-actions";
 import type { AssistantMessage as AssistantMsg } from "@openuidev/react-headless";
 import { useThread } from "@openuidev/react-headless";
 import type { ActionEvent } from "@openuidev/react-lang";
-import { BuiltinActionType, Renderer } from "@openuidev/react-lang";
+import { Renderer } from "@openuidev/react-lang";
 import { BehindTheScenes, Callout, Shell } from "@openuidev/react-ui";
 import { openuiLibrary } from "@openuidev/react-ui/genui-lib";
 import { AlertCircle, CheckCircle2, ChevronDown, Loader2, SquareTerminal } from "lucide-react";
@@ -328,18 +332,10 @@ export function AssistantMessage({ message }: Props) {
 
   const handleAction = useCallback(
     (event: ActionEvent) => {
-      if (event.type === BuiltinActionType.ContinueConversation) {
-        const contentPart = wrapContent(event.humanFriendlyMessage);
-        const ctx: unknown[] = [`User clicked: ${event.humanFriendlyMessage}`];
-        const formState =
-          event.formState ??
-          (initialState && typeof initialState === "object" ? initialState : undefined);
-        if (formState) ctx.push(formState);
-        processMessage({ role: "user", content: contentPart + wrapContext(JSON.stringify(ctx)) });
-      } else if (event.type === BuiltinActionType.OpenUrl) {
-        const url = event.params?.["url"] as string | undefined;
-        if (typeof window !== "undefined" && url) window.open(url, "_blank", "noopener,noreferrer");
-      }
+      if (handleOpenUrlAction(event)) return;
+
+      const payload = buildContinueConversationPayload(event, initialState);
+      if (payload) processMessage(payload);
     },
     [initialState, processMessage],
   );
@@ -481,6 +477,7 @@ export function AssistantMessage({ message }: Props) {
         onAction={handleAction}
         onStateUpdate={handleStateUpdate}
         initialState={initialState}
+        onError={(errors) => console.log("errors", errors)}
       />
     ) : (
       <div
