@@ -1,39 +1,63 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  type CSSProperties,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import {
+  ChevronDown,
   ChevronRight,
+  CornerDownLeft,
+  Cpu,
   EllipsisVertical,
+  FileText,
   Home,
-  LayoutDashboard,
+  LayoutGrid,
+  Loader2,
   Pencil,
   Pin,
   Plus,
-  ScrollText,
+  Search,
   Settings,
+  ShieldAlert,
+  Sparkles,
   Trash2,
+  Wifi,
+  WifiOff,
 } from "lucide-react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { useThreadList } from "@openuidev/react-headless";
-import { Button, Shell } from "@openuidev/react-ui";
+import { Shell } from "@openuidev/react-ui";
 import { ConnectionState } from "@/lib/gateway/types";
 import type { ClawThread } from "@/types/claw-thread";
 import {
   useHashRoute,
   navigate,
-  artifactsHash,
-  artifactHash,
   appHash,
   homeHash,
 } from "@/lib/hooks/useHashRoute";
 import type { AppSummary, ArtifactSummary } from "@/lib/engines/types";
+import type { NotificationRecord } from "@/lib/notifications";
+import { useTheme } from "@/lib/hooks/useTheme";
+import { UnreadBadge } from "@/components/ui/UnreadBadge";
+import { StatusDot } from "@/components/ui/StatusDot";
+import { ThemeModal } from "@/components/ui/ThemeModal";
+import { CommandPalette } from "@/components/ui/CommandPalette";
+import { ExpandCollapse } from "@/components/ui/ExpandCollapse";
 
-const DOT_CLASS: Record<ConnectionState, string> = {
-  [ConnectionState.DISCONNECTED]: "bg-zinc-400",
-  [ConnectionState.CONNECTING]: "bg-yellow-400 animate-pulse",
-  [ConnectionState.CONNECTED]: "bg-green-400",
-  [ConnectionState.AUTH_FAILED]: "bg-red-500",
-  [ConnectionState.PAIRING]: "bg-amber-400 animate-pulse",
+// ── CONSTANTS ──────────────────────────────────────────────────────────────
+
+const STATUS_COLORS: Record<ConnectionState, string> = {
+  [ConnectionState.DISCONNECTED]: "#a1a1aa",
+  [ConnectionState.CONNECTING]: "#facc15",
+  [ConnectionState.CONNECTED]: "#22c55e",
+  [ConnectionState.AUTH_FAILED]: "#ef4444",
+  [ConnectionState.PAIRING]: "#f59e0b",
 };
 
 const STATUS_LABEL: Record<ConnectionState, string> = {
@@ -43,6 +67,47 @@ const STATUS_LABEL: Record<ConnectionState, string> = {
   [ConnectionState.AUTH_FAILED]: "Auth failed",
   [ConnectionState.PAIRING]: "Pairing…",
 };
+
+const STATUS_ICON: Record<ConnectionState, typeof Wifi> = {
+  [ConnectionState.DISCONNECTED]: WifiOff,
+  [ConnectionState.CONNECTING]: Loader2,
+  [ConnectionState.CONNECTED]: Wifi,
+  [ConnectionState.AUTH_FAILED]: ShieldAlert,
+  [ConnectionState.PAIRING]: Loader2,
+};
+
+const STATUS_ICON_SPIN: Record<ConnectionState, boolean> = {
+  [ConnectionState.DISCONNECTED]: false,
+  [ConnectionState.CONNECTING]: true,
+  [ConnectionState.CONNECTED]: false,
+  [ConnectionState.AUTH_FAILED]: false,
+  [ConnectionState.PAIRING]: true,
+};
+
+const EASE = "cubic-bezier(0.4, 0, 0.2, 1)";
+
+const PAD_OUTER = "0 var(--sp-s)";
+const ROW_PAD = "var(--sp-xs) var(--sp-xs)";
+
+const SEARCH_KBD_STYLE: CSSProperties = {
+  fontFamily: "var(--font-label)",
+  fontSize: "var(--fs-2xs)",
+  fontWeight: "var(--fw-medium)",
+  color: "var(--color-text-tertiary)",
+  padding: "2px 5px",
+  borderRadius: "var(--r-s)",
+  border: "1px solid var(--color-border)",
+  background: "var(--color-bg)",
+};
+
+const SEPARATOR_STYLE: CSSProperties = {
+  height: 1,
+  backgroundColor: "var(--color-border)",
+  opacity: 0.35,
+  margin: "var(--sp-xs) var(--sp-s)",
+};
+
+// ── HELPERS ────────────────────────────────────────────────────────────────
 
 type AgentGroup = {
   agentId: string;
@@ -65,6 +130,612 @@ function buildAgentGroups(threads: ClawThread[]): AgentGroup[] {
   return [...map.values()];
 }
 
+function countUnread(
+  notifications: NotificationRecord[],
+  predicate: (n: NotificationRecord) => boolean,
+): number {
+  let count = 0;
+  for (const n of notifications) if (n.unread && predicate(n)) count++;
+  return count;
+}
+
+// ── SUB-COMPONENTS ─────────────────────────────────────────────────────────
+
+function NavSep() {
+  return <div style={SEPARATOR_STYLE} aria-hidden />;
+}
+
+function SectionHead({
+  icon: Icon,
+  label,
+  open,
+  onToggle,
+}: {
+  icon: typeof Cpu;
+  label: string;
+  open: boolean;
+  onToggle: () => void;
+}) {
+  const [hover, setHover] = useState(false);
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: "var(--sp-s)",
+        padding: ROW_PAD,
+        width: "100%",
+        textAlign: "left",
+        border: "none",
+        background: hover ? "var(--color-sunk-light)" : "transparent",
+        cursor: "pointer",
+        borderRadius: "var(--r-m)",
+        marginBottom: "1px",
+        transition: "background-color 0.15s",
+      }}
+    >
+      <span
+        style={{
+          width: 24,
+          height: 24,
+          borderRadius: "var(--r-m)",
+          backgroundColor: hover ? "var(--color-sunk-light)" : "var(--color-bg)",
+          border: "1px solid var(--color-border)",
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          flexShrink: 0,
+        }}
+      >
+        <Icon size={13} color="var(--color-text-accent-primary)" />
+      </span>
+      <span
+        style={{
+          flex: 1,
+          fontFamily: "var(--font-label)",
+          fontSize: "var(--fs-xs)",
+          fontWeight: "var(--fw-medium)",
+          color: hover ? "var(--color-text-secondary)" : "var(--color-text-tertiary)",
+          transition: "color 0.15s",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+        }}
+      >
+        {label}
+      </span>
+      <ChevronDown
+        size={11}
+        color="var(--color-text-tertiary)"
+        style={{
+          flexShrink: 0,
+          transition: `transform 0.3s ${EASE}`,
+          transform: open ? "rotate(180deg)" : "rotate(0deg)",
+        }}
+      />
+    </button>
+  );
+}
+
+function ViewAllRow({ label, onClick }: { label: string; onClick: () => void }) {
+  const [hover, setHover] = useState(false);
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: "var(--sp-s)",
+        padding: ROW_PAD,
+        width: "100%",
+        textAlign: "left",
+        border: "none",
+        background: "transparent",
+        cursor: "pointer",
+        borderRadius: "var(--r-m)",
+      }}
+    >
+      <span
+        style={{
+          width: 24,
+          height: 24,
+          borderRadius: "var(--r-m)",
+          backgroundColor: "transparent",
+          border: `1px solid ${hover ? "var(--color-border-accent)" : "var(--color-border)"}`,
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          flexShrink: 0,
+          transition: "border-color 0.15s",
+        }}
+      >
+        <ChevronRight
+          size={12}
+          color={
+            hover ? "var(--color-text-accent-primary)" : "var(--color-text-tertiary)"
+          }
+        />
+      </span>
+      <span
+        style={{
+          flex: 1,
+          fontFamily: "var(--font-body)",
+          fontSize: "var(--fs-sm)",
+          color: hover ? "var(--color-text-primary)" : "var(--color-text-tertiary)",
+          transition: "color 0.15s",
+        }}
+      >
+        {label}
+      </span>
+    </button>
+  );
+}
+
+function LetterTile({
+  letter,
+  state,
+}: {
+  letter: string;
+  state: "idle" | "hover" | "active";
+}) {
+  const bg =
+    state === "active"
+      ? "var(--color-highlight-strong)"
+      : state === "hover"
+        ? "var(--color-sunk-light)"
+        : "var(--color-bg)";
+  const color =
+    state === "active" || state === "hover"
+      ? "var(--color-text-primary)"
+      : "var(--color-text-tertiary)";
+  return (
+    <span
+      style={{
+        width: 24,
+        height: 24,
+        borderRadius: "var(--r-m)",
+        backgroundColor: bg,
+        border: "1px solid var(--color-border)",
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        flexShrink: 0,
+        fontFamily: "var(--font-label)",
+        fontSize: "var(--fs-xs)",
+        fontWeight: "var(--fw-bold)",
+        lineHeight: 1,
+        color,
+        transition: "background-color 0.15s, box-shadow 0.15s, color 0.15s",
+        boxShadow: state === "hover" ? "var(--shadow-lg)" : "none",
+      }}
+    >
+      {letter.charAt(0).toUpperCase()}
+    </span>
+  );
+}
+
+function SessionRow({
+  label,
+  active,
+  hasUnread,
+  onClick,
+  onDoubleClick,
+  menu,
+  editingInput,
+}: {
+  label: string;
+  active: boolean;
+  hasUnread: boolean;
+  onClick?: () => void;
+  onDoubleClick?: (e: React.MouseEvent) => void;
+  menu?: ReactNode;
+  editingInput?: ReactNode;
+}) {
+  const [hover, setHover] = useState(false);
+  if (editingInput) {
+    return (
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          height: 30,
+          padding: "0 var(--sp-xs)",
+          gap: "var(--sp-s)",
+        }}
+      >
+        <div style={{ width: 24, flexShrink: 0 }} />
+        {editingInput}
+      </div>
+    );
+  }
+  return (
+    <div
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        height: 30,
+        padding: "0 var(--sp-xs)",
+        gap: "var(--sp-s)",
+        borderRadius: "var(--r-m)",
+        cursor: "pointer",
+      }}
+    >
+      <div
+        style={{
+          width: 24,
+          flexShrink: 0,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        {active ? (
+          <CornerDownLeft
+            size={11}
+            color="var(--color-text-primary)"
+            style={{ transform: "scaleX(-1)" }}
+          />
+        ) : null}
+      </div>
+      <button
+        type="button"
+        onClick={onClick}
+        onDoubleClick={onDoubleClick}
+        style={{
+          flex: 1,
+          background: "transparent",
+          border: "none",
+          padding: 0,
+          textAlign: "left",
+          whiteSpace: "nowrap",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          cursor: "pointer",
+          fontFamily: "var(--font-body)",
+          fontSize: "var(--fs-sm)",
+          fontWeight: active ? "var(--fw-medium)" : "var(--fw-regular)",
+          color: active || hover
+            ? "var(--color-text-primary)"
+            : "var(--color-text-tertiary)",
+          transition: "color 0.15s",
+        }}
+      >
+        {label}
+      </button>
+      {hasUnread ? <StatusDot size={5} color="var(--color-destructive)" /> : null}
+      {menu}
+    </div>
+  );
+}
+
+// ── SMALL STYLE HELPERS ────────────────────────────────────────────────────
+
+const EMPTY_SECTION_STYLE: CSSProperties = {
+  padding: "var(--sp-xs) var(--sp-s)",
+  fontSize: "var(--fs-xs)",
+  color: "var(--color-text-tertiary)",
+};
+
+function PILL_ICON_BUTTON_STYLE(tone: "muted" | "accent"): CSSProperties {
+  return {
+    background: "transparent",
+    border: "none",
+    cursor: "pointer",
+    padding: 2,
+    color: tone === "accent"
+      ? "var(--color-accent)"
+      : "var(--color-text-tertiary)",
+  };
+}
+
+// ── ROW COMPONENTS (prototype-faithful) ────────────────────────────────────
+
+function SearchRow({ onClick }: { onClick: () => void }) {
+  const [hover, setHover] = useState(false);
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: "var(--sp-s)",
+        padding: ROW_PAD,
+        width: "100%",
+        textAlign: "left",
+        borderRadius: "var(--r-m)",
+        background: hover ? "var(--color-sunk)" : "var(--color-sunk-light)",
+        border: "none",
+        cursor: "pointer",
+        transition: "background-color 0.15s",
+      }}
+    >
+      <span
+        style={{
+          width: 24,
+          height: 24,
+          borderRadius: "var(--r-m)",
+          backgroundColor: "var(--color-bg)",
+          border: "1px solid var(--color-border)",
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          flexShrink: 0,
+        }}
+      >
+        <Search size={12} color="var(--color-text-accent-primary)" />
+      </span>
+      <span
+        style={{
+          flex: 1,
+          fontFamily: "var(--font-body)",
+          fontSize: "var(--fs-sm)",
+          color: "var(--color-text-tertiary)",
+        }}
+      >
+        Search
+      </span>
+      <span style={SEARCH_KBD_STYLE}>⌘K</span>
+    </button>
+  );
+}
+
+function HomeNavRow({ active, unread }: { active: boolean; unread: number }) {
+  const [hover, setHover] = useState(false);
+  const hi = active || hover;
+  return (
+    <a
+      href={homeHash()}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: "var(--sp-s)",
+        padding: ROW_PAD,
+        width: "100%",
+        borderRadius: "var(--r-m)",
+        background: active
+          ? "var(--color-bg)"
+          : hover
+            ? "var(--color-sunk-light)"
+            : "transparent",
+        color: hi ? "var(--color-text-primary)" : "var(--color-text-secondary)",
+        textDecoration: "none",
+        boxShadow: active ? "var(--shadow-md)" : "none",
+        fontWeight: active ? "var(--fw-medium)" : "var(--fw-regular)",
+        transition: "background-color 0.15s, box-shadow 0.15s",
+        marginBottom: "1px",
+      }}
+    >
+      <span
+        style={{
+          width: 24,
+          height: 24,
+          borderRadius: "var(--r-m)",
+          backgroundColor: active
+            ? "var(--color-highlight-strong)"
+            : hover
+              ? "var(--color-sunk-light)"
+              : "var(--color-bg)",
+          border: "1px solid var(--color-border)",
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          flexShrink: 0,
+          transition: "background-color 0.15s",
+        }}
+      >
+        <Home
+          size={13}
+          color="var(--color-text-accent-primary)"
+        />
+      </span>
+      <span
+        style={{
+          flex: 1,
+          fontFamily: "var(--font-body)",
+          fontSize: "var(--fs-sm)",
+          whiteSpace: "nowrap",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+        }}
+      >
+        Home
+      </span>
+      {unread > 0 ? <UnreadBadge count={unread} /> : null}
+    </a>
+  );
+}
+
+function SidebarLetterRow({
+  letter,
+  label,
+  href,
+  active,
+  onClick,
+  right,
+}: {
+  letter: string;
+  label: string;
+  href?: string;
+  active: boolean;
+  onClick?: () => void;
+  right?: ReactNode;
+}) {
+  const [hover, setHover] = useState(false);
+  const state: "idle" | "hover" | "active" = active ? "active" : hover ? "hover" : "idle";
+  const rowStyle: CSSProperties = {
+    display: "flex",
+    alignItems: "center",
+    gap: "var(--sp-s)",
+    padding: ROW_PAD,
+    width: "100%",
+    borderRadius: "var(--r-m)",
+    background: active
+      ? "var(--color-bg)"
+      : hover
+        ? "var(--color-sunk-light)"
+        : "transparent",
+    color: active || hover ? "var(--color-text-primary)" : "var(--color-text-secondary)",
+    fontFamily: "var(--font-body)",
+    fontSize: "var(--fs-sm)",
+    fontWeight: active ? "var(--fw-medium)" : "var(--fw-regular)",
+    border: "none",
+    textAlign: "left",
+    textDecoration: "none",
+    cursor: "pointer",
+    boxShadow: active ? "var(--shadow-md)" : "none",
+    transition: "background-color 0.15s, box-shadow 0.15s",
+    marginBottom: "1px",
+  };
+  const content = (
+    <>
+      <LetterTile letter={letter} state={state} />
+      <span
+        style={{
+          flex: 1,
+          whiteSpace: "nowrap",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+        }}
+      >
+        {label}
+      </span>
+      {right}
+    </>
+  );
+  if (href) {
+    return (
+      <a
+        href={href}
+        onClick={onClick}
+        onMouseEnter={() => setHover(true)}
+        onMouseLeave={() => setHover(false)}
+        style={rowStyle}
+      >
+        {content}
+      </a>
+    );
+  }
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={rowStyle}
+    >
+      {content}
+    </button>
+  );
+}
+
+function AgentCard({
+  active,
+  header,
+  children,
+}: {
+  active: boolean;
+  header: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <div
+      style={{
+        backgroundColor: active ? "var(--color-bg)" : "transparent",
+        borderRadius: "var(--r-l)",
+        marginTop: active ? "var(--sp-s)" : 0,
+        marginBottom: active ? "var(--sp-s)" : "1px",
+        boxShadow: active ? "var(--shadow-sm)" : "none",
+        transition: `background-color 0.15s, margin 0.3s ${EASE}, box-shadow 0.15s`,
+      }}
+    >
+      {header}
+      {children}
+    </div>
+  );
+}
+
+function AgentHeaderButton({
+  title,
+  state,
+  unread,
+  expanded,
+  onClick,
+}: {
+  title: string;
+  state: "idle" | "active";
+  unread: number;
+  expanded: boolean;
+  onClick: () => void;
+}) {
+  const [hover, setHover] = useState(false);
+  const tileState: "idle" | "hover" | "active" =
+    state === "active" ? "active" : hover ? "hover" : "idle";
+  const hi = state === "active" || hover || expanded;
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: "var(--sp-s)",
+        padding: ROW_PAD,
+        width: "100%",
+        textAlign: "left",
+        border: "none",
+        background: "transparent",
+        cursor: "pointer",
+        borderRadius: "var(--r-m)",
+      }}
+    >
+      <LetterTile letter={title} state={tileState} />
+      <span
+        style={{
+          flex: 1,
+          fontFamily: "var(--font-body)",
+          fontSize: "var(--fs-sm)",
+          fontWeight: hi ? "var(--fw-medium)" : "var(--fw-regular)",
+          color: hi ? "var(--color-text-primary)" : "var(--color-text-secondary)",
+          whiteSpace: "nowrap",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+        }}
+      >
+        {title}
+      </span>
+      {unread > 0 ? <StatusDot size={6} color="var(--color-destructive)" /> : null}
+      <ChevronDown
+        size={11}
+        color="var(--color-text-tertiary)"
+        style={{
+          opacity: hover || expanded ? 0.5 : 0,
+          flexShrink: 0,
+          transition: `transform 0.3s ${EASE}, opacity 0.2s`,
+          transform: expanded ? "rotate(180deg)" : "rotate(0deg)",
+        }}
+      />
+    </button>
+  );
+}
+
+// ── MAIN COMPONENT ─────────────────────────────────────────────────────────
+
 interface Props {
   connectionState: ConnectionState;
   onSettingsClick: () => void;
@@ -73,6 +744,7 @@ interface Props {
   deleteSession: (threadId: string) => Promise<boolean>;
   apps: AppSummary[];
   artifacts: ArtifactSummary[];
+  notifications: NotificationRecord[];
   unreadNotificationCount: number;
   pinnedAppIds: Set<string>;
   onTogglePinned: (appId: string) => void;
@@ -87,6 +759,7 @@ export function AppSidebar({
   deleteSession,
   apps,
   artifacts,
+  notifications,
   unreadNotificationCount,
   pinnedAppIds,
   onTogglePinned,
@@ -98,14 +771,41 @@ export function AppSidebar({
 
   const route = useHashRoute();
   const homeActive = route?.view === "home";
-  const artifactsActive = route?.view === "artifacts" || route?.view === "artifact";
   const activeAppId = route?.view === "app" ? route.appId : null;
   const activeChatId = route?.view === "chat" ? route.sessionId : null;
 
+  const [agentsExpanded, setAgentsExpanded] = useState(true);
   const [pinnedExpanded, setPinnedExpanded] = useState(true);
   const [appsExpanded, setAppsExpanded] = useState(true);
   const [artifactsExpanded, setArtifactsExpanded] = useState(true);
   const [deletingAppId, setDeletingAppId] = useState<string | null>(null);
+  const [themeOpen, setThemeOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [sidebarExpanded, setSidebarExpanded] = useState(true);
+
+  // Observe the Shell sidebar container width to mirror its collapse state.
+  useEffect(() => {
+    const container = document.querySelector<HTMLElement>(
+      ".openui-shell-sidebar-container",
+    );
+    if (!container) return;
+    const update = () => setSidebarExpanded(container.offsetWidth > 120);
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(container);
+    return () => ro.disconnect();
+  }, []);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setSearchOpen((prev) => !prev);
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
 
   const [titleOverrides, setTitleOverrides] = useState<Map<string, string>>(() => new Map());
   const [deletedIds, setDeletedIds] = useState<Set<string>>(() => new Set());
@@ -124,7 +824,6 @@ export function AppSidebar({
     [threadsCast, deletedIds, titleOverrides]
   );
 
-  // Clear stale local overrides/deletions when server data refreshes
   useEffect(() => {
     if (isLoadingThreads) return;
     const serverIds = new Set(
@@ -147,7 +846,7 @@ export function AppSidebar({
     });
   }, [isLoadingThreads, serverThreadIdsKey]);
 
-  const [expandedByAgent, setExpandedByAgent] = useState<Record<string, boolean>>({});
+  const [expandedAgent, setExpandedAgent] = useState<string | null>(null);
   const [creatingForAgent, setCreatingForAgent] = useState<string | null>(null);
   const [editingThreadId, setEditingThreadId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
@@ -169,20 +868,18 @@ export function AppSidebar({
     [groups],
   );
 
+  // Auto-expand the agent whose session is currently active.
   useEffect(() => {
-    const agentIds = groupIdsKey.length > 0 ? groupIdsKey.split("\u0000") : [];
-    setExpandedByAgent((prev) => {
-      const next = { ...prev };
-      let changed = false;
-      for (const agentId of agentIds) {
-        if (next[agentId] === undefined) {
-          next[agentId] = true;
-          changed = true;
-        }
-      }
-      return changed ? next : prev;
-    });
-  }, [groupIdsKey]);
+    if (!activeChatId) return;
+    const g = groups.find((group) => group.threads.some((t) => t.id === activeChatId));
+    if (g) setExpandedAgent(g.agentId);
+  }, [activeChatId, groups]);
+
+  useEffect(() => {
+    if (!expandedAgent) return;
+    const exists = groupIdsKey.split("\u0000").includes(expandedAgent);
+    if (!exists) setExpandedAgent(null);
+  }, [groupIdsKey, expandedAgent]);
 
   useEffect(() => {
     if (
@@ -288,274 +985,157 @@ export function AppSidebar({
     [apps, pinnedAppIds],
   );
 
+  const agentUnread = useCallback(
+    (agentId: string) =>
+      countUnread(notifications, (n) => n.source?.agentId === agentId),
+    [notifications],
+  );
+
+  const sessionUnread = useCallback(
+    (sessionId: string) =>
+      countUnread(
+        notifications,
+        (n) => n.target.view === "chat" && n.target.sessionId === sessionId,
+      ),
+    [notifications],
+  );
+
   return (
     <Shell.SidebarContainer>
       <Shell.SidebarHeader />
       <Shell.SidebarSeparator />
 
       <Shell.SidebarContent>
-        <div className="min-h-0 flex-1 overflow-y-auto pr-1">
-        <a
-          href={homeHash()}
-          className={`mx-1 mb-2 flex items-center gap-2 rounded-md px-2 py-1.5 text-xs font-medium transition-colors ${
-            homeActive
-              ? "bg-zinc-900 text-white ring-1 ring-zinc-900/10 dark:bg-zinc-100 dark:text-zinc-900 dark:ring-zinc-100/20"
-              : "text-zinc-500 hover:bg-zinc-50 hover:text-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-900/40 dark:hover:text-zinc-300"
-          }`}
+        <div
+          className="flex h-full min-h-0 flex-1 flex-col"
+          style={{ overflow: "hidden" }}
         >
-          <Home className="h-3.5 w-3.5 shrink-0" />
-          Home
-          {unreadNotificationCount > 0 ? (
-            <span className="ml-auto inline-flex min-w-5 items-center justify-center rounded-full bg-zinc-900 px-1.5 py-0.5 text-[10px] font-semibold text-white dark:bg-zinc-100 dark:text-zinc-900">
-              {unreadNotificationCount}
-            </span>
-          ) : null}
-        </a>
-
-        {pinnedApps.length > 0 && (
-          <div className="mb-3 px-1">
-            <button
-              type="button"
-              className="flex w-full min-w-0 items-center gap-1.5 px-2 py-1.5 text-left text-[11px] font-semibold leading-snug tracking-tight text-zinc-500 hover:bg-zinc-50 dark:text-zinc-400 dark:hover:bg-zinc-900/40"
-              onClick={() => setPinnedExpanded((prev) => !prev)}
-            >
-              <ChevronRight
-                className={`h-3 w-3 flex-shrink-0 text-zinc-400 transition-transform dark:text-zinc-500 ${pinnedExpanded ? "rotate-90" : ""}`}
-              />
-              <Pin className="h-3 w-3 shrink-0" />
-              <span className="truncate">Pinned</span>
-            </button>
-
-            {pinnedExpanded && (
-              <div className="ml-1.5 mt-1 border-l border-zinc-200 pl-2.5 dark:border-zinc-700">
-                <div className="space-y-0.5">
-                  {pinnedApps.map((app) => (
-                    <div
-                      key={app.id}
-                      className={`openui-shell-thread-button${activeAppId === app.id ? " openui-shell-thread-button--selected" : ""}`}
-                    >
-                      <a
-                        href={appHash(app.id)}
-                        className="openui-shell-thread-button-title"
-                        onClick={() => navigate({ view: "app", appId: app.id })}
-                      >
-                        {app.title}
-                      </a>
-                      <button
-                        type="button"
-                        className="openui-shell-thread-button-dropdown-trigger"
-                        title="Unpin app"
-                        onClick={(event) => {
-                          event.preventDefault();
-                          onTogglePinned(app.id);
-                        }}
-                      >
-                        <Pin size={14} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
+          {/* ── Search ── */}
+          <div style={{ padding: PAD_OUTER, flexShrink: 0 }}>
+            <SearchRow onClick={() => setSearchOpen(true)} />
           </div>
-        )}
 
-        <a
-          href={artifactsHash()}
-          className={`mx-1 mb-2 flex items-center gap-2 rounded-md px-2 py-1.5 text-xs font-medium transition-colors ${
-            artifactsActive
-              ? "bg-sky-50 text-sky-900 ring-1 ring-sky-200/80 dark:bg-sky-500/10 dark:text-sky-100 dark:ring-sky-500/30"
-              : "text-zinc-500 hover:bg-zinc-50 hover:text-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-900/40 dark:hover:text-zinc-300"
-          }`}
-        >
-          <ScrollText className="h-3.5 w-3.5 shrink-0" />
-          Artifacts
-        </a>
+          <NavSep />
 
-        <div className="mb-3 px-1">
-          <button
-            type="button"
-            className="flex w-full min-w-0 items-center gap-1.5 px-2 py-1.5 text-left text-[11px] font-semibold leading-snug tracking-tight text-zinc-500 hover:bg-zinc-50 dark:text-zinc-400 dark:hover:bg-zinc-900/40"
-            onClick={() => setArtifactsExpanded((prev) => !prev)}
-          >
-            <ChevronRight
-              className={`h-3 w-3 flex-shrink-0 text-zinc-400 transition-transform dark:text-zinc-500 ${artifactsExpanded ? "rotate-90" : ""}`}
+          {/* ── Home ── */}
+          <div style={{ padding: PAD_OUTER, flexShrink: 0 }}>
+            <HomeNavRow
+              active={homeActive}
+              unread={unreadNotificationCount}
             />
-            <ScrollText className="h-3 w-3 shrink-0" />
-            <span className="truncate">Recent Artifacts</span>
-          </button>
+          </div>
 
-          {artifactsExpanded && (
-            <div className="ml-1.5 mt-1 border-l border-zinc-200 pl-2.5 dark:border-zinc-700">
-              {artifacts.length === 0 ? (
-                <p className="py-1.5 text-[11px] text-zinc-400 dark:text-zinc-500">
-                  No artifacts yet
-                </p>
-              ) : (
-                <div className="space-y-0.5">
-                  {artifacts.slice(0, 8).map((artifact) => (
-                    <a
-                      key={artifact.id}
-                      href={artifactHash(artifact.id)}
-                      className={`openui-shell-thread-button${route?.view === "artifact" && route.artifactId === artifact.id ? " openui-shell-thread-button--selected" : ""}`}
-                      onClick={() => navigate({ view: "artifact", artifactId: artifact.id })}
-                    >
-                      <span className="openui-shell-thread-button-title">{artifact.title}</span>
-                      <span className="rounded px-1.5 py-0.5 text-[10px] text-zinc-400">
-                        {artifact.kind}
-                      </span>
-                    </a>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
+          <NavSep />
 
-        {/* ── Apps section ── */}
-        <div className="mb-3 px-1">
-          <button
-            type="button"
-            className="flex w-full min-w-0 items-center gap-1.5 px-2 py-1.5 text-left text-[11px] font-semibold leading-snug tracking-tight text-zinc-500 hover:bg-zinc-50 dark:text-zinc-400 dark:hover:bg-zinc-900/40"
-            onClick={() => setAppsExpanded((prev) => !prev)}
-          >
-            <ChevronRight
-              className={`h-3 w-3 flex-shrink-0 text-zinc-400 transition-transform dark:text-zinc-500 ${appsExpanded ? "rotate-90" : ""}`}
-            />
-            <LayoutDashboard className="h-3 w-3 shrink-0" />
-            <span className="truncate">Apps</span>
-          </button>
+          {/* ── Scrollable sections ── */}
+          <div className="min-h-0 flex-1 overflow-y-auto">
 
-          {appsExpanded && (
-            <div className="ml-1.5 mt-1 border-l border-zinc-200 pl-2.5 dark:border-zinc-700">
-              {apps.length === 0 ? (
-                <p className="py-1.5 text-[11px] text-zinc-400 dark:text-zinc-500">
-                  No apps yet
-                </p>
-              ) : (
-                <div className="space-y-0.5">
-                  {apps.map((app) => {
-                    const isActive = activeAppId === app.id;
-                    const isDeleting = deletingAppId === app.id;
-                    const isPinned = pinnedAppIds.has(app.id);
-                    return (
-                      <div
-                        key={app.id}
-                        className={`openui-shell-thread-button${isActive ? " openui-shell-thread-button--selected" : ""}`}
-                      >
-                        <a
-                          href={appHash(app.id)}
-                          className="openui-shell-thread-button-title"
-                          onClick={() => navigate({ view: "app", appId: app.id })}
-                        >
-                          {isDeleting ? "Deleting…" : app.title}
-                        </a>
-                        {!isDeleting && (
-                          <div className="flex items-center gap-1">
-                            <button
-                              type="button"
-                              className="openui-shell-thread-button-dropdown-trigger"
-                              title={isPinned ? "Unpin app" : "Pin app"}
-                              onClick={(event) => {
-                                event.preventDefault();
-                                onTogglePinned(app.id);
-                              }}
-                            >
-                              <Pin size={14} className={isPinned ? "text-sky-500" : undefined} />
-                            </button>
-                            <button
-                              type="button"
-                              className="openui-shell-thread-button-dropdown-trigger"
-                              title="Delete app"
-                              onClick={async (e) => {
-                                e.preventDefault();
-                                setDeletingAppId(app.id);
-                                try {
-                                  await onDeleteApp(app.id);
-                                  if (isActive) navigate({ view: "home" });
-                                } finally {
-                                  setDeletingAppId(null);
-                                }
-                              }}
-                            >
-                              <Trash2 size={14} />
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
-        {isLoadingThreads && displayThreads.length === 0 && (
-          <p className="px-3 py-2 text-xs text-zinc-400">Loading agents…</p>
-        )}
-        {groups.map((g) => {
-          const expanded = expandedByAgent[g.agentId] !== false;
-          return (
-            <div key={g.agentId} className="mb-3 px-1">
-              <button
-                type="button"
-                className="flex w-full min-w-0 items-center gap-1.5 px-2 py-1.5 text-left text-[11px] font-semibold leading-snug tracking-tight text-zinc-500 hover:bg-zinc-50 dark:text-zinc-400 dark:hover:bg-zinc-900/40"
-                onClick={() =>
-                  setExpandedByAgent((prev) => {
-                    const isOpen = prev[g.agentId] !== false;
-                    return { ...prev, [g.agentId]: !isOpen };
-                  })
-                }
-              >
-                <ChevronRight
-                  className={`h-3 w-3 flex-shrink-0 text-zinc-400 transition-transform dark:text-zinc-500 ${expanded ? "rotate-90" : ""}`}
+          {pinnedApps.length > 0 && (
+            <>
+              <div style={{ padding: PAD_OUTER }}>
+                <SectionHead
+                  icon={Pin}
+                  label="Pinned"
+                  open={pinnedExpanded}
+                  onToggle={() => setPinnedExpanded((prev) => !prev)}
                 />
-                <span className="truncate">{g.headerTitle}</span>
-              </button>
-
-              {expanded && (
-                <div className="ml-1.5 mt-1 space-y-0.5 border-l border-zinc-200 pl-2.5 dark:border-zinc-700">
-                  {g.threads.map((t) => {
-                    const isEditing = editingThreadId === t.id;
-                    const isRenaming = renamingThreadId === t.id;
-                    const isDeleting = deletingThreadId === t.id;
-                    const isExtra = t.clawKind !== "main";
-                    const isBusy = isRenaming || isDeleting;
-                    const label = isDeleting
-                      ? "Deleting…"
-                      : isRenaming
-                      ? "Renaming…"
-                      : isExtra
-                      ? t.title
-                      : "Main";
-
-                    return (
-                      <div
-                        key={t.id}
-                        className={`openui-shell-thread-button${activeChatId === t.id ? " openui-shell-thread-button--selected" : ""}`}
-                      >
-                        {isEditing ? (
-                          <input
-                            ref={editInputRef}
-                            className="openui-shell-thread-button-title w-full bg-transparent outline-none"
-                            value={editValue}
-                            onChange={(e) => setEditValue(e.target.value)}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") {
-                                e.preventDefault();
-                                commitRename(t.id);
-                              } else if (e.key === "Escape") {
-                                cancelEditing();
-                              }
+                <ExpandCollapse open={pinnedExpanded}>
+                  <div style={{ paddingBottom: 2 }}>
+                    {pinnedApps.map((app) => (
+                      <SidebarLetterRow
+                        key={app.id}
+                        letter={app.title}
+                        label={app.title}
+                        href={appHash(app.id)}
+                        active={activeAppId === app.id}
+                        onClick={() => navigate({ view: "app", appId: app.id })}
+                        right={
+                          <button
+                            type="button"
+                            title="Unpin app"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              onTogglePinned(app.id);
                             }}
-                            onBlur={() => commitRename(t.id)}
-                            maxLength={64}
-                          />
-                        ) : (
-                          <>
-                            <button
-                              type="button"
+                            style={PILL_ICON_BUTTON_STYLE("accent")}
+                          >
+                            <Pin size={12} />
+                          </button>
+                        }
+                      />
+                    ))}
+                  </div>
+                </ExpandCollapse>
+              </div>
+              <NavSep />
+            </>
+          )}
+
+          {/* ── Agents section ── */}
+          <div style={{ padding: PAD_OUTER }}>
+            <SectionHead
+              icon={Cpu}
+              label="Agents"
+              open={agentsExpanded}
+              onToggle={() => setAgentsExpanded((prev) => !prev)}
+            />
+            <ExpandCollapse open={agentsExpanded} duration={0.4}>
+            {isLoadingThreads && displayThreads.length === 0 && (
+              <p
+                style={{
+                  padding: "var(--sp-s) var(--sp-m)",
+                  fontSize: "var(--fs-xs)",
+                  color: "var(--color-text-tertiary)",
+                }}
+              >
+                Loading agents…
+              </p>
+            )}
+            <div style={{ paddingBottom: 2 }}>
+              {groups.slice(0, 3).map((g) => {
+                const expanded = expandedAgent === g.agentId;
+                const unread = agentUnread(g.agentId);
+                const isActive = g.threads.some((t) => t.id === activeChatId);
+                const cardActive = expanded || isActive;
+                return (
+                  <AgentCard
+                    key={g.agentId}
+                    active={cardActive}
+                    header={
+                      <AgentHeaderButton
+                        title={g.headerTitle}
+                        state={cardActive ? "active" : "idle"}
+                        unread={unread}
+                        expanded={expanded}
+                        onClick={() =>
+                          setExpandedAgent((prev) => (prev === g.agentId ? null : g.agentId))
+                        }
+                      />
+                    }
+                  >
+                    <ExpandCollapse open={expanded} duration={0.3}>
+                      <div style={{ padding: "2px var(--sp-s) var(--sp-s)" }}>
+                        {g.threads.map((t) => {
+                          const isEditing = editingThreadId === t.id;
+                          const isRenaming = renamingThreadId === t.id;
+                          const isDeleting = deletingThreadId === t.id;
+                          const isExtra = t.clawKind !== "main";
+                          const isBusy = isRenaming || isDeleting;
+                          const label = isDeleting
+                            ? "Deleting…"
+                            : isRenaming
+                              ? "Renaming…"
+                              : isExtra
+                                ? t.title
+                                : "Main";
+                          const unread = sessionUnread(t.id);
+                          return (
+                            <SessionRow
+                              key={t.id}
+                              label={label}
+                              active={activeChatId === t.id}
+                              hasUnread={unread > 0}
+                              isMain={!isExtra}
                               onClick={() => {
                                 selectThread(t.id);
                                 navigate({ view: "chat", sessionId: t.id });
@@ -568,84 +1148,333 @@ export function AppSidebar({
                                     }
                                   : undefined
                               }
-                              className="openui-shell-thread-button-title"
-                            >
-                              {label}
-                            </button>
-
-                            {isExtra && !isBusy && (
-                              <DropdownMenu.Root>
-                                <DropdownMenu.Trigger asChild>
-                                  <button className="openui-shell-thread-button-dropdown-trigger">
-                                    <EllipsisVertical size={14} />
-                                  </button>
-                                </DropdownMenu.Trigger>
-                                <DropdownMenu.Portal>
-                                  <DropdownMenu.Content
-                                    className="openui-shell-thread-button-dropdown-menu"
-                                    side="bottom"
-                                    align="start"
-                                    sideOffset={2}
-                                  >
-                                    <DropdownMenu.Item
-                                      className="openui-shell-thread-button-dropdown-menu-item"
-                                      onSelect={() => startEditing(t.id, t.title)}
-                                    >
-                                      <Pencil size={14} className="openui-shell-thread-button-dropdown-menu-item-icon" />
-                                      Rename
-                                    </DropdownMenu.Item>
-                                    <DropdownMenu.Item
-                                      className="openui-shell-thread-button-dropdown-menu-item"
-                                      onSelect={() => handleDelete(t.id)}
-                                    >
-                                      <Trash2 size={14} className="openui-shell-thread-button-dropdown-menu-item-icon" />
-                                      Delete
-                                    </DropdownMenu.Item>
-                                  </DropdownMenu.Content>
-                                </DropdownMenu.Portal>
-                              </DropdownMenu.Root>
-                            )}
-                          </>
-                        )}
+                              editingInput={
+                                isEditing ? (
+                                  <input
+                                    ref={editInputRef}
+                                    value={editValue}
+                                    onChange={(e) => setEditValue(e.target.value)}
+                                    onKeyDown={(e) => {
+                                      if (e.key === "Enter") {
+                                        e.preventDefault();
+                                        commitRename(t.id);
+                                      } else if (e.key === "Escape") {
+                                        cancelEditing();
+                                      }
+                                    }}
+                                    onBlur={() => commitRename(t.id)}
+                                    maxLength={64}
+                                    style={{
+                                      flex: 1,
+                                      background: "transparent",
+                                      border: "none",
+                                      outline: "none",
+                                      fontSize: "var(--fs-xs)",
+                                      color: "var(--color-text-primary)",
+                                      fontFamily: "var(--font-body)",
+                                    }}
+                                  />
+                                ) : undefined
+                              }
+                              menu={
+                                isExtra && !isBusy && !isEditing ? (
+                                  <DropdownMenu.Root>
+                                    <DropdownMenu.Trigger asChild>
+                                      <button
+                                        style={{
+                                          background: "transparent",
+                                          border: "none",
+                                          cursor: "pointer",
+                                          padding: 2,
+                                          color: "var(--color-text-tertiary)",
+                                        }}
+                                      >
+                                        <EllipsisVertical size={12} />
+                                      </button>
+                                    </DropdownMenu.Trigger>
+                                    <DropdownMenu.Portal>
+                                      <DropdownMenu.Content
+                                        className="openui-shell-thread-button-dropdown-menu"
+                                        side="bottom"
+                                        align="start"
+                                        sideOffset={2}
+                                      >
+                                        <DropdownMenu.Item
+                                          className="openui-shell-thread-button-dropdown-menu-item"
+                                          onSelect={() => startEditing(t.id, t.title)}
+                                        >
+                                          <Pencil size={14} className="openui-shell-thread-button-dropdown-menu-item-icon" />
+                                          Rename
+                                        </DropdownMenu.Item>
+                                        <DropdownMenu.Item
+                                          className="openui-shell-thread-button-dropdown-menu-item"
+                                          onSelect={() => handleDelete(t.id)}
+                                        >
+                                          <Trash2 size={14} className="openui-shell-thread-button-dropdown-menu-item-icon" />
+                                          Delete
+                                        </DropdownMenu.Item>
+                                      </DropdownMenu.Content>
+                                    </DropdownMenu.Portal>
+                                  </DropdownMenu.Root>
+                                ) : undefined
+                              }
+                            />
+                          );
+                        })}
+                        <button
+                          type="button"
+                          disabled={creatingForAgent === g.agentId}
+                          onClick={() => handleNewSession(g.agentId)}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "var(--sp-xs)",
+                            padding: "var(--sp-2xs) var(--sp-xs)",
+                            fontFamily: "var(--font-label)",
+                            fontSize: "var(--fs-xs)",
+                            color: "var(--color-text-tertiary)",
+                            background: "transparent",
+                            border: "none",
+                            cursor: "pointer",
+                            borderRadius: "var(--r-m)",
+                            width: "100%",
+                            textAlign: "left",
+                          }}
+                        >
+                          <Plus size={12} />
+                          {creatingForAgent === g.agentId ? "Creating…" : "New session"}
+                        </button>
                       </div>
-                    );
-                  })}
-
-
-                  <Button
-                    type="button"
-                    variant="tertiary"
-                    size="extra-small"
-                    disabled={creatingForAgent === g.agentId}
-                    iconLeft={<Plus className="h-3.5 w-3.5 shrink-0 opacity-80" aria-hidden />}
-                    className="mt-1 w-full justify-start gap-1.5 px-1 font-normal"
-                    onClick={() => handleNewSession(g.agentId)}
-                  >
-                    {creatingForAgent === g.agentId ? "Creating…" : "New session"}
-                  </Button>
-                </div>
-              )}
+                    </ExpandCollapse>
+                  </AgentCard>
+                );
+              })}
+              <ViewAllRow
+                label="View all"
+                onClick={() => {
+                  /* placeholder: no dedicated agents-list view yet */
+                }}
+              />
             </div>
-          );
-        })}
+            </ExpandCollapse>
+          </div>
+
+          <NavSep />
+
+          {/* ── Apps section ── */}
+          <div style={{ padding: PAD_OUTER }}>
+            <SectionHead
+              icon={LayoutGrid}
+              label="Apps"
+              open={appsExpanded}
+              onToggle={() => setAppsExpanded((prev) => !prev)}
+            />
+            <ExpandCollapse open={appsExpanded}>
+              <div style={{ paddingBottom: 2 }}>
+                {apps.length === 0 ? (
+                  <p style={EMPTY_SECTION_STYLE}>No apps yet</p>
+                ) : (
+                  apps.slice(0, 3).map((app) => {
+                    const isActive = activeAppId === app.id;
+                    const isDeleting = deletingAppId === app.id;
+                    const isPinned = pinnedAppIds.has(app.id);
+                    return (
+                      <SidebarLetterRow
+                        key={app.id}
+                        letter={app.title}
+                        label={isDeleting ? "Deleting…" : app.title}
+                        href={appHash(app.id)}
+                        active={isActive}
+                        onClick={() => navigate({ view: "app", appId: app.id })}
+                        right={
+                          !isDeleting ? (
+                            <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
+                              <button
+                                type="button"
+                                title={isPinned ? "Unpin app" : "Pin app"}
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  onTogglePinned(app.id);
+                                }}
+                                style={PILL_ICON_BUTTON_STYLE(isPinned ? "accent" : "muted")}
+                              >
+                                <Pin size={12} />
+                              </button>
+                              <button
+                                type="button"
+                                title="Delete app"
+                                onClick={async (e) => {
+                                  e.preventDefault();
+                                  setDeletingAppId(app.id);
+                                  try {
+                                    await onDeleteApp(app.id);
+                                    if (isActive) navigate({ view: "home" });
+                                  } finally {
+                                    setDeletingAppId(null);
+                                  }
+                                }}
+                                style={PILL_ICON_BUTTON_STYLE("muted")}
+                              >
+                                <Trash2 size={12} />
+                              </button>
+                            </div>
+                          ) : undefined
+                        }
+                      />
+                    );
+                  })
+                )}
+                <ViewAllRow
+                  label="View all"
+                  onClick={() => navigate({ view: "home" })}
+                />
+              </div>
+            </ExpandCollapse>
+          </div>
+
+          <NavSep />
+
+          {/* ── Artifacts section ── */}
+          <div style={{ padding: PAD_OUTER }}>
+            <SectionHead
+              icon={FileText}
+              label="Artifacts"
+              open={artifactsExpanded}
+              onToggle={() => setArtifactsExpanded((prev) => !prev)}
+            />
+            <ExpandCollapse open={artifactsExpanded}>
+              <div style={{ paddingBottom: 2 }}>
+                {artifacts.length === 0 ? (
+                  <p style={EMPTY_SECTION_STYLE}>No artifacts yet</p>
+                ) : (
+                  artifacts.slice(0, 3).map((artifact) => (
+                    <SidebarLetterRow
+                      key={artifact.id}
+                      letter={artifact.title}
+                      label={artifact.title}
+                      active={route?.view === "artifact" && route.artifactId === artifact.id}
+                      onClick={() => navigate({ view: "artifact", artifactId: artifact.id })}
+                    />
+                  ))
+                )}
+                <ViewAllRow
+                  label="View all"
+                  onClick={() => navigate({ view: "artifacts" })}
+                />
+              </div>
+            </ExpandCollapse>
+          </div>
+          </div>
         </div>
       </Shell.SidebarContent>
 
-      <div className="mt-auto flex items-center gap-2 border-t border-zinc-200 px-3 py-3 dark:border-zinc-800">
-        <span
-          className={`inline-block h-2 w-2 flex-shrink-0 rounded-full ${DOT_CLASS[connectionState]}`}
-        />
-        <span className="flex-1 truncate text-xs text-zinc-500 dark:text-zinc-400">
-          {STATUS_LABEL[connectionState]}
-        </span>
-        <button
-          onClick={onSettingsClick}
-          title="Open settings"
-          className="rounded p-1 transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-800"
-        >
-          <Settings className="h-3.5 w-3.5 text-zinc-400" />
-        </button>
+      {/* ── Bottom bar: status (+ theme + settings when expanded) ── */}
+      <div
+        style={{
+          marginTop: "auto",
+          display: "flex",
+          alignItems: "center",
+          gap: "var(--sp-s)",
+          borderTop: "1px solid var(--color-border)",
+          padding: "var(--sp-m) var(--sp-m)",
+          justifyContent: sidebarExpanded ? "flex-start" : "center",
+        }}
+      >
+        <StatusIcon state={connectionState} />
+        {sidebarExpanded ? (
+          <>
+            <span
+              style={{
+                flex: 1,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+                fontFamily: "var(--font-body)",
+                fontSize: "var(--fs-xs)",
+                color: "var(--color-text-secondary)",
+              }}
+            >
+              {STATUS_LABEL[connectionState]}
+            </span>
+            <ThemeIconButton onClick={() => setThemeOpen(true)} />
+            <IconButton onClick={onSettingsClick} title="Open settings">
+              <Settings size={14} />
+            </IconButton>
+          </>
+        ) : null}
       </div>
+
+      <ThemeModal open={themeOpen} onClose={() => setThemeOpen(false)} />
+
+      <CommandPalette
+        open={searchOpen}
+        onClose={() => setSearchOpen(false)}
+        threads={displayThreads}
+        apps={apps}
+        artifacts={artifacts}
+        onSelect={(href) => {
+          window.location.hash = href.replace(/^#/, "");
+        }}
+      />
     </Shell.SidebarContainer>
+  );
+}
+
+function StatusIcon({ state }: { state: ConnectionState }) {
+  const Icon = STATUS_ICON[state];
+  const spin = STATUS_ICON_SPIN[state];
+  return (
+    <Icon
+      size={14}
+      color={STATUS_COLORS[state]}
+      className={spin ? "animate-spin" : undefined}
+      aria-label={STATUS_LABEL[state]}
+      style={{ flexShrink: 0 }}
+    />
+  );
+}
+
+function ThemeIconButton({ onClick }: { onClick: () => void }) {
+  const { palette, mode } = useTheme();
+  const title = `Theme: ${palette === "bloom" ? "Bloom" : "Neo"} · ${mode === "dark" ? "Dark" : "Light"}`;
+  return (
+    <IconButton onClick={onClick} title={title}>
+      <Sparkles size={14} />
+    </IconButton>
+  );
+}
+
+function IconButton({
+  children,
+  onClick,
+  title,
+}: {
+  children: ReactNode;
+  onClick: () => void;
+  title: string;
+}) {
+  const [hover, setHover] = useState(false);
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      title={title}
+      style={{
+        width: 28,
+        height: 28,
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        border: "none",
+        borderRadius: "var(--r-m)",
+        background: hover ? "var(--color-sunk-light)" : "transparent",
+        color: "var(--color-text-tertiary)",
+        cursor: "pointer",
+      }}
+    >
+      {children}
+    </button>
   );
 }

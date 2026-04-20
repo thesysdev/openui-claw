@@ -28,10 +28,7 @@ import { ArtifactsView } from "@/components/artifacts/ArtifactsView";
 import { ArtifactDetail } from "@/components/artifacts/ArtifactDetail";
 import { AppDetail } from "@/components/apps/AppDetail";
 import { HomeDashboard } from "@/components/home/HomeDashboard";
-import {
-  NotificationInboxDrawer,
-  NotificationInboxPane,
-} from "@/components/notifications/NotificationInbox";
+import { HomeNotificationPanel } from "@/components/home/HomeNotificationPanel";
 import { BellRing, PanelRightOpen, X } from "lucide-react";
 import { useHashRoute, navigate } from "@/lib/hooks/useHashRoute";
 import { loadPinnedAppIds, savePinnedAppIds } from "@/lib/app-pins";
@@ -556,8 +553,6 @@ function ChatAppInner({
   const { threads, selectedThreadId, selectThread, loadThreads } =
     useThreadList();
   const selectedThreadIsRunning = useThread((state) => state.isRunning);
-  const [mobileNotificationInboxOpen, setMobileNotificationInboxOpen] = useState(false);
-  const [notificationPaneCollapsed, setNotificationPaneCollapsed] = useState(false);
   const [workspacePaneCollapsed, setWorkspacePaneCollapsed] = useState(false);
   const [toastNotices, setToastNotices] = useState<NotificationToastNotice[]>([]);
   const notificationIdsRef = useRef<Set<string>>(new Set());
@@ -861,41 +856,11 @@ function ChatAppInner({
             onOpenThread={(threadId) => navigate({ view: "chat", sessionId: threadId })}
             onOpenApp={(appId) => navigate({ view: "app", appId })}
             onOpenArtifact={(artifactId) => navigate({ view: "artifact", artifactId })}
-            onOpenNotifications={() => setMobileNotificationInboxOpen(true)}
           />
         </div>
-        {notificationPaneCollapsed ? (
-          <div className="hidden h-full w-14 shrink-0 border-l border-zinc-200/70 bg-gradient-to-b from-white/95 via-white/90 to-sky-50/35 dark:border-zinc-800 dark:from-zinc-950/92 dark:via-zinc-950/82 dark:to-sky-950/25 xl:flex">
-            <button
-              type="button"
-              className="m-2 flex h-10 w-10 items-center justify-center rounded-2xl text-zinc-500 transition-colors hover:bg-white/80 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
-              onClick={() => setNotificationPaneCollapsed(false)}
-              aria-label="Expand notifications"
-            >
-              <PanelRightOpen className="h-4 w-4" />
-            </button>
-          </div>
-        ) : (
-          <NotificationInboxPane
-            notifications={notifications}
-            onCollapse={() => setNotificationPaneCollapsed(true)}
-            onMarkAllRead={async () => {
-              await onMarkNotificationsRead();
-            }}
-            onOpenNotification={openNotification}
-          />
-        )}
-        <NotificationInboxDrawer
-          open={mobileNotificationInboxOpen}
-          onClose={() => setMobileNotificationInboxOpen(false)}
+        <HomeNotificationPanel
           notifications={notifications}
-          onMarkAllRead={async () => {
-            await onMarkNotificationsRead();
-          }}
-          onOpenNotification={async (notification) => {
-            setMobileNotificationInboxOpen(false);
-            await openNotification(notification);
-          }}
+          onOpenNotification={openNotification}
         />
       </div>
     );
@@ -977,6 +942,7 @@ function ChatAppInner({
         deleteSession={deleteSession}
         apps={appList}
         artifacts={artifactList}
+        notifications={notifications}
         unreadNotificationCount={unreadNotificationCount}
         pinnedAppIds={pinnedAppIds}
         onTogglePinned={onTogglePinned}

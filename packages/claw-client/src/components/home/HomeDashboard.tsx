@@ -1,22 +1,84 @@
 "use client";
 
-import {
-  BellRing,
-  Clock3,
-  LayoutGrid,
-  MessageSquareText,
-  Pin,
-  ScrollText,
-} from "lucide-react";
+import type { CSSProperties } from "react";
+import { Clock3, Cpu, Pin } from "lucide-react";
 import type { Thread } from "@openuidev/react-headless";
 import type { AppSummary, ArtifactSummary } from "@/lib/engines/types";
 import type { NotificationRecord } from "@/lib/notifications";
 import type { CronJobRecord, CronRunEntry, CronStatusRecord } from "@/lib/cron";
+import { useTheme } from "@/lib/hooks/useTheme";
+import { Card } from "@/components/ui/Card";
+import { IconTile } from "@/components/ui/IconTile";
+import { Row } from "@/components/ui/Row";
+import { SectionHeader } from "@/components/ui/SectionHeader";
+
+// ── CONSTANTS ──────────────────────────────────────────────────────────────
+
+const PAGE_STYLE: CSSProperties = {
+  height: "100%",
+  overflowY: "auto",
+  backgroundColor: "var(--color-bg)",
+  color: "var(--color-text-primary)",
+};
+
+const CONTAINER_STYLE: CSSProperties = {
+  maxWidth: 1200,
+  margin: "0 auto",
+  padding: "var(--sp-xl) var(--sp-xl)",
+  display: "flex",
+  flexDirection: "column",
+  gap: "var(--sp-2xl)",
+};
+
+const GREETING_TITLE_STYLE: CSSProperties = {
+  fontFamily: "var(--font-heading)",
+  fontSize: "var(--fs-2xl)",
+  fontWeight: "var(--fw-bold)",
+  color: "var(--color-text-primary)",
+  letterSpacing: "var(--ls-tight)",
+};
+
+const GREETING_SUB_STYLE: CSSProperties = {
+  marginTop: 6,
+  fontFamily: "var(--font-body)",
+  fontSize: "var(--fs-md)",
+  color: "var(--color-text-tertiary)",
+};
+
+const AGENTS_GRID_STYLE: CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(4, 1fr)",
+  gap: "var(--sp-ml)",
+};
+
+const SPLIT_GRID_STYLE: CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "2fr 1fr",
+  gap: "var(--sp-xl)",
+};
+
+const EMPTY_STATE_STYLE: CSSProperties = {
+  padding: "var(--sp-xl)",
+  borderRadius: "var(--r-l)",
+  border: "1px dashed var(--color-border)",
+  fontSize: "var(--fs-sm)",
+  color: "var(--color-text-tertiary)",
+  textAlign: "center",
+};
+
+// ── HELPERS ────────────────────────────────────────────────────────────────
+
+function greet(hour: number): string {
+  if (hour < 6) return "Good night";
+  if (hour < 12) return "Good morning";
+  if (hour < 17) return "Good afternoon";
+  if (hour < 21) return "Good evening";
+  return "Good night";
+}
 
 function formatDateTime(value?: number | string | null): string {
   if (value == null) return "Not scheduled";
-  const timestamp =
-    typeof value === "number" ? value : new Date(value).getTime();
+  const timestamp = typeof value === "number" ? value : new Date(value).getTime();
   if (!Number.isFinite(timestamp)) return "Not scheduled";
   return new Date(timestamp).toLocaleString(undefined, {
     month: "short",
@@ -33,111 +95,116 @@ function cronRunBadge(run: CronRunEntry): string | undefined {
   return undefined;
 }
 
-function StatCard({
-  icon: Icon,
-  label,
-  value,
-  hint,
-  onClick,
-}: {
-  icon: React.ComponentType<{ className?: string }>;
-  label: string;
-  value: string | number;
-  hint: string;
-  onClick?: () => void;
-}) {
-  const className =
-    "rounded-3xl border border-white/70 bg-white/80 p-5 shadow-[0_18px_45px_-28px_rgba(15,23,42,0.28)] backdrop-blur dark:border-zinc-800/80 dark:bg-zinc-900/72";
+interface AgentAggregate {
+  agentId: string;
+  displayName: string;
+  threadCount: number;
+  unread: number;
+}
 
-  const content = (
-    <>
-      <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-zinc-100 via-white to-sky-100 text-zinc-700 dark:from-zinc-800 dark:via-zinc-900 dark:to-sky-500/20 dark:text-zinc-100">
-        <Icon className="h-5 w-5" />
-      </div>
-      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400">
-        {label}
-      </p>
-      <p className="mt-2 text-3xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
-        {value}
-      </p>
-      <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">{hint}</p>
-    </>
-  );
-
-  if (!onClick) {
-    return <div className={className}>{content}</div>;
+function aggregateAgents(
+  threads: Thread[],
+  notifications: NotificationRecord[],
+): AgentAggregate[] {
+  const map = new Map<string, AgentAggregate>();
+  for (const t of threads) {
+    const anyT = t as Thread & { clawAgentId?: string; clawKind?: string };
+    const aid = anyT.clawAgentId ?? t.id;
+    let a = map.get(aid);
+    if (!a) {
+      a = { agentId: aid, displayName: aid, threadCount: 0, unread: 0 };
+      map.set(aid, a);
+    }
+    a.threadCount += 1;
+    if (anyT.clawKind === "main") a.displayName = t.title;
   }
-
-  return (
-    <button
-      type="button"
-      className={`${className} text-left transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-800/80`}
-      onClick={onClick}
-    >
-      {content}
-    </button>
-  );
+  for (const n of notifications) {
+    if (!n.unread) continue;
+    const aid = n.source?.agentId;
+    if (!aid) continue;
+    const a = map.get(aid);
+    if (a) a.unread += 1;
+  }
+  return [...map.values()];
 }
 
-function Section({
-  title,
-  action,
-  children,
-}: {
-  title: string;
-  action?: React.ReactNode;
-  children: React.ReactNode;
-}) {
-  return (
-    <section className="rounded-3xl border border-white/70 bg-white/82 p-5 shadow-[0_18px_45px_-28px_rgba(15,23,42,0.28)] backdrop-blur dark:border-zinc-800/80 dark:bg-zinc-900/72">
-      <div className="mb-4 flex items-center justify-between gap-3">
-        <h2 className="text-sm font-semibold uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400">
-          {title}
-        </h2>
-        {action}
-      </div>
-      {children}
-    </section>
-  );
-}
+// ── SUB-COMPONENTS ─────────────────────────────────────────────────────────
 
-function Row({
-  icon: Icon,
-  title,
-  subtitle,
-  badge,
+function AgentCard({
+  agent,
   onClick,
 }: {
-  icon: React.ComponentType<{ className?: string }>;
-  title: string;
-  subtitle: string;
-  badge?: string;
+  agent: AgentAggregate;
   onClick: () => void;
 }) {
   return (
-    <button
-      type="button"
+    <Card
+      as="button"
+      interactive
       onClick={onClick}
-      className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-800/80"
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: "var(--sp-m)",
+        alignItems: "flex-start",
+        textAlign: "left",
+      }}
     >
-      <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-zinc-100 via-white to-sky-100 text-zinc-700 dark:from-zinc-800 dark:via-zinc-900 dark:to-sky-500/20 dark:text-zinc-100">
-        <Icon className="h-5 w-5" />
-      </div>
-      <div className="min-w-0 flex-1">
-        <div className="truncate text-sm font-medium text-zinc-950 dark:text-zinc-50">
-          {title}
+      <IconTile letter={agent.displayName} size="lg" category="agent" />
+      <div style={{ width: "100%" }}>
+        <div
+          style={{
+            fontFamily: "var(--font-heading)",
+            fontSize: "var(--fs-md)",
+            fontWeight: "var(--fw-bold)",
+            color: "var(--color-text-primary)",
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+          }}
+        >
+          {agent.displayName}
         </div>
-        <div className="truncate text-xs text-zinc-500 dark:text-zinc-400">
-          {subtitle}
+        <div
+          style={{
+            marginTop: 4,
+            fontFamily: "var(--font-body)",
+            fontSize: "var(--fs-xs)",
+            color: "var(--color-text-tertiary)",
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+          }}
+        >
+          <span>
+            {agent.threadCount} {agent.threadCount === 1 ? "session" : "sessions"}
+          </span>
+          {agent.unread > 0 ? (
+            <span style={{ color: "var(--color-text-danger)" }}>
+              {agent.unread} unread
+            </span>
+          ) : null}
         </div>
       </div>
-      {badge ? (
-        <span className="rounded-md border border-zinc-200 px-1.5 py-0.5 text-[10px] font-medium text-zinc-500 dark:border-zinc-700 dark:text-zinc-400">
-          {badge}
-        </span>
-      ) : null}
-    </button>
+    </Card>
   );
+}
+
+// ── MAIN COMPONENT ─────────────────────────────────────────────────────────
+
+interface HomeDashboardProps {
+  threads: Thread[];
+  apps: AppSummary[];
+  artifacts: ArtifactSummary[];
+  notifications: NotificationRecord[];
+  cronJobs: CronJobRecord[];
+  cronRuns: CronRunEntry[];
+  cronStatus: CronStatusRecord | null;
+  pinnedAppIds: Set<string>;
+  onOpenThread: (threadId: string) => void;
+  onOpenApp: (appId: string) => void;
+  onOpenArtifact: (artifactId: string) => void;
+  onOpenNotifications?: () => void;
 }
 
 export function HomeDashboard({
@@ -152,28 +219,13 @@ export function HomeDashboard({
   onOpenThread,
   onOpenApp,
   onOpenArtifact,
-  onOpenNotifications,
-}: {
-  threads: Thread[];
-  apps: AppSummary[];
-  artifacts: ArtifactSummary[];
-  notifications: NotificationRecord[];
-  cronJobs: CronJobRecord[];
-  cronRuns: CronRunEntry[];
-  cronStatus: CronStatusRecord | null;
-  pinnedAppIds: Set<string>;
-  onOpenThread: (threadId: string) => void;
-  onOpenApp: (appId: string) => void;
-  onOpenArtifact: (artifactId: string) => void;
-  onOpenNotifications?: () => void;
-}) {
+}: HomeDashboardProps) {
+  const { name } = useTheme();
   const pinnedApps = apps.filter((app) => pinnedAppIds.has(app.id));
-  const recentApps = pinnedApps.length > 0 ? pinnedApps : apps.slice(0, 4);
-  const recentThreads = threads.slice(0, 5);
-  const recentArtifacts = artifacts.slice(0, 4);
-  const unreadNotifications = notifications.filter((notification) => notification.unread);
-  const visibleCronJobs = cronJobs.slice(0, 4);
-  const visibleCronRuns = cronRuns.slice(0, 4);
+  const topApps = pinnedApps.length > 0 ? pinnedApps : apps.slice(0, 6);
+  const recentArtifacts = artifacts.slice(0, 3);
+  const visibleCronJobs = cronJobs.slice(0, 3);
+  const visibleCronRuns = cronRuns.slice(0, 3);
   const cronHeartbeat =
     typeof cronStatus?.["running"] === "boolean"
       ? cronStatus["running"]
@@ -181,197 +233,199 @@ export function HomeDashboard({
         : "Scheduler idle"
       : "Automation status";
 
+  const agents = aggregateAgents(threads, notifications).slice(0, 4);
+  const greeting = greet(new Date().getHours());
+  const who = name?.trim() || "there";
+
   return (
-    <div className="h-full overflow-y-auto bg-[radial-gradient(circle_at_top_right,_rgba(56,189,248,0.12),_transparent_24%),radial-gradient(circle_at_top_left,_rgba(148,163,184,0.12),_transparent_28%),linear-gradient(to_bottom,_rgba(255,255,255,0.94),_rgba(248,250,252,0.98))] dark:bg-[radial-gradient(circle_at_top_right,_rgba(14,165,233,0.12),_transparent_24%),radial-gradient(circle_at_top_left,_rgba(71,85,105,0.14),_transparent_26%),linear-gradient(to_bottom,_rgba(9,9,11,0.96),_rgba(9,9,11,0.98))]">
-      <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8">
-        <div className="mb-8">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-zinc-500 dark:text-zinc-400">
-              OpenUI Claw
-            </p>
-            <h1 className="mt-2 text-4xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
-              Home
-            </h1>
-            <p className="mt-2 max-w-2xl text-sm text-zinc-600 dark:text-zinc-400">
-              Conversations create durable apps and artifacts. This dashboard keeps the workspace state visible before you dive back into a thread.
-            </p>
-          </div>
-        </div>
+    <div style={PAGE_STYLE}>
+      <div style={CONTAINER_STYLE}>
+        <header>
+          <h1 style={GREETING_TITLE_STYLE}>
+            {greeting}, {who}
+          </h1>
+          <p style={GREETING_SUB_STYLE}>What would you like to work on today?</p>
+        </header>
 
-        {onOpenNotifications ? (
-          <div className="mb-6 xl:hidden">
-            <button
-              type="button"
-              className="flex w-full items-center justify-between rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-left text-sm font-medium text-zinc-700 shadow-sm transition-colors hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
-              onClick={onOpenNotifications}
-            >
-              <span className="inline-flex items-center gap-2">
-                <BellRing className="h-4 w-4" />
-                Notifications
-              </span>
-              <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-semibold text-zinc-500 dark:bg-zinc-800 dark:text-zinc-300">
-                {unreadNotifications.length}
-              </span>
-            </button>
-          </div>
-        ) : null}
-
-        <div className="mb-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <StatCard
-            icon={MessageSquareText}
-            label="Threads"
-            value={threads.length}
-            hint="Recent chats and agent sessions"
-          />
-          <StatCard
-            icon={LayoutGrid}
-            label="Apps"
-            value={apps.length}
-            hint="Durable interfaces created by agents"
-          />
-          <StatCard
-            icon={ScrollText}
-            label="Artifacts"
-            value={artifacts.length}
-            hint="Saved documents, files, and outputs"
-          />
-          <StatCard
-            icon={BellRing}
-            label="Unread"
-            value={unreadNotifications.length}
-            hint="Notifications that still need your attention"
-            onClick={onOpenNotifications}
-          />
-        </div>
-
-        <div className="grid gap-6 xl:grid-cols-2">
-          <Section title="Recent Conversations">
-            <div className="space-y-1">
-              {recentThreads.length === 0 ? (
-                <p className="rounded-2xl border border-dashed border-zinc-200 px-4 py-6 text-sm text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
-                  Once you start or open a thread, it will show up here for quick return.
-                </p>
-              ) : (
-                recentThreads.map((thread) => (
-                  <Row
-                    key={thread.id}
-                    icon={Clock3}
-                    title={thread.title}
-                    subtitle="Open chat session"
-                    onClick={() => onOpenThread(thread.id)}
-                  />
-                ))
-              )}
+        {/* ── Top agents ── */}
+        <section>
+          <SectionHeader title="Top agents" />
+          {agents.length === 0 ? (
+            <div style={EMPTY_STATE_STYLE}>
+              Agents and their sessions will appear here once you connect a gateway.
             </div>
-          </Section>
+          ) : (
+            <div style={AGENTS_GRID_STYLE}>
+              {agents.map((agent) => {
+                const first = threads.find((t) => {
+                  const anyT = t as Thread & { clawAgentId?: string };
+                  return (anyT.clawAgentId ?? t.id) === agent.agentId;
+                });
+                return (
+                  <AgentCard
+                    key={agent.agentId}
+                    agent={agent}
+                    onClick={() => first && onOpenThread(first.id)}
+                  />
+                );
+              })}
+            </div>
+          )}
+        </section>
 
-          <Section title="Recent Artifacts">
-            <div className="space-y-1">
-              {recentArtifacts.length === 0 ? (
-                <p className="rounded-2xl border border-dashed border-zinc-200 px-4 py-6 text-sm text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
-                  Durable artifacts will appear here once an agent saves reports, files, or media.
-                </p>
-              ) : (
-                recentArtifacts.map((artifact) => (
+        {/* ── Top apps + Recent artifacts ── */}
+        <section style={SPLIT_GRID_STYLE}>
+          <Card>
+            <SectionHeader
+              title={pinnedApps.length > 0 ? "Pinned apps" : "Top apps"}
+              action={
+                pinnedApps.length > 0 ? (
+                  <span
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 4,
+                      color: "var(--color-accent)",
+                      fontSize: "var(--fs-xs)",
+                    }}
+                  >
+                    <Pin size={12} />
+                    {pinnedApps.length}
+                  </span>
+                ) : null
+              }
+            />
+            {topApps.length === 0 ? (
+              <div style={EMPTY_STATE_STYLE}>
+                Apps generated during conversations will appear here.
+              </div>
+            ) : (
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: "var(--sp-2xs)",
+                }}
+              >
+                {topApps.map((app) => (
+                  <Row
+                    key={app.id}
+                    icon={<IconTile letter={app.title} size="md" category="app" />}
+                    title={app.title}
+                    subtitle={app.agentId}
+                    onClick={() => onOpenApp(app.id)}
+                  />
+                ))}
+              </div>
+            )}
+          </Card>
+
+          <Card>
+            <SectionHeader title="Recent artifacts" />
+            {recentArtifacts.length === 0 ? (
+              <div style={EMPTY_STATE_STYLE}>
+                Durable artifacts will appear here once an agent saves reports, files, or media.
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-2xs)" }}>
+                {recentArtifacts.map((artifact) => (
                   <Row
                     key={artifact.id}
-                    icon={ScrollText}
+                    icon={<IconTile letter={artifact.title} size="md" category="artifact" />}
                     title={artifact.title}
                     subtitle={artifact.source.agentId}
-                    badge={artifact.kind}
                     onClick={() => onOpenArtifact(artifact.id)}
                   />
-                ))
-              )}
-            </div>
-          </Section>
+                ))}
+              </div>
+            )}
+          </Card>
+        </section>
 
-          <Section
-            title="Scheduled Activity"
+        {/* ── Scheduled activity ── */}
+        <section>
+          <SectionHeader
+            title="Scheduled activity"
             action={
-              <span className="text-xs text-zinc-500 dark:text-zinc-400">
+              <span
+                style={{
+                  fontFamily: "var(--font-label)",
+                  fontSize: "var(--fs-xs)",
+                  color: "var(--color-text-tertiary)",
+                }}
+              >
                 {cronHeartbeat}
               </span>
             }
-          >
-            <div className="space-y-1">
-              {visibleCronJobs.length === 0 && visibleCronRuns.length === 0 ? (
-                <p className="rounded-2xl border border-dashed border-zinc-200 px-4 py-6 text-sm text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
-                  Scheduled jobs and recent automation outcomes will appear here once cron is active.
-                </p>
-              ) : (
-                <>
-                  {visibleCronJobs.map((job) => (
-                    <Row
-                      key={job.id}
-                      icon={Clock3}
-                      title={job.name}
-                      subtitle={
-                        job.enabled
-                          ? `Next run ${formatDateTime(job.state?.nextRunAtMs)}`
-                          : "Disabled"
-                      }
-                      badge={job.state?.lastRunStatus ?? (job.enabled ? "Scheduled" : "Off")}
-                      onClick={() => {
-                        if (job.threadId) onOpenThread(job.threadId);
-                      }}
-                    />
-                  ))}
-                  {visibleCronRuns.map((run) => (
-                    <Row
-                      key={`${run.jobId}:${run.ts}`}
-                      icon={BellRing}
-                      title={run.jobName ?? run.jobId}
-                      subtitle={
-                        run.summary ??
-                        run.error ??
-                        `Last run ${formatDateTime(run.runAtMs ?? run.ts)}`
-                      }
-                      badge={cronRunBadge(run)}
-                      onClick={() => {
-                        if (run.threadId) onOpenThread(run.threadId);
-                      }}
-                    />
-                  ))}
-                </>
-              )}
+          />
+          {visibleCronJobs.length === 0 && visibleCronRuns.length === 0 ? (
+            <div style={EMPTY_STATE_STYLE}>
+              Scheduled jobs and recent automation outcomes will appear here once cron is active.
             </div>
-          </Section>
-
-          <div className="xl:col-span-2">
-            <Section
-              title={pinnedApps.length > 0 ? "Pinned Apps" : "Recent Apps"}
-              action={
-                pinnedApps.length > 0 ? (
-                  <div className="inline-flex items-center gap-1 text-xs text-sky-500">
-                    <Pin className="h-3.5 w-3.5" />
-                    {pinnedApps.length}
-                  </div>
-                ) : null
-              }
-            >
-              <div className="space-y-1">
-                {recentApps.length === 0 ? (
-                  <p className="rounded-2xl border border-dashed border-zinc-200 px-4 py-6 text-sm text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
-                    Apps generated during conversations will appear here and remain easy to revisit.
-                  </p>
-                ) : (
-                  recentApps.map((app) => (
-                    <Row
-                      key={app.id}
-                      icon={LayoutGrid}
-                      title={app.title}
-                      subtitle={app.agentId}
-                      badge={pinnedAppIds.has(app.id) ? "Pinned" : undefined}
-                      onClick={() => onOpenApp(app.id)}
-                    />
-                  ))
-                )}
-              </div>
-            </Section>
-          </div>
-        </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-2xs)" }}>
+              {visibleCronJobs.map((job) => (
+                <Row
+                  key={job.id}
+                  icon={<IconTile icon={<Clock3 size={14} />} size="md" category="activity" />}
+                  title={job.name}
+                  subtitle={
+                    job.enabled
+                      ? `Next run ${formatDateTime(job.state?.nextRunAtMs)}`
+                      : "Disabled"
+                  }
+                  right={
+                    <span
+                      style={{
+                        padding: "2px 8px",
+                        borderRadius: "var(--r-s)",
+                        fontSize: "var(--fs-2xs)",
+                        color: "var(--color-text-tertiary)",
+                        border: "1px solid var(--color-border)",
+                      }}
+                    >
+                      {job.state?.lastRunStatus ?? (job.enabled ? "Scheduled" : "Off")}
+                    </span>
+                  }
+                  onClick={() => {
+                    if (job.threadId) onOpenThread(job.threadId);
+                  }}
+                />
+              ))}
+              {visibleCronRuns.map((run) => (
+                <Row
+                  key={`${run.jobId}:${run.ts}`}
+                  icon={<IconTile icon={<Cpu size={14} />} size="md" category="activity" />}
+                  title={run.jobName ?? run.jobId}
+                  subtitle={
+                    run.summary ?? run.error ?? `Last run ${formatDateTime(run.runAtMs ?? run.ts)}`
+                  }
+                  right={
+                    cronRunBadge(run) ? (
+                      <span
+                        style={{
+                          padding: "2px 8px",
+                          borderRadius: "var(--r-s)",
+                          fontSize: "var(--fs-2xs)",
+                          color: "var(--color-text-tertiary)",
+                          border: "1px solid var(--color-border)",
+                        }}
+                      >
+                        {cronRunBadge(run)}
+                      </span>
+                    ) : undefined
+                  }
+                  onClick={() => {
+                    if (run.threadId) onOpenThread(run.threadId);
+                  }}
+                />
+              ))}
+            </div>
+          )}
+        </section>
       </div>
     </div>
   );
 }
+
+export default HomeDashboard;

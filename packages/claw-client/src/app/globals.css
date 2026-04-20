@@ -1,18 +1,375 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap");
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* ──────────────────────────────────────────────────────────────────────── */
+/*  LAYOUT TOKENS — palette/mode independent                                */
+/* ──────────────────────────────────────────────────────────────────────── */
+
+:root {
+  /* Spacing */
+  --sp-000: 0px;
+  --sp-3xs: 2px;
+  --sp-2xs: 4px;
+  --sp-xs: 6px;
+  --sp-s: 8px;
+  --sp-sm: 10px;
+  --sp-m: 12px;
+  --sp-ml: 16px;
+  --sp-l: 20px;
+  --sp-xl: 24px;
+  --sp-2xl: 32px;
+  --sp-3xl: 48px;
+
+  /* Radii */
+  --r-none: 0px;
+  --r-3xs: 1px;
+  --r-2xs: 2px;
+  --r-xs: 3px;
+  --r-s: 4px;
+  --r-m: 6px;
+  --r-l: 8px;
+  --r-xl: 10px;
+  --r-2xl: 12px;
+  --r-3xl: 14px;
+  --r-4xl: 16px;
+  --r-5xl: 18px;
+  --r-6xl: 20px;
+  --r-7xl: 22px;
+  --r-8xl: 24px;
+  --r-9xl: 28px;
+  --r-full: 9999px;
+
+  /* Type sizes */
+  --fs-2xs: 10px;
+  --fs-xs: 11px;
+  --fs-sm: 12px;
+  --fs-md: 14px;
+  --fs-lg: 16px;
+  --fs-xl: 18px;
+  --fs-2xl: 22px;
+  --fs-3xl: 28px;
+  --fs-4xl: 36px;
+  --fs-5xl: 48px;
+
+  /* Weights */
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-bold: 600;
+  --fw-heavy: 700;
+
+  /* Line heights */
+  --lh-body: 1.5;
+  --lh-heading: 1.25;
+  --lh-heading-lg: 1.15;
+  --lh-label: 1.35;
+  --lh-code: 1.6;
+
+  /* Letter spacing */
+  --ls-normal: 0em;
+  --ls-tight: -0.01em;
+  --ls-tighter: -0.02em;
+
+  /* Font stacks (overridden per palette) */
+  --font-sans: "Inter", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-mono: "JetBrains Mono", "Fira Code", "SF Mono", "Cascadia Code", monospace;
+}
+
+/* ──────────────────────────────────────────────────────────────────────── */
+/*  THEME PALETTES — Bloom (default) × Neo, each in light + dark           */
+/* ──────────────────────────────────────────────────────────────────────── */
+
+/* ── BLOOM · LIGHT (default) ────────────────────────────────────────────── */
+:root,
+:root[data-palette="bloom"] {
+  /* Typography */
+  --font-body: var(--font-sans);
+  --font-heading: var(--font-sans);
+  --font-label: var(--font-sans);
+  --font-code: var(--font-mono);
+  --font-numbers: var(--font-mono);
+
+  /* Surfaces */
+  --color-bg: #ffffff;
+  --color-fg: #f3f3f3;
+  --color-popover: #ffffff;
+  --color-sunk-light: #f0f0f0;
+  --color-sunk: #e5e5e5;
+  --color-sunk-deep: #d4d4d4;
+  --color-elevated-light: #ffffff;
+  --color-elevated: #ffffff;
+  --color-elevated-strong: #ffffff;
+  --color-elevated-intense: #ffffff;
+  --color-overlay: rgba(0, 0, 0, 0.45);
+  --color-highlight-subtle: #f5f0ff;
+  --color-highlight: #ede5ff;
+  --color-highlight-strong: #d8ccfa;
+  --color-highlight-intense: #b89df5;
+  --color-inverted-bg: #1a1a1a;
+
+  /* Status backgrounds */
+  --color-info-bg: #e7f5ff;
+  --color-success-bg: #ebfbee;
+  --color-alert-bg: #fff9db;
+  --color-danger-bg: #fff5f5;
+  --color-purple-bg: #f3f0ff;
+  --color-pink-bg: #fff0f6;
+
+  /* Text */
+  --color-text-primary: #1a1a1a;
+  --color-text-secondary: #525252;
+  --color-text-tertiary: #808080;
+  --color-text-link: #7c3aed;
+  --color-text-brand: #7c3aed;
+  --color-text-white: #ffffff;
+  --color-text-black: #000000;
+  --color-text-accent-primary: #6d28d9;
+  --color-text-accent-secondary: #7c3aed;
+  --color-text-accent-tertiary: #a78bfa;
+  --color-text-success: #2b8a3e;
+  --color-text-alert: #e67700;
+  --color-text-danger: #e03131;
+  --color-text-info: #1971c2;
+  --color-text-pink: #c2255c;
+  --color-text-purple: #7048e8;
+
+  /* Interactive */
+  --color-accent: #7c3aed;
+  --color-accent-hover: #6d28d9;
+  --color-accent-disabled: #ddd6fe;
+  --color-accent-pressed: #5b21b6;
+  --color-destructive: #e03131;
+  --color-destructive-hover: #c92a2a;
+  --color-destructive-disabled: #ffc9c9;
+  --color-destructive-pressed: #b02525;
+
+  /* Borders */
+  --color-border: #d4d4d4;
+  --color-border-interactive: #a0a0a0;
+  --color-border-interactive-selected: #7c3aed;
+  --color-border-accent: #ddd6fe;
+  --color-border-accent-selected: #7c3aed;
+
+  /* Chat */
+  --color-chat-user-bg: #7c3aed;
+  --color-chat-user-text: #ffffff;
+
+  /* Shadows */
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06);
+  --shadow-md: 0 1px 3px rgba(0, 0, 0, 0.08);
+  --shadow-lg: 0 1px 3px rgba(0, 0, 0, 0.1);
+  --shadow-xl: 0 1px 4px rgba(0, 0, 0, 0.06);
+  --shadow-card: 0 4px 16px rgba(0, 0, 0, 0.12);
+  --shadow-float: 0 4px 16px rgba(0, 0, 0, 0.15);
+  --shadow-panel: 4px 0 24px rgba(0, 0, 0, 0.15);
+
+  /* Bloom category colors (icon tiles) */
+  --cat-agent: #2563eb;
+  --cat-app: #16a34a;
+  --cat-artifact: #db2777;
+  --cat-activity: #0d9488;
+  --cat-task: #2563eb;
+  --cat-context: #7c3aed;
+}
+
+/* ── BLOOM · DARK ───────────────────────────────────────────────────────── */
+.dark,
+.dark[data-palette="bloom"],
+:root[data-palette="bloom"].dark {
+  --color-bg: #141414;
+  --color-fg: #1a1a1a;
+  --color-popover: #262626;
+  --color-sunk-light: #1a1a1a;
+  --color-sunk: #141414;
+  --color-sunk-deep: #0f0f0f;
+  --color-elevated-light: #262626;
+  --color-elevated: #2e2e2e;
+  --color-elevated-strong: #3d3d3d;
+  --color-elevated-intense: #525252;
+  --color-overlay: rgba(0, 0, 0, 0.65);
+  --color-highlight-subtle: #222222;
+  --color-highlight: #2a2a2a;
+  --color-highlight-strong: #333333;
+  --color-highlight-intense: #3d3d3d;
+  --color-inverted-bg: #ffffff;
+
+  --color-info-bg: #1a2a1a;
+  --color-success-bg: #152a15;
+  --color-alert-bg: #2a2510;
+  --color-danger-bg: #2c1515;
+  --color-purple-bg: #1f1535;
+  --color-pink-bg: #2c1525;
+
+  --color-text-primary: #e5e5e5;
+  --color-text-secondary: #a0a0a0;
+  --color-text-tertiary: #808080;
+  --color-text-link: #c4b5fa;
+  --color-text-brand: #c4b5fa;
+  --color-text-accent-primary: #c4b5fa;
+  --color-text-accent-secondary: #b89df5;
+  --color-text-accent-tertiary: #a78bfa;
+  --color-text-success: #69db7c;
+  --color-text-alert: #ffd43b;
+  --color-text-danger: #d63031;
+  --color-text-info: #74c0fc;
+  --color-text-pink: #f783ac;
+  --color-text-purple: #b197fc;
+
+  --color-accent: #a78bfa;
+  --color-accent-hover: #c4b5fa;
+  --color-accent-disabled: #2a2a2a;
+  --color-accent-pressed: #8b5cf6;
+  --color-destructive: #d63031;
+  --color-destructive-hover: #ff8787;
+  --color-destructive-disabled: #3d1c1c;
+  --color-destructive-pressed: #fa5252;
+
+  --color-border: #3d3d3d;
+  --color-border-interactive: #525252;
+  --color-border-interactive-selected: #c4b5fa;
+  --color-border-accent: #333333;
+  --color-border-accent-selected: #c4b5fa;
+
+  --color-chat-user-bg: #8b5cf6;
+  --color-chat-user-text: #ffffff;
+
+  --shadow-xs: none;
+  --shadow-sm: none;
+  --shadow-md: none;
+  --shadow-lg: none;
+  --shadow-xl: none;
+  --shadow-card: 0 4px 16px rgba(0, 0, 0, 0.35);
+  --shadow-float: 0 4px 16px rgba(0, 0, 0, 0.4);
+  --shadow-panel: 4px 0 24px rgba(0, 0, 0, 0.3);
+
+  --cat-agent: #60a5fa;
+  --cat-app: #4ade80;
+  --cat-artifact: #f472b6;
+  --cat-activity: #5eead4;
+  --cat-task: #60a5fa;
+  --cat-context: #a78bfa;
+}
+
+/* ── NEO · LIGHT ────────────────────────────────────────────────────────── */
+:root[data-palette="neo"] {
+  --font-body: var(--font-mono);
+  --font-heading: var(--font-mono);
+  --font-label: var(--font-mono);
+  --font-code: var(--font-mono);
+  --font-numbers: var(--font-mono);
+
+  --color-bg: #ffffff;
+  --color-fg: #f3f3f3;
+  --color-popover: #ffffff;
+  --color-sunk-light: #f0f0f0;
+  --color-sunk: #e5e5e5;
+  --color-sunk-deep: #d4d4d4;
+  --color-elevated-light: #ffffff;
+  --color-elevated: #ffffff;
+  --color-elevated-strong: #ffffff;
+  --color-elevated-intense: #ffffff;
+  --color-highlight-subtle: #f0f0f0;
+  --color-highlight: #e5e5e5;
+  --color-highlight-strong: #d4d4d4;
+  --color-highlight-intense: #c0c0c0;
+  --color-inverted-bg: #1a1a1a;
+
+  --color-text-primary: #1a1a1a;
+  --color-text-secondary: #525252;
+  --color-text-tertiary: #808080;
+  --color-text-link: #1a1a1a;
+  --color-text-brand: #1a1a1a;
+  --color-text-accent-primary: #1a1a1a;
+  --color-text-accent-secondary: #363636;
+  --color-text-accent-tertiary: #525252;
+
+  --color-accent: #1a1a1a;
+  --color-accent-hover: #363636;
+  --color-accent-disabled: #c0c0c0;
+  --color-accent-pressed: #000000;
+
+  --color-border: #d4d4d4;
+  --color-border-interactive: #a0a0a0;
+  --color-border-interactive-selected: #1a1a1a;
+  --color-border-accent: #c0c0c0;
+  --color-border-accent-selected: #1a1a1a;
+
+  --color-chat-user-bg: #1a1a1a;
+  --color-chat-user-text: #ffffff;
+
+  /* Neo has no category palette — reuse accent */
+  --cat-agent: var(--color-text-accent-primary);
+  --cat-app: var(--color-text-accent-primary);
+  --cat-artifact: var(--color-text-accent-primary);
+  --cat-activity: var(--color-text-accent-primary);
+  --cat-task: var(--color-text-accent-primary);
+  --cat-context: var(--color-text-accent-primary);
+}
+
+/* ── NEO · DARK ─────────────────────────────────────────────────────────── */
+:root[data-palette="neo"].dark {
+  --color-bg: #141414;
+  --color-fg: #1a1a1a;
+  --color-popover: #262626;
+  --color-sunk-light: #1a1a1a;
+  --color-sunk: #141414;
+  --color-sunk-deep: #0f0f0f;
+  --color-elevated-light: #262626;
+  --color-elevated: #2e2e2e;
+  --color-elevated-strong: #3d3d3d;
+  --color-elevated-intense: #525252;
+  --color-highlight-subtle: #262626;
+  --color-highlight: #2e2e2e;
+  --color-highlight-strong: #3d3d3d;
+  --color-highlight-intense: #525252;
+  --color-inverted-bg: #ffffff;
+
+  --color-text-primary: #e5e5e5;
+  --color-text-secondary: #a0a0a0;
+  --color-text-tertiary: #808080;
+  --color-text-link: #ffffff;
+  --color-text-brand: #ffffff;
+  --color-text-accent-primary: #ffffff;
+  --color-text-accent-secondary: #e5e5e5;
+  --color-text-accent-tertiary: #c0c0c0;
+
+  --color-accent: #ffffff;
+  --color-accent-hover: #e5e5e5;
+  --color-accent-disabled: #3d3d3d;
+  --color-accent-pressed: #c0c0c0;
+
+  --color-border: #3d3d3d;
+  --color-border-interactive: #525252;
+  --color-border-interactive-selected: #ffffff;
+  --color-border-accent: #525252;
+  --color-border-accent-selected: #ffffff;
+
+  --color-chat-user-bg: #ffffff;
+  --color-chat-user-text: #1a1a1a;
+}
+
+/* ──────────────────────────────────────────────────────────────────────── */
+/*  BASE                                                                   */
+/* ──────────────────────────────────────────────────────────────────────── */
 
 html,
 body {
   height: 100%;
   overflow: hidden;
-  background:
-    radial-gradient(circle at top left, rgba(148, 163, 184, 0.12), transparent 24%),
-    radial-gradient(circle at top right, rgba(56, 189, 248, 0.1), transparent 20%),
-    linear-gradient(to bottom, #fafafa, #f8fafc);
+  background: var(--color-bg);
+  color: var(--color-text-primary);
+  font-family: var(--font-body);
+  font-size: var(--fs-md);
+  line-height: var(--lh-body);
+  letter-spacing: var(--ls-normal);
 }
 
-/* ── Composer toolbar (session controls) ──────────────────────────────────── */
+/* ──────────────────────────────────────────────────────────────────────── */
+/*  SESSION COMPOSER STYLES (preserved from prior globals)                  */
+/* ──────────────────────────────────────────────────────────────────────── */
 
 .composer-toolbar {
   max-width: 880px;
@@ -35,20 +392,18 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.92));
-  border: 1px solid rgba(228, 228, 231, 0.9);
+  background: linear-gradient(135deg, var(--color-elevated), var(--color-fg));
+  border: 1px solid var(--color-border);
   border-bottom: none;
-  border-radius: var(--openui-radius-2xl, 24px) var(--openui-radius-2xl, 24px) 0 0;
+  border-radius: var(--r-8xl) var(--r-8xl) 0 0;
   padding: 6px 12px;
-  box-shadow: 0 18px 40px -32px rgba(15, 23, 42, 0.35);
+  box-shadow: var(--shadow-xl);
 }
 
-/* Remove top border-radius from composer card when toolbar is present */
 .composer-toolbar + .openui-shell-thread-composer .openui-shell-thread-composer__input-wrapper {
   border-top-left-radius: 0;
   border-top-right-radius: 0;
-  border-top-color: var(--openui-border-default, #f0f0f0);
+  border-top-color: var(--color-border);
 }
 
 .composer-toolbar__controls {
@@ -66,26 +421,26 @@ body {
 .composer-toolbar__icon {
   width: 13px;
   height: 13px;
-  color: var(--openui-text-neutral-secondary, #a1a1aa);
+  color: var(--color-text-tertiary);
   flex-shrink: 0;
 }
 
 .composer-toolbar__select {
   height: 22px;
   border: none;
-  border-radius: 4px;
+  border-radius: var(--r-s);
   background: transparent;
   padding: 0 4px;
-  font: var(--openui-text-label-sm, 11px/1.2 system-ui);
-  letter-spacing: var(--openui-text-label-sm-letter-spacing, normal);
-  color: var(--openui-text-neutral-secondary, #71717a);
+  font-family: var(--font-label);
+  font-size: var(--fs-xs);
+  color: var(--color-text-secondary);
   outline: none;
   cursor: pointer;
   appearance: auto;
 }
 
 .composer-toolbar__select:hover {
-  background-color: var(--openui-elevated, #f4f4f5);
+  background-color: var(--color-sunk-light);
 }
 
 .composer-toolbar__select--model {
@@ -103,19 +458,16 @@ body {
 }
 
 .composer-toolbar__context-label {
-  font: var(--openui-text-label-sm, 11px/1.2 system-ui);
-  color: var(--openui-text-neutral-secondary, #71717a);
+  font-family: var(--font-label);
+  font-size: var(--fs-xs);
+  color: var(--color-text-secondary);
   white-space: nowrap;
 }
-
-/* ── Thread layout when session workspace pane is visible ─────────────────── */
 
 .openui-claw-thread-container .openui-shell-thread-scroll-area {
   padding-left: 16px;
   padding-right: 16px;
-  background:
-    radial-gradient(circle at top, rgba(148, 163, 184, 0.08), transparent 26%),
-    linear-gradient(to bottom, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0));
+  background: var(--color-bg);
 }
 
 .openui-claw-thread-container .openui-shell-thread-messages {
@@ -138,6 +490,8 @@ body {
 .openui-claw-thread-container .openui-shell-thread-message-user__content {
   max-width: min(100%, 720px);
   padding: 12px 18px;
+  background: var(--color-chat-user-bg);
+  color: var(--color-chat-user-text);
 }
 
 .openui-claw-thread-container .openui-shell-thread-error {
@@ -152,24 +506,9 @@ body {
 }
 
 .openui-claw-session-composer > div {
-  background:
-    linear-gradient(145deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.88));
-  border-color: rgba(228, 228, 231, 0.9);
-  box-shadow: 0 20px 40px -34px rgba(15, 23, 42, 0.36);
-}
-
-.dark body {
-  background:
-    radial-gradient(circle at top left, rgba(71, 85, 105, 0.14), transparent 24%),
-    radial-gradient(circle at top right, rgba(14, 165, 233, 0.1), transparent 18%),
-    linear-gradient(to bottom, #09090b, #111827);
-}
-
-.dark .composer-toolbar__inner,
-.dark .openui-claw-session-composer > div {
-  background:
-    linear-gradient(145deg, rgba(24, 24, 27, 0.96), rgba(23, 37, 84, 0.78));
-  border-color: rgba(63, 63, 70, 0.9);
+  background: var(--color-elevated);
+  border-color: var(--color-border);
+  box-shadow: var(--shadow-xl);
 }
 
 .openui-claw-thread-container .composer-toolbar {
