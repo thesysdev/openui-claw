@@ -1,23 +1,25 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { ConnectionState } from "@/lib/gateway/types";
-import { getSettings, saveSettings } from "@/lib/storage";
-import type { Settings } from "@/lib/storage";
-import { EventType } from "@openuidev/react-headless";
-import type { ModelChoice, ClawThreadListItem, SessionRow } from "@/types/gateway-responses";
-import {
-  OpenClawEngine,
-  resolveChatSessionKey,
-} from "@/lib/engines/openclaw/OpenClawEngine";
-import type { StoredMessage, ArtifactStore, AppStore } from "@/lib/engines/types";
-import type { NotificationRecord } from "@/lib/notifications";
-import type { CronJobRecord, CronRunEntry, CronStatusRecord } from "@/lib/cron";
 import { separateContentAndContext } from "@/lib/content-parser";
+import type { CronJobRecord, CronRunEntry, CronStatusRecord } from "@/lib/cron";
+import { OpenClawEngine, resolveChatSessionKey } from "@/lib/engines/openclaw/OpenClawEngine";
+import type {
+  AppStore,
+  ArtifactStore,
+  GatewayCommand,
+  StoredMessage,
+  UploadStore,
+} from "@/lib/engines/types";
+import { ConnectionState } from "@/lib/gateway/types";
+import { shouldSurfaceNotification, type NotificationRecord } from "@/lib/notifications";
+import type { Settings } from "@/lib/storage";
+import { getSettings, saveSettings } from "@/lib/storage";
 import { deriveTitleFromText, isOpaqueSessionTitle } from "@/lib/thread-titles";
+import type { ClawThreadListItem, ModelChoice, SessionRow } from "@/types/gateway-responses";
+import { EventType } from "@openuidev/react-headless";
+import { useCallback, useEffect, useRef, useState } from "react";
 
-export type { ClawThreadListItem } from "@/types/gateway-responses";
-export type { SessionRow, ModelChoice } from "@/types/gateway-responses";
+export type { ClawThreadListItem, ModelChoice, SessionRow } from "@/types/gateway-responses";
 export { resolveChatSessionKey };
 
 function extractUserMessageText(content: unknown): string {
@@ -54,7 +56,7 @@ function deriveThreadTitleFromMessages(messages: unknown[]): string | null {
   return null;
 }
 
-function sessionRouteIdFromSessionKey(
+export function sessionRouteIdFromSessionKey(
   sessionKey: string,
   knownAgentIds: Set<string>,
 ): string {
@@ -69,20 +71,20 @@ function sessionRouteIdFromSessionKey(
 
 export function useGateway({ onAuthFailed }: { onAuthFailed: () => void }) {
   const [connectionState, setConnectionState] = useState<ConnectionState>(
-    ConnectionState.DISCONNECTED
+    ConnectionState.DISCONNECTED,
   );
   const [settings, setSettings] = useState<Settings | null>(() => getSettings());
   const [pairingDeviceId, setPairingDeviceId] = useState<string | null>(null);
-  const [sessionMeta, setSessionMeta] = useState<Map<string, SessionRow>>(
-    () => new Map()
-  );
+  const [sessionMeta, setSessionMeta] = useState<Map<string, SessionRow>>(() => new Map());
   const [availableModels, setAvailableModels] = useState<ModelChoice[]>([]);
   const [artifacts, setArtifacts] = useState<ArtifactStore | undefined>(undefined);
   const [apps, setApps] = useState<AppStore | undefined>(undefined);
+  const [uploads, setUploads] = useState<UploadStore | undefined>(undefined);
   const [notifications, setNotifications] = useState<NotificationRecord[]>([]);
   const [cronJobs, setCronJobs] = useState<CronJobRecord[]>([]);
   const [cronRuns, setCronRuns] = useState<CronRunEntry[]>([]);
   const [cronStatus, setCronStatus] = useState<CronStatusRecord | null>(null);
+  const [gatewayCommands, setGatewayCommands] = useState<GatewayCommand[]>([]);
 
   const onAuthFailedRef = useRef(onAuthFailed);
   useEffect(() => {
@@ -93,6 +95,9 @@ export function useGateway({ onAuthFailed }: { onAuthFailed: () => void }) {
   const attemptedAutoTitlesRef = useRef<Map<string, string>>(new Map());
   const engineRef = useRef<OpenClawEngine | null>(null);
   const sessionMetaRef = useRef(sessionMeta);
+  // Subscribers for `sessions.changed` broadcasts — populated by consumers
+  // via `onSessionChanged(...)` and drained when the gateway fires an event.
+  const sessionChangedListenersRef = useRef<Set<(sessionKey: string) => void>>(new Set());
 
   useEffect(() => {
     sessionMetaRef.current = sessionMeta;
@@ -119,14 +124,28 @@ export function useGateway({ onAuthFailed }: { onAuthFailed: () => void }) {
         },
         onSessionMetaChanged: setSessionMeta,
         onModelsChanged: setAvailableModels,
-        onKnownAgentIdsChanged: (ids) => { knownAgentIds.current = ids; },
-      }
+        onKnownAgentIdsChanged: (ids) => {
+          knownAgentIds.current = ids;
+        },
+        onSessionChanged: (sessionKey) => {
+          for (const listener of sessionChangedListenersRef.current) {
+            try {
+              listener(sessionKey);
+            } catch (err) {
+              console.warn("[claw] onSessionChanged listener threw:", err);
+            }
+          }
+        },
+      },
     );
     engineRef.current = engine;
     setArtifacts(engine.artifacts);
     setApps(engine.apps);
+    setUploads(engine.uploads);
     void engine.connect();
-    return () => { void engine.disconnect(); };
+    return () => {
+      void engine.disconnect();
+    };
     // Only run once on mount
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -149,22 +168,21 @@ export function useGateway({ onAuthFailed }: { onAuthFailed: () => void }) {
             type: EventType.RUN_ERROR,
             message: "No agent selected. Choose an agent from the sidebar.",
           }) + "\n",
-          { status: 200, headers: { "Content-Type": "application/octet-stream" } }
+          { status: 200, headers: { "Content-Type": "application/octet-stream" } },
         );
       }
 
       if (!engineRef.current) {
         return new Response(
           JSON.stringify({ type: EventType.RUN_ERROR, message: "Engine not initialized." }) + "\n",
-          { status: 200, headers: { "Content-Type": "application/octet-stream" } }
+          { status: 200, headers: { "Content-Type": "application/octet-stream" } },
         );
       }
 
       if (!knownAgentIds.current.has(threadId)) {
         const sessionKey = resolveChatSessionKey(threadId, knownAgentIds.current);
         const session = sessionMetaRef.current.get(sessionKey);
-        const serverTitle =
-          session?.label ?? session?.displayName ?? session?.derivedTitle ?? null;
+        const serverTitle = session?.label ?? session?.displayName ?? session?.derivedTitle ?? null;
 
         if (!serverTitle || isOpaqueSessionTitle(serverTitle, sessionKey)) {
           const derivedTitle = deriveThreadTitleFromMessages(messages);
@@ -172,8 +190,7 @@ export function useGateway({ onAuthFailed }: { onAuthFailed: () => void }) {
             derivedTitle != null &&
             Array.from(sessionMetaRef.current.entries()).some(
               ([existingSessionKey, existingSession]) =>
-                existingSessionKey !== sessionKey &&
-                existingSession.label?.trim() === derivedTitle,
+                existingSessionKey !== sessionKey && existingSession.label?.trim() === derivedTitle,
             );
           if (
             derivedTitle &&
@@ -188,56 +205,61 @@ export function useGateway({ onAuthFailed }: { onAuthFailed: () => void }) {
 
       return engineRef.current.sendMessage(threadId, messages, abortController);
     },
-    []
+    [],
   );
 
   const fetchThreadList = useCallback(
-    async (): Promise<ClawThreadListItem[]> =>
-      engineRef.current?.fetchThreadList() ?? [],
-    []
+    async (): Promise<ClawThreadListItem[]> => engineRef.current?.fetchThreadList() ?? [],
+    [],
   );
 
   const loadThread = useCallback(
     async (threadId: string): Promise<StoredMessage[]> =>
       engineRef.current?.loadHistory(threadId) ?? [],
-    []
+    [],
   );
 
-  const createSession = useCallback(
-    async (agentId: string): Promise<string | null> => {
-      const session = await engineRef.current?.createSession(agentId);
-      return session?.id ?? null;
-    },
-    []
-  );
+  const createSession = useCallback(async (agentId: string): Promise<string | null> => {
+    const session = await engineRef.current?.createSession(agentId);
+    return session?.id ?? null;
+  }, []);
 
   const deleteSession = useCallback(
     async (threadId: string): Promise<boolean> =>
       engineRef.current?.deleteSession(threadId) ?? false,
-    []
+    [],
   );
 
-  const renameSession = useCallback(
-    async (threadId: string, label: string): Promise<boolean> => {
-      try {
-        await engineRef.current?.conversations.renameSession(threadId, label);
-        return true;
-      } catch {
-        return false;
-      }
-    },
-    []
+  const renameSession = useCallback(async (threadId: string, label: string): Promise<boolean> => {
+    try {
+      await engineRef.current?.conversations.renameSession(threadId, label);
+      return true;
+    } catch {
+      return false;
+    }
+  }, []);
+
+  const resetSession = useCallback(
+    async (sessionKey: string): Promise<boolean> =>
+      engineRef.current?.resetSession(sessionKey) ?? false,
+    [],
+  );
+
+  const compactSession = useCallback(
+    async (sessionKey: string): Promise<boolean> =>
+      engineRef.current?.compactSession(sessionKey) ?? false,
+    [],
   );
 
   const patchSession = useCallback(
     async (sessionKey: string, patch: Record<string, unknown>): Promise<boolean> =>
       engineRef.current?.patchSession(sessionKey, patch) ?? false,
-    []
+    [],
   );
 
   const refreshNotifications = useCallback(async (): Promise<NotificationRecord[]> => {
     const next = await engineRef.current?.listNotifications();
-    const list = next ?? [];
+    const list = (next ?? []).filter(shouldSurfaceNotification);
     setNotifications(list);
     return list;
   }, []);
@@ -269,70 +291,67 @@ export function useGateway({ onAuthFailed }: { onAuthFailed: () => void }) {
     [refreshNotifications],
   );
 
-  const syncCronNotifications = useCallback(
-    async (runs: CronRunEntry[]): Promise<void> => {
-      const engine = engineRef.current;
-      if (!engine) return;
-      const existingNotifications = await engine.listNotifications();
-      const existingDedupeKeys = new Set(
-        (existingNotifications ?? [])
-          .map((notification) => notification.dedupeKey)
-          .filter((value): value is string => typeof value === "string" && value.length > 0),
-      );
+  const syncCronNotifications = useCallback(async (runs: CronRunEntry[]): Promise<void> => {
+    const engine = engineRef.current;
+    if (!engine) return;
+    const existingNotifications = await engine.listNotifications();
+    const existingDedupeKeys = new Set(
+      (existingNotifications ?? [])
+        .map((notification) => notification.dedupeKey)
+        .filter((value): value is string => typeof value === "string" && value.length > 0),
+    );
 
-      const relevantRuns = runs
-        .filter(
-          (run) =>
-            run.status === "error" ||
-            run.status === "skipped" ||
-            (run.status === "ok" && typeof run.summary === "string" && run.summary.length > 0),
-        )
-        .slice(0, 12);
+    const relevantRuns = runs
+      .filter(
+        (run) =>
+          run.status === "error" ||
+          run.status === "skipped" ||
+          (run.status === "ok" && typeof run.summary === "string" && run.summary.length > 0),
+      )
+      .slice(0, 12);
 
-      await Promise.all(
-        relevantRuns.map(async (run) => {
-          const dedupeKey = `cron-run:${run.jobId}:${run.ts}`;
-          if (existingDedupeKeys.has(dedupeKey)) {
-            return;
-          }
+    await Promise.all(
+      relevantRuns.map(async (run) => {
+        const dedupeKey = `cron-run:${run.jobId}:${run.ts}`;
+        if (existingDedupeKeys.has(dedupeKey)) {
+          return;
+        }
 
-          const threadId =
-            run.threadId ??
-            (run.sessionKey
-              ? sessionRouteIdFromSessionKey(run.sessionKey, knownAgentIds.current)
-              : undefined);
+        const threadId =
+          run.threadId ??
+          (run.sessionKey
+            ? sessionRouteIdFromSessionKey(run.sessionKey, knownAgentIds.current)
+            : undefined);
 
-          const message =
-            run.status === "error"
-              ? run.error ?? "Scheduled run failed."
-              : run.status === "skipped"
-                ? run.summary ?? "Scheduled run was skipped."
-                : run.summary ?? "Scheduled run completed.";
+        const message =
+          run.status === "error"
+            ? (run.error ?? "Scheduled run failed.")
+            : run.status === "skipped"
+              ? (run.summary ?? "Scheduled run was skipped.")
+              : (run.summary ?? "Scheduled run completed.");
 
-          await engine.upsertNotification({
-            dedupeKey,
-            kind: run.status === "ok" ? "cron_completed" : "cron_attention",
-            title: run.jobName ?? run.jobId,
-            message,
-            target: threadId ? { view: "chat", sessionId: threadId } : { view: "home" },
-            source: {
-              cronId: run.jobId,
-              sessionKey: run.sessionKey,
-            },
-            metadata: {
-              status: run.status,
-              summary: run.summary,
-              error: run.error,
-              deliveryStatus: run.deliveryStatus,
-              runAtMs: run.runAtMs,
-              nextRunAtMs: run.nextRunAtMs,
-            },
-          });
-        }),
-      );
-    },
-    [],
-  );
+        await engine.upsertNotification({
+          dedupeKey,
+          kind: run.status === "ok" ? "cron_completed" : "cron_attention",
+          title: run.jobName ?? run.jobId,
+          message,
+          target: threadId ? { view: "chat", sessionId: threadId } : { view: "home" },
+          source: {
+            cronId: run.jobId,
+            sessionKey: run.sessionKey,
+          },
+          metadata: {
+            status: run.status,
+            summary: run.summary,
+            error: run.error,
+            deliveryStatus: run.deliveryStatus,
+            runAtMs: run.runAtMs,
+            nextRunAtMs: run.nextRunAtMs,
+          },
+        });
+      }),
+    );
+  }, []);
 
   const refreshCronData = useCallback(async () => {
     const engine = engineRef.current;
@@ -386,13 +405,76 @@ export function useGateway({ onAuthFailed }: { onAuthFailed: () => void }) {
   useEffect(() => {
     if (connectionState !== ConnectionState.CONNECTED) return;
 
-    const intervalId = window.setInterval(() => {
-      if (document.visibilityState === "hidden") return;
-      void refreshCronData();
-    }, 5000);
+    let intervalId: number | null = null;
 
-    return () => window.clearInterval(intervalId);
+    const stopPolling = () => {
+      if (intervalId !== null) {
+        window.clearInterval(intervalId);
+        intervalId = null;
+      }
+    };
+
+    const startPolling = () => {
+      if (document.visibilityState === "hidden" || intervalId !== null) return;
+      intervalId = window.setInterval(() => {
+        void refreshCronData().catch((error) => {
+          console.warn("[claw] cron refresh failed:", error);
+        });
+      }, 30000);
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "hidden") {
+        stopPolling();
+        return;
+      }
+
+      void refreshCronData().catch((error) => {
+        console.warn("[claw] cron refresh failed:", error);
+      });
+      startPolling();
+    };
+
+    handleVisibilityChange();
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      stopPolling();
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
   }, [connectionState, refreshCronData]);
+
+  // Pull the gateway's native slash-command catalog + subscribe to
+  // `sessions.changed` once per connect. Autocomplete needs the commands;
+  // `sessions.changed` lets us know when a transcript mutated out of band
+  // (subagent completions, external sessions.send, etc.) so we can re-fetch.
+  useEffect(() => {
+    if (connectionState !== ConnectionState.CONNECTED) {
+      setGatewayCommands([]);
+      return;
+    }
+    let cancelled = false;
+    void engineRef.current
+      ?.fetchGatewayCommands()
+      .then((commands) => {
+        if (!cancelled) setGatewayCommands(commands);
+      })
+      .catch((err) => console.warn("[claw] fetchGatewayCommands failed:", err));
+    void engineRef.current?.subscribeSessions();
+    return () => {
+      cancelled = true;
+    };
+  }, [connectionState]);
+
+  /** Subscribe to `sessions.changed` events for any session. Returns an
+   *  unsubscribe function. Consumers typically filter on sessionKey to react
+   *  only when their own thread changes. */
+  const onSessionChanged = useCallback((listener: (sessionKey: string) => void) => {
+    sessionChangedListenersRef.current.add(listener);
+    return () => {
+      sessionChangedListenersRef.current.delete(listener);
+    };
+  }, []);
 
   return {
     connectionState,
@@ -403,6 +485,8 @@ export function useGateway({ onAuthFailed }: { onAuthFailed: () => void }) {
     loadThread,
     createSession,
     deleteSession,
+    resetSession,
+    compactSession,
     renameSession,
     reconnect,
     sessionMeta,
@@ -411,6 +495,7 @@ export function useGateway({ onAuthFailed }: { onAuthFailed: () => void }) {
     knownAgentIds,
     artifacts,
     apps,
+    uploads,
     notifications,
     refreshNotifications,
     markNotificationsRead,
@@ -419,5 +504,7 @@ export function useGateway({ onAuthFailed }: { onAuthFailed: () => void }) {
     cronRuns,
     cronStatus,
     refreshCronData,
+    gatewayCommands,
+    onSessionChanged,
   };
 }

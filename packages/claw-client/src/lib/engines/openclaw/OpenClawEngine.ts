@@ -1,5 +1,9 @@
+import type { MergedMessage } from "@/lib/chat/history-merger";
+import { mergeHistoryMessages } from "@/lib/chat/history-merger";
+import { createOpenClawAGUIMapper } from "@/lib/chat/openclaw-agui-mapper";
+import type { CronJobRecord, CronRunEntry, CronStatusRecord } from "@/lib/cron";
+import { getOrCreateDeviceIdentity } from "@/lib/gateway/device-identity";
 import { GatewaySocket } from "@/lib/gateway/socket";
-import { ConnectionState } from "@/lib/gateway/types";
 import type {
   AgentEvent,
   ChatEvent,
@@ -7,19 +11,16 @@ import type {
   EventFrame,
   HelloOk,
 } from "@/lib/gateway/types";
+import { ConnectionState } from "@/lib/gateway/types";
+import { normalizeSessionPatch } from "@/lib/models";
+import type { NotificationRecord } from "@/lib/notifications";
+import type { Settings } from "@/lib/storage";
 import {
   clearAuthCredentials,
   clearDeviceToken,
   getSettings,
   saveDeviceToken,
 } from "@/lib/storage";
-import type { Settings } from "@/lib/storage";
-import { getOrCreateDeviceIdentity } from "@/lib/gateway/device-identity";
-import { EventType } from "@openuidev/react-headless";
-import { createOpenClawAGUIMapper } from "@/lib/chat/openclaw-agui-mapper";
-import { mergeHistoryMessages } from "@/lib/chat/history-merger";
-import type { MergedMessage } from "@/lib/chat/history-merger";
-import { normalizeSessionPatch } from "@/lib/models";
 import { resolveSessionTitle } from "@/lib/thread-titles";
 import type {
   AgentsListResult,
@@ -31,8 +32,7 @@ import type {
   SessionRow,
   SessionsListResult,
 } from "@/types/gateway-responses";
-import type { NotificationRecord } from "@/lib/notifications";
-import type { CronJobRecord, CronRunEntry, CronStatusRecord } from "@/lib/cron";
+import { EventType } from "@openuidev/react-headless";
 import type {
   AgentInfo,
   AppRecord,
@@ -44,21 +44,26 @@ import type {
   ConversationStore,
   Engine,
   EngineCapabilities,
+  GatewayCommand,
+  GatewayCommandRaw,
   ModelInfo,
   OpenClawEngineConfig,
   SessionInfo,
   StoredMessage,
+  UploadMeta,
+  UploadRecord,
+  UploadStore,
 } from "../types";
 
-const log = (...args: unknown[]) =>
-  console.log("[claw:openclaw-engine]", ...args);
-const warn = (...args: unknown[]) =>
-  console.warn("[claw:openclaw-engine]", ...args);
+const log = (...args: unknown[]) => console.log("[claw:openclaw-engine]", ...args);
+const warn = (...args: unknown[]) => console.warn("[claw:openclaw-engine]", ...args);
 
 const CLAW_SUFFIX = ":openui-claw";
 const FULL_VERBOSE_LEVEL = "full";
 
-function sessionRowTitle(row: Pick<SessionRow, "label" | "displayName" | "derivedTitle" | "key">): string {
+function sessionRowTitle(
+  row: Pick<SessionRow, "label" | "displayName" | "derivedTitle" | "key">,
+): string {
   return resolveSessionTitle({
     label: row.label,
     displayName: row.displayName,
@@ -71,10 +76,7 @@ export function agentMainSessionKey(agentId: string): string {
   return `agent:${agentId}:main${CLAW_SUFFIX}`;
 }
 
-export function resolveChatSessionKey(
-  threadId: string,
-  agentIds: Set<string>
-): string {
+export function resolveChatSessionKey(threadId: string, agentIds: Set<string>): string {
   if (agentIds.has(threadId)) return agentMainSessionKey(threadId);
   return threadId;
 }
@@ -120,6 +122,13 @@ export interface OpenClawEngineEvents {
   onSessionMetaChanged: (meta: Map<string, SessionRow>) => void;
   onModelsChanged: (models: ModelChoice[]) => void;
   onKnownAgentIdsChanged: (ids: Set<string>) => void;
+  /**
+   * Fired when the gateway broadcasts `sessions.changed` for a session we
+   * subscribe to (new transcript messages, resets, subagent completions).
+   * The UI uses this to re-pull `chat.history` for the currently-viewed thread
+   * even after the active run listener has been torn down.
+   */
+  onSessionChanged: (sessionKey: string) => void;
 }
 
 export class OpenClawEngine implements Engine {
@@ -133,10 +142,13 @@ export class OpenClawEngine implements Engine {
     sessionConfig: true,
     artifacts: true,
     apps: true,
+    uploads: true,
   };
 
   private socket: GatewaySocket | null = null;
-  private runListener: RunListener | null = null;
+  /** Active runs keyed by sessionKey. Allows concurrent runs across threads
+   * without cross-contaminating their event streams. */
+  private runListeners = new Map<string, RunListener>();
   private knownAgentIds = new Set<string>();
   private notificationMethodState: "unknown" | "supported" | "unsupported" = "unknown";
 
@@ -158,16 +170,16 @@ export class OpenClawEngine implements Engine {
     if (this._isReady) return Promise.resolve();
     if (!this._readyDeferred) {
       let resolve!: () => void, reject!: (e: Error) => void;
-      const promise = new Promise<void>((res, rej) => { resolve = res; reject = rej; });
+      const promise = new Promise<void>((res, rej) => {
+        resolve = res;
+        reject = rej;
+      });
       this._readyDeferred = { promise, resolve, reject };
     }
     return this._readyDeferred.promise;
   }
 
-  constructor(
-    config: OpenClawEngineConfig,
-    events: OpenClawEngineEvents
-  ) {
+  constructor(config: OpenClawEngineConfig, events: OpenClawEngineEvents) {
     this.id = config.id;
     this._settings = config.gatewayUrl
       ? { gatewayUrl: config.gatewayUrl, token: config.token, deviceToken: config.deviceToken }
@@ -184,33 +196,34 @@ export class OpenClawEngine implements Engine {
     deleteSession: (sessionId) => this._deleteSessionRecord(sessionId),
     renameSession: (sessionId, title) => this._renameSessionRecord(sessionId, title),
     loadHistory: (sessionId) => this._loadHistory(sessionId),
-    appendMessage: async () => { /* server persists messages via chat.send — no-op */ },
+    appendMessage: async () => {
+      /* server persists messages via chat.send — no-op */
+    },
     getSessionConfig: (sessionId) => this._getSessionConfig(sessionId),
-    setSessionConfig: (sessionId, key, value) =>
-      this._setSessionConfig(sessionId, key, value),
+    setSessionConfig: (sessionId, key, value) => this._setSessionConfig(sessionId, key, value),
   };
 
   readonly artifacts: ArtifactStore = {
     listArtifacts: async (kind?: string): Promise<ArtifactSummary[]> => {
       try {
-        const result = await this._request<{ artifacts: ArtifactSummary[] }>(
-          "artifacts.list",
-          { kind },
-        );
+        const result = await this._request<{ artifacts: ArtifactSummary[] }>("artifacts.list", {
+          kind,
+        });
         return result?.artifacts ?? [];
-      } catch {
+      } catch (error) {
+        warn("artifacts.list failed:", error);
         return [];
       }
     },
 
     getArtifact: async (artifactId: string): Promise<ArtifactRecord | null> => {
       try {
-        const result = await this._request<{ artifact: ArtifactRecord | null }>(
-          "artifacts.get",
-          { id: artifactId },
-        );
+        const result = await this._request<{ artifact: ArtifactRecord | null }>("artifacts.get", {
+          id: artifactId,
+        });
         return result?.artifact ?? null;
-      } catch {
+      } catch (error) {
+        warn("artifacts.get failed:", error);
         return null;
       }
     },
@@ -225,7 +238,8 @@ export class OpenClawEngine implements Engine {
       try {
         const result = await this._request<{ apps: AppSummary[] }>("apps.list", {});
         return result?.apps ?? [];
-      } catch {
+      } catch (error) {
+        warn("apps.list failed:", error);
         return [];
       }
     },
@@ -234,7 +248,8 @@ export class OpenClawEngine implements Engine {
       try {
         const result = await this._request<{ app: AppRecord | null }>("apps.get", { id: appId });
         return result?.app ?? null;
-      } catch {
+      } catch (error) {
+        warn("apps.get failed:", error);
         return null;
       }
     },
@@ -243,13 +258,60 @@ export class OpenClawEngine implements Engine {
       await this._request("apps.delete", { id: appId });
     },
 
-    invokeTool: async (tool: string, args: Record<string, unknown>, sessionKey?: string): Promise<unknown> => {
+    invokeTool: async (
+      tool: string,
+      args: Record<string, unknown>,
+      sessionKey?: string,
+    ): Promise<unknown> => {
       const result = await this._request<{ result: unknown }>("tools.invoke", {
         tool_name: tool,
         tool_args: args,
         ...(sessionKey ? { sessionKey } : {}),
       });
       return result?.result ?? null;
+    },
+  };
+
+  readonly uploads: UploadStore = {
+    putUpload: async (params): Promise<UploadMeta | null> => {
+      try {
+        const result = await this._request<{ upload: UploadMeta }>("uploads.put", params);
+        return result?.upload ?? null;
+      } catch (error) {
+        warn("uploads.put failed:", error);
+        return null;
+      }
+    },
+
+    listUploads: async (sessionKey?: string): Promise<UploadMeta[]> => {
+      try {
+        const result = await this._request<{ uploads: UploadMeta[] }>(
+          "uploads.list",
+          sessionKey ? { sessionKey } : {},
+        );
+        return result?.uploads ?? [];
+      } catch (error) {
+        warn("uploads.list failed:", error);
+        return [];
+      }
+    },
+
+    getUpload: async (id: string): Promise<UploadRecord | null> => {
+      try {
+        const result = await this._request<{ upload: UploadRecord | null }>("uploads.get", { id });
+        return result?.upload ?? null;
+      } catch (error) {
+        warn("uploads.get failed:", error);
+        return null;
+      }
+    },
+
+    deleteUpload: async (id: string): Promise<void> => {
+      try {
+        await this._request("uploads.delete", { id });
+      } catch (error) {
+        warn("uploads.delete failed:", error);
+      }
     },
   };
 
@@ -309,7 +371,7 @@ export class OpenClawEngine implements Engine {
   async sendMessage(
     sessionId: string,
     messages: unknown[],
-    abortController: AbortController
+    abortController: AbortController,
   ): Promise<Response> {
     const lastMsg = messages[messages.length - 1] as {
       role?: string;
@@ -320,22 +382,19 @@ export class OpenClawEngine implements Engine {
       typeof raw === "string"
         ? raw
         : Array.isArray(raw)
-        ? raw
-            .filter((c: unknown) => (c as { type?: string } | null)?.type === "text")
-            .map((c: unknown) => (c as { text?: string } | null)?.text ?? "")
-            .join("")
-        : "";
+          ? raw
+              .filter((c: unknown) => (c as { type?: string } | null)?.type === "text")
+              .map((c: unknown) => (c as { text?: string } | null)?.text ?? "")
+              .join("")
+          : "";
     const attachments = Array.isArray((lastMsg as { attachments?: unknown[] } | null)?.attachments)
       ? ((lastMsg as { attachments?: unknown[] }).attachments ?? [])
           .map((item) => {
             if (!item || typeof item !== "object") return null;
             const candidate = item as Record<string, unknown>;
-            const mimeType =
-              typeof candidate.mimeType === "string" ? candidate.mimeType : "";
-            const fileName =
-              typeof candidate.fileName === "string" ? candidate.fileName : "";
-            const content =
-              typeof candidate.content === "string" ? candidate.content : "";
+            const mimeType = typeof candidate.mimeType === "string" ? candidate.mimeType : "";
+            const fileName = typeof candidate.fileName === "string" ? candidate.fileName : "";
+            const content = typeof candidate.content === "string" ? candidate.content : "";
 
             if (!mimeType || !fileName || !content) return null;
             return {
@@ -345,7 +404,12 @@ export class OpenClawEngine implements Engine {
               content,
             };
           })
-          .filter((item): item is { type?: string; mimeType: string; fileName: string; content: string } => item !== null)
+          .filter(
+            (
+              item,
+            ): item is { type?: string; mimeType: string; fileName: string; content: string } =>
+              item !== null,
+          )
       : [];
 
     const sessionKey = resolveChatSessionKey(sessionId, this.knownAgentIds);
@@ -356,19 +420,42 @@ export class OpenClawEngine implements Engine {
     const encoder = new TextEncoder();
     let ctrl!: ReadableStreamDefaultController<Uint8Array>;
     const stream = new ReadableStream<Uint8Array>({
-      start(c) { ctrl = c; },
+      start(c) {
+        ctrl = c;
+      },
     });
 
     const write = (event: Record<string, unknown>) => {
-      try { ctrl.enqueue(encoder.encode(JSON.stringify(event) + "\n")); } catch { /* closed */ }
+      try {
+        ctrl.enqueue(encoder.encode(JSON.stringify(event) + "\n"));
+      } catch {
+        /* closed */
+      }
     };
     const closeStream = () => {
-      this.runListener = null;
-      try { ctrl.close(); } catch { /* already closed */ }
+      if (this.runListeners.get(sessionKey) === listener) {
+        this.runListeners.delete(sessionKey);
+      }
+      try {
+        ctrl.close();
+      } catch {
+        /* already closed */
+      }
     };
 
+    // If a previous run for the same sessionKey is still tracked (shouldn't
+    // happen normally since the server aborts prior runs), close it cleanly.
+    const existing = this.runListeners.get(sessionKey);
+    if (existing) {
+      try {
+        existing.onClose();
+      } catch {
+        /* ignore */
+      }
+    }
+
     const mapper = createOpenClawAGUIMapper(write);
-    this.runListener = {
+    const listener: RunListener = {
       onAgentEvent: mapper.onAgentEvent,
       onChatEvent: (evt: ChatEvent) => {
         mapper.onChatEvent(evt);
@@ -381,6 +468,7 @@ export class OpenClawEngine implements Engine {
       },
       onClose: closeStream,
     };
+    this.runListeners.set(sessionKey, listener);
 
     abortController.signal.addEventListener("abort", () => {
       this.socket?.request("chat.abort", { sessionKey }).catch(() => {});
@@ -395,7 +483,7 @@ export class OpenClawEngine implements Engine {
         idempotencyKey: crypto.randomUUID(),
       });
     } catch (err) {
-      this.runListener = null;
+      this.runListeners.delete(sessionKey);
       write({
         type: EventType.RUN_ERROR,
         message: err instanceof Error ? err.message : "Failed to send",
@@ -441,11 +529,7 @@ export class OpenClawEngine implements Engine {
     return this.conversations.getSessionConfig(sessionId);
   }
 
-  async setSessionConfig(
-    sessionId: string,
-    key: string,
-    value: string
-  ): Promise<void> {
+  async setSessionConfig(sessionId: string, key: string, value: string): Promise<void> {
     return this.conversations.setSessionConfig(sessionId, key, value);
   }
 
@@ -464,7 +548,13 @@ export class OpenClawEngine implements Engine {
     if (!agents.length) {
       this._setKnownAgentIds(new Set(["main"]));
       return [
-        { id: "main", title: "Agent", createdAt: Date.now(), clawKind: "main", clawAgentId: "main" },
+        {
+          id: "main",
+          title: "Agent",
+          createdAt: Date.now(),
+          clawKind: "main",
+          clawAgentId: "main",
+        },
       ];
     }
 
@@ -484,10 +574,10 @@ export class OpenClawEngine implements Engine {
       });
 
       try {
-        const result = await this._request<SessionsListResult>(
-          "sessions.list",
-          { agentId: a.id, limit: 50 }
-        );
+        const result = await this._request<SessionsListResult>("sessions.list", {
+          agentId: a.id,
+          limit: 50,
+        });
         const seen = new Set<string>();
         for (const row of result?.sessions ?? []) {
           metaUpdates.set(row.key, row);
@@ -514,10 +604,7 @@ export class OpenClawEngine implements Engine {
     return items;
   }
 
-  async patchSession(
-    sessionKey: string,
-    patch: Record<string, unknown>
-  ): Promise<boolean> {
+  async patchSession(sessionKey: string, patch: Record<string, unknown>): Promise<boolean> {
     log("patchSession", sessionKey, patch);
     try {
       await this._request("sessions.patch", { key: sessionKey, ...patch });
@@ -541,9 +628,7 @@ export class OpenClawEngine implements Engine {
     }
 
     try {
-      const result = await this._request<NotificationsListResult>(
-        "notifications.list",
-      );
+      const result = await this._request<NotificationsListResult>("notifications.list");
       this.notificationMethodState = "supported";
       return result?.notifications ?? [];
     } catch (e) {
@@ -580,10 +665,7 @@ export class OpenClawEngine implements Engine {
   }
 
   async upsertNotification(
-    notification: Omit<
-      NotificationRecord,
-      "id" | "createdAt" | "updatedAt" | "unread" | "readAt"
-    >,
+    notification: Omit<NotificationRecord, "id" | "createdAt" | "updatedAt" | "unread" | "readAt">,
   ): Promise<boolean> {
     if (this.notificationMethodState === "unsupported") {
       return false;
@@ -641,10 +723,18 @@ export class OpenClawEngine implements Engine {
 
   // ── Public state accessors ────────────────────────────────────────────────
 
-  get connectionState(): ConnectionState { return this._connectionState; }
-  get settings(): Settings | null { return this._settings; }
-  get sessionMeta(): Map<string, SessionRow> { return this._sessionMeta; }
-  get availableModels(): ModelChoice[] { return this._availableModels; }
+  get connectionState(): ConnectionState {
+    return this._connectionState;
+  }
+  get settings(): Settings | null {
+    return this._settings;
+  }
+  get sessionMeta(): Map<string, SessionRow> {
+    return this._sessionMeta;
+  }
+  get availableModels(): ModelChoice[] {
+    return this._availableModels;
+  }
 
   // ── Private helpers ───────────────────────────────────────────────────────
 
@@ -674,7 +764,7 @@ export class OpenClawEngine implements Engine {
       onStateChange: (connecting: boolean) => {
         log(`state → ${connecting ? "CONNECTING" : "DISCONNECTED"}`);
         this._setConnectionState(
-          connecting ? ConnectionState.CONNECTING : ConnectionState.DISCONNECTED
+          connecting ? ConnectionState.CONNECTING : ConnectionState.DISCONNECTED,
         );
       },
     });
@@ -691,21 +781,114 @@ export class OpenClawEngine implements Engine {
   }
 
   private _handleEvent = (frame: EventFrame): void => {
-    if (!this.runListener) return;
     const payload = frame.payload as Record<string, unknown> | undefined;
     if (!payload) return;
+    const sessionKey =
+      typeof (payload as { sessionKey?: unknown }).sessionKey === "string"
+        ? (payload as { sessionKey: string }).sessionKey
+        : null;
+
+    // Broadcasts from `sessions.subscribe` arrive as event:"sessions.changed"
+    // with a sessionKey on the payload. Route to the UI-level subscriber so
+    // out-of-band transcript changes (subagent completions, external
+    // sessions.send, resets) can trigger a chat.history reload.
+    if (frame.event === "sessions.changed") {
+      if (sessionKey) {
+        this.events.onSessionChanged(sessionKey);
+      } else {
+        warn("sessions.changed frame missing sessionKey:", frame);
+      }
+      return;
+    }
+
+    if (!sessionKey) return;
+    const listener = this.runListeners.get(sessionKey);
+    if (!listener) return;
     if (frame.event === "agent") {
-      this.runListener.onAgentEvent(payload as unknown as AgentEvent);
+      listener.onAgentEvent(payload as unknown as AgentEvent);
       if (
         (payload as { stream?: string }).stream === "lifecycle" &&
-        ((payload as { data?: { phase?: string } }).data?.phase === "error")
+        (payload as { data?: { phase?: string } }).data?.phase === "error"
       ) {
-        this.runListener.onClose();
+        listener.onClose();
       }
     } else if (frame.event === "chat") {
-      this.runListener.onChatEvent(payload as unknown as ChatEvent);
+      listener.onChatEvent(payload as unknown as ChatEvent);
     }
   };
+
+  /** RPC: subscribe to `sessions.changed` broadcasts for all sessions we can see. */
+  async subscribeSessions(): Promise<void> {
+    try {
+      await this._request("sessions.subscribe", {});
+    } catch (error) {
+      warn("sessions.subscribe failed:", error);
+    }
+  }
+
+  /** RPC: reset a session's transcript. Returns true on success.
+   *  Gateway schema uses `key`, not `sessionKey`. */
+  async resetSession(sessionKey: string): Promise<boolean> {
+    try {
+      await this._request("sessions.reset", { key: sessionKey });
+      return true;
+    } catch (error) {
+      warn("sessions.reset failed:", error);
+      return false;
+    }
+  }
+
+  /** RPC: start a compaction on the session. Returns true on success.
+   *  Gateway schema uses `key`, not `sessionKey`. */
+  async compactSession(sessionKey: string): Promise<boolean> {
+    try {
+      await this._request("sessions.compact", { key: sessionKey });
+      return true;
+    } catch (error) {
+      warn("sessions.compact failed:", error);
+      return false;
+    }
+  }
+
+  /** RPC: fetch slash commands registered on the gateway (native + plugin). */
+  async fetchGatewayCommands(agentId = "main"): Promise<GatewayCommand[]> {
+    try {
+      const result = await this._request<{ commands?: GatewayCommandRaw[] }>("commands.list", {
+        agentId,
+        scope: "both",
+        includeArgs: true,
+      });
+      const raw = result?.commands ?? [];
+      const out: GatewayCommand[] = [];
+      for (const c of raw) {
+        const aliases = Array.isArray(c.textAliases) ? (c.textAliases as unknown[]) : [];
+        const firstAlias = aliases.find((a) => typeof a === "string") as string | undefined;
+        const name =
+          (typeof c.name === "string" && c.name) ||
+          (typeof c.nativeName === "string" && c.nativeName) ||
+          firstAlias ||
+          "";
+        if (!name) continue;
+        const argHint = Array.isArray(c.args)
+          ? (c.args as Array<{ name?: unknown }>)
+              .map((a) => (typeof a?.name === "string" ? a.name : null))
+              .filter((v): v is string => !!v)
+              .map((v) => `<${v}>`)
+              .join(" ")
+          : undefined;
+        out.push({
+          key: name,
+          name,
+          description: typeof c.description === "string" ? c.description : "",
+          ...(argHint ? { argHint } : {}),
+        });
+      }
+      return out;
+    } catch (error) {
+      warn("commands.list failed:", error);
+      return [];
+    }
+  }
 
   private _handleHelloOk = (hello: HelloOk): void => {
     if (hello.auth?.deviceToken) {
@@ -790,7 +973,7 @@ export class OpenClawEngine implements Engine {
     try {
       const result = await this._request<SessionsListResult>(
         "sessions.list",
-        agentId ? { agentId, limit: 100 } : { limit: 100 }
+        agentId ? { agentId, limit: 100 } : { limit: 100 },
       );
       return (result?.sessions ?? []).map((row) => ({
         id: row.key,
@@ -808,10 +991,7 @@ export class OpenClawEngine implements Engine {
   private async _getSession(sessionId: string): Promise<SessionInfo | null> {
     const sessionKey = resolveChatSessionKey(sessionId, this.knownAgentIds);
     try {
-      const result = await this._request<SessionGetResult>(
-        "sessions.get",
-        { key: sessionKey }
-      );
+      const result = await this._request<SessionGetResult>("sessions.get", { key: sessionKey });
       if (!result?.session) return null;
       const row = result.session;
       return {
@@ -827,10 +1007,7 @@ export class OpenClawEngine implements Engine {
     }
   }
 
-  private async _createSessionRecord(
-    agentId: string,
-    _title?: string
-  ): Promise<SessionInfo> {
+  private async _createSessionRecord(agentId: string, _title?: string): Promise<SessionInfo> {
     const key = `agent:${agentId}:${crypto.randomUUID()}${CLAW_SUFFIX}`;
     log("createSession", agentId, key);
     try {
@@ -851,12 +1028,15 @@ export class OpenClawEngine implements Engine {
       key: sessionKey,
       deleteTranscript: true,
     });
+    // Best-effort cleanup of uploads bound to this session.
+    try {
+      await this._request("uploads.deleteBySession", { sessionKey });
+    } catch (error) {
+      warn("uploads.deleteBySession failed:", error);
+    }
   }
 
-  private async _renameSessionRecord(
-    sessionId: string,
-    title: string
-  ): Promise<void> {
+  private async _renameSessionRecord(sessionId: string, title: string): Promise<void> {
     const sessionKey = resolveChatSessionKey(sessionId, this.knownAgentIds);
     await this._request("sessions.patch", { key: sessionKey, label: title });
   }
@@ -877,15 +1057,10 @@ export class OpenClawEngine implements Engine {
     }
   }
 
-  private async _getSessionConfig(
-    sessionId: string
-  ): Promise<Record<string, string>> {
+  private async _getSessionConfig(sessionId: string): Promise<Record<string, string>> {
     const sessionKey = resolveChatSessionKey(sessionId, this.knownAgentIds);
     try {
-      const result = await this._request<SessionGetResult>(
-        "sessions.get",
-        { key: sessionKey }
-      );
+      const result = await this._request<SessionGetResult>("sessions.get", { key: sessionKey });
       if (!result?.session) return {};
       const { model, thinkingLevel } = result.session;
       const config: Record<string, string> = {};
@@ -898,14 +1073,7 @@ export class OpenClawEngine implements Engine {
     }
   }
 
-  private async _setSessionConfig(
-    sessionId: string,
-    key: string,
-    value: string
-  ): Promise<void> {
-    await this.patchSession(
-      resolveChatSessionKey(sessionId, this.knownAgentIds),
-      { [key]: value }
-    );
+  private async _setSessionConfig(sessionId: string, key: string, value: string): Promise<void> {
+    await this.patchSession(resolveChatSessionKey(sessionId, this.knownAgentIds), { [key]: value });
   }
 }

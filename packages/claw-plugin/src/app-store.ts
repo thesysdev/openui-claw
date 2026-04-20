@@ -40,7 +40,9 @@ export class AppStore {
     await fs.mkdir(this.dir, { recursive: true });
   }
 
-  async create(data: Omit<StoredApp, "id" | "createdAt" | "updatedAt" | "versions">): Promise<StoredApp> {
+  async create(
+    data: Omit<StoredApp, "id" | "createdAt" | "updatedAt" | "versions">,
+  ): Promise<StoredApp> {
     await this.ensureDir();
     const now = new Date().toISOString();
     const record: StoredApp = {

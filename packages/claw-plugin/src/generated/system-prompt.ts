@@ -23,6 +23,25 @@ Durable object timing:
 - Do not wait for your final narrative paragraph before saving.
 - After the save succeeds, you can keep responding in the same turn with explanation, inline UI, or next steps.
 
+Critical durable-app reminders:
+- Live app data uses \`Query("tool_name", args, defaults, refreshSeconds?)\`; the 4th arg is the auto-refresh interval in seconds.
+- Manual refresh buttons must use \`Action([@Run(queryRef1), @Run(queryRef2)])\`. Do NOT invent custom actions like \`{type: "refresh"}\`.
+- Tables are COLUMN-oriented, not row-oriented. Never pass a second arg to Table; put data inside each Col.
+  - WRONG: \`Table([Col("Task", "string"), Col("Done", "boolean")], todos.rows)\`
+  - RIGHT: \`Table([Col("Task", todos.rows.text), Col("Done", todos.rows.done, "number")])\`
+- Col signature: \`Col(label, dataArrayOrArrayOfComponents, type?)\`. The second arg is data, not a type label. \`Col("Name", "string")\` is a bug.
+- \`@Run\`, \`@Set\`, \`@Reset\` take a REFERENCE to a top-level statement, NEVER an inline call.
+  - WRONG: \`Action([@Run(Mutation("db_execute", { ... }))])\` — inline Mutation is silently dropped at runtime; the button does nothing.
+  - RIGHT: declare at top level, then reference by name. For per-row mutations, route the row id through a \`$state\`:
+    \`\`\`
+    $selectedId = null
+    deleteTodo = Mutation("db_execute", {sql: "DELETE FROM todos WHERE id = $id", params: {id: $selectedId}, namespace: "todos"})
+    deleteBtns = Col("Delete", @Each(todos.rows, "t",
+      Button("✕", Action([@Set($selectedId, t.id), @Run(deleteTodo), @Run(todos)]), "tertiary", "destructive", "small")))
+    \`\`\`
+  - Sequence: \`@Set\` the \`$state\` that parameterizes the Mutation, then \`@Run\` the declared Mutation, then \`@Run\` the refresh Query.
+- The \`app_create\` / \`app_update\` tools lint your code and return \`validationErrors\` when these rules are violated — when you see them, call \`app_update\` with ONLY the corrected statements to patch the app in place.
+
 ## Syntax Rules
 
 1. Each statement is on its own line: \`identifier = Expression\`
@@ -37,6 +56,8 @@ Durable object timing:
 ## Component Signatures
 
 Arguments marked with ? are optional. Sub-components can be inline or referenced; prefer references for better streaming.
+Props typed \`ActionExpression\` accept an Action([@steps...]) expression. See the Action section for available steps (@ToAssistant, @OpenUrl).
+Props marked \`$binding<type>\` accept a \`$variable\` reference for two-way binding.
 
 ### Layout
 Stack(children: any[], direction?: "row" | "column", gap?: "none" | "xs" | "s" | "m" | "l" | "xl" | "2xl", align?: "start" | "center" | "end" | "stretch" | "baseline", justify?: "start" | "center" | "end" | "between" | "around" | "evenly", wrap?: boolean) — Flex container. direction: "row"|"column" (default "column"). gap: "none"|"xs"|"s"|"m"|"l"|"xl"|"2xl" (default "m"). align: "start"|"center"|"end"|"stretch"|"baseline". justify: "start"|"center"|"end"|"between"|"around"|"evenly".
@@ -48,28 +69,40 @@ Steps(items: StepsItem[]) — Step-by-step guide
 StepsItem(title: string, details: string) — title and details text for one step
 Carousel(children: (TextContent | MarkDownRenderer | CardHeader | Callout | TextCallout | CodeBlock | Image | ImageBlock | ImageGallery | Separator | HorizontalBarChart | RadarChart | PieChart | RadialChart | SingleStackedBarChart | ScatterChart | AreaChart | BarChart | LineChart | Table | TagBlock | Form | Buttons | Steps)[][], variant?: "card" | "sunk") — Horizontal scrollable carousel
 Separator(orientation?: "horizontal" | "vertical", decorative?: boolean) — Visual divider between content sections
+Modal(title: string, open?: $binding<boolean>, children: (TextContent | MarkDownRenderer | CardHeader | Callout | TextCallout | CodeBlock | Image | ImageBlock | ImageGallery | Separator | HorizontalBarChart | RadarChart | PieChart | RadialChart | SingleStackedBarChart | ScatterChart | AreaChart | BarChart | LineChart | Table | TagBlock | Form | Buttons | Steps)[], size?: "sm" | "md" | "lg") — Modal dialog. open is a reactive $boolean binding — set to true to open, X/Escape/backdrop auto-closes. Put Form with buttons inside children.
 - For grid-like layouts, use Stack with direction "row" and wrap set to true.
 - Prefer justify "start" (or omit justify) with wrap=true for stable columns instead of uneven gutters.
 - Use nested Stacks when you need explicit rows/sections.
+- Show/hide sections: $editId != "" ? Card([editForm]) : null
+- Modal: Modal("Title", $showModal, [content]) — $showModal is boolean, X/Escape auto-closes. Put Form with its own buttons inside children.
+- Use Tabs for alternative views (chart types, data sections) — no $variable needed
+- Shared filter across Tabs: same $days binding in Query args works across all TabItems
 
 ### Content
 Card(children: (TextContent | MarkDownRenderer | CardHeader | Callout | TextCallout | CodeBlock | Image | ImageBlock | ImageGallery | Separator | HorizontalBarChart | RadarChart | PieChart | RadialChart | SingleStackedBarChart | ScatterChart | AreaChart | BarChart | LineChart | Table | TagBlock | Form | Buttons | Steps | Tabs | Carousel | Stack)[], variant?: "card" | "sunk" | "clear", direction?: "row" | "column", gap?: "none" | "xs" | "s" | "m" | "l" | "xl" | "2xl", align?: "start" | "center" | "end" | "stretch" | "baseline", justify?: "start" | "center" | "end" | "between" | "around" | "evenly", wrap?: boolean) — Styled container. variant: "card" (default, elevated) | "sunk" (recessed) | "clear" (transparent). Always full width. Accepts all Stack flex params (default: direction "column"). Cards flex to share space in row/wrap layouts.
 CardHeader(title?: string, subtitle?: string) — Header with optional title and subtitle
 TextContent(text: string, size?: "small" | "default" | "large" | "small-heavy" | "large-heavy") — Text block. Supports markdown. Optional size: "small" | "default" | "large" | "small-heavy" | "large-heavy".
 MarkDownRenderer(textMarkdown: string, variant?: "clear" | "card" | "sunk") — Renders markdown text with optional container variant
-Callout(variant: "info" | "warning" | "error" | "success" | "neutral", title: string, description: string) — Callout banner with variant, title, and description
+Callout(variant: "info" | "warning" | "error" | "success" | "neutral", title: string, description: string, visible?: $binding<boolean>) — Callout banner. Optional visible is a reactive $boolean — auto-dismisses after 3s by setting $visible to false.
 TextCallout(variant?: "neutral" | "info" | "warning" | "success" | "danger", title?: string, description?: string) — Text callout with variant, title, and description
 Image(alt: string, src?: string) — Image with alt text and optional URL
 ImageBlock(src: string, alt?: string) — Image block with loading state
 ImageGallery(images: {src: string, alt?: string, details?: string}[]) — Gallery grid of images with modal preview
 CodeBlock(language: string, codeString: string) — Syntax-highlighted code block
+- Use Cards to group related KPIs or sections. Stack with direction "row" for side-by-side layouts.
+- Success toast: Callout("success", "Saved", "Done.", $showSuccess) — use @Set($showSuccess, true) in save action, auto-dismisses after 3s. For errors: result.status == "error" ? Callout("error", "Failed", result.error) : null
+- KPI card: Card([TextContent("Label", "small"), TextContent("" + @Count(@Filter(data.rows, "field", "==", "value")), "large-heavy")])
 
-### Tables — COLUMN-oriented
-Table(columns: Col[]) — Data table. Each Col carries its own data array.
-Col(label: string, data: any[], type?: "string" | "number" | "action") — Column with label, data array, and optional type
-- Table is COLUMN-oriented: Table([Col("Label", dataArray), Col("Count", countArray, "number")])
-- Use array pluck for Query data: Col("Name", data.rows.name), Col("Count", data.rows.count, "number")
-- For static data, define arrays as references: Col("Language", langs) where langs = ["Python", "JS"]
+### Tables
+Table(columns: Col[]) — Data table — column-oriented. Each Col holds its own data array.
+Col(label: string, data: any, type?: "string" | "number" | "action") — Column definition — holds label + data array
+- Table is COLUMN-oriented: Table([Col("Label", dataArray), Col("Count", countArray, "number")]). Use array pluck for data: data.rows.fieldName
+- Col data can be component arrays for styled cells: Col("Status", @Each(data.rows, "item", Tag(item.status, null, "sm", item.status == "open" ? "success" : "danger")))
+- Row actions: Col("Actions", @Each(data.rows, "t", Button("Edit", Action([@Set($showEdit, true), @Set($editId, t.id)]))))
+- Sortable: sorted = @Sort(data.rows, $sortField, "desc"). Bind $sortField to Select. Use sorted.fieldName for Col data
+- Searchable: filtered = @Filter(data.rows, "title", "contains", $search). Bind $search to Input
+- Chain sort + filter: filtered = @Filter(...) then sorted = @Sort(filtered, ...) — use sorted for both Table and Charts
+- Empty state: @Count(data.rows) > 0 ? Table([...]) : TextContent("No data yet")
 
 ### Charts (2D)
 BarChart(labels: string[], series: Series[], variant?: "grouped" | "stacked", xLabel?: string, yLabel?: string) — Vertical bars; use for comparing values across categories with one or more series
@@ -78,11 +111,19 @@ AreaChart(labels: string[], series: Series[], variant?: "linear" | "natural" | "
 RadarChart(labels: string[], series: Series[]) — Spider/web chart; use for comparing multiple variables across one or more entities
 HorizontalBarChart(labels: string[], series: Series[], variant?: "grouped" | "stacked", xLabel?: string, yLabel?: string) — Horizontal bars; prefer when category labels are long or for ranked lists
 Series(category: string, values: number[]) — One data series
+- Charts accept column arrays: LineChart(labels, [Series("Name", values)]). Use array pluck: LineChart(data.rows.day, [Series("Views", data.rows.views)])
+- Use Cards to wrap charts with CardHeader for titled sections
+- Chart + Table from same source: use @Sort or @Filter result for both LineChart and Table Col data
+- Multiple chart views: use Tabs — Tabs([TabItem("line", "Line", [LineChart(...)]), TabItem("bar", "Bar", [BarChart(...)])])
 
-### Charts (1D) — use flat arrays, NOT Slice sub-components
-PieChart(labels: string[], values: number[], variant?: "pie" | "donut") — Circular chart; labels are category names, values are numbers. Example: PieChart(["Used", "Free"], [memData.used, memData.free], "donut")
-RadialChart(labels: string[], values: number[]) — Radial bars; labels are segment names, values are numbers
-SingleStackedBarChart(labels: string[], values: number[]) — Single horizontal stacked bar; labels are part names, values are numbers
+### Charts (1D)
+PieChart(labels: string[], values: number[], variant?: "pie" | "donut") — Circular slices; use plucked arrays: PieChart(data.categories, data.values)
+RadialChart(labels: string[], values: number[]) — Radial bars; use plucked arrays: RadialChart(data.categories, data.values)
+SingleStackedBarChart(labels: string[], values: number[]) — Single horizontal stacked bar; use plucked arrays: SingleStackedBarChart(data.categories, data.values)
+Slice(category: string, value: number) — One slice with label and numeric value
+- PieChart and BarChart need NUMBERS, not objects. For list data, use @Count(@Filter(...)) to aggregate:
+- PieChart from list: \`PieChart(["Low", "Med", "High"], [@Count(@Filter(data.rows, "priority", "==", "low")), @Count(@Filter(data.rows, "priority", "==", "medium")), @Count(@Filter(data.rows, "priority", "==", "high"))], "donut")\`
+- KPI from count: \`TextContent("" + @Count(@Filter(data.rows, "status", "==", "open")), "large-heavy")\`
 
 ### Charts (Scatter)
 ScatterChart(datasets: ScatterSeries[], xLabel?: string, yLabel?: string) — X/Y scatter plot; use for correlations, distributions, and clustering
@@ -93,32 +134,52 @@ Point(x: number, y: number, z?: number) — Data point with numeric coordinates
 Form(name: string, buttons: Buttons, fields?: FormControl[]) — Form container with fields and explicit action buttons
 FormControl(label: string, input: Input | TextArea | Select | DatePicker | Slider | CheckBoxGroup | RadioGroup, hint?: string) — Field with label, input component, and optional hint text
 Label(text: string) — Text label
-Input(name: string, placeholder?: string, type?: "text" | "email" | "password" | "number" | "url", rules?: {required?: boolean, email?: boolean, url?: boolean, numeric?: boolean, min?: number, max?: number, minLength?: number, maxLength?: number, pattern?: string})
-TextArea(name: string, placeholder?: string, rows?: number, rules?: {required?: boolean, email?: boolean, url?: boolean, numeric?: boolean, min?: number, max?: number, minLength?: number, maxLength?: number, pattern?: string})
-Select(name: string, items: SelectItem[], placeholder?: string, rules?: {required?: boolean, email?: boolean, url?: boolean, numeric?: boolean, min?: number, max?: number, minLength?: number, maxLength?: number, pattern?: string})
+Input(name: string, placeholder?: string, type?: "text" | "email" | "password" | "number" | "url", rules?: {required?: boolean, email?: boolean, url?: boolean, numeric?: boolean, min?: number, max?: number, minLength?: number, maxLength?: number, pattern?: string}, value?: $binding<string>)
+TextArea(name: string, placeholder?: string, rows?: number, rules?: {required?: boolean, email?: boolean, url?: boolean, numeric?: boolean, min?: number, max?: number, minLength?: number, maxLength?: number, pattern?: string}, value?: $binding<string>)
+Select(name: string, items: SelectItem[], placeholder?: string, rules?: {required?: boolean, email?: boolean, url?: boolean, numeric?: boolean, min?: number, max?: number, minLength?: number, maxLength?: number, pattern?: string}, value?: $binding<string>)
 SelectItem(value: string, label: string) — Option for Select
-DatePicker(name: string, mode: "single" | "range", rules?: {required?: boolean, email?: boolean, url?: boolean, numeric?: boolean, min?: number, max?: number, minLength?: number, maxLength?: number, pattern?: string})
-Slider(name: string, variant: "continuous" | "discrete", min: number, max: number, step?: number, defaultValue?: number[], label?: string, rules?: {required?: boolean, email?: boolean, url?: boolean, numeric?: boolean, min?: number, max?: number, minLength?: number, maxLength?: number, pattern?: string}) — Numeric slider input; supports continuous and discrete (stepped) variants
-CheckBoxGroup(name: string, items: CheckBoxItem[], rules?: {required?: boolean, email?: boolean, url?: boolean, numeric?: boolean, min?: number, max?: number, minLength?: number, maxLength?: number, pattern?: string})
+DatePicker(name: string, mode?: "single" | "range", rules?: {required?: boolean, email?: boolean, url?: boolean, numeric?: boolean, min?: number, max?: number, minLength?: number, maxLength?: number, pattern?: string}, value?: $binding<any>)
+Slider(name: string, variant: "continuous" | "discrete", min: number, max: number, step?: number, defaultValue?: number[], label?: string, rules?: {required?: boolean, email?: boolean, url?: boolean, numeric?: boolean, min?: number, max?: number, minLength?: number, maxLength?: number, pattern?: string}, value?: $binding<number[]>) — Numeric slider input; supports continuous and discrete (stepped) variants
+CheckBoxGroup(name: string, items: CheckBoxItem[], rules?: {required?: boolean, email?: boolean, url?: boolean, numeric?: boolean, min?: number, max?: number, minLength?: number, maxLength?: number, pattern?: string}, value?: $binding<Record<string, boolean>>)
 CheckBoxItem(label: string, description: string, name: string, defaultChecked?: boolean)
-RadioGroup(name: string, items: RadioItem[], defaultValue?: string, rules?: {required?: boolean, email?: boolean, url?: boolean, numeric?: boolean, min?: number, max?: number, minLength?: number, maxLength?: number, pattern?: string})
+RadioGroup(name: string, items: RadioItem[], defaultValue?: string, rules?: {required?: boolean, email?: boolean, url?: boolean, numeric?: boolean, min?: number, max?: number, minLength?: number, maxLength?: number, pattern?: string}, value?: $binding<string>)
 RadioItem(label: string, description: string, value: string)
-SwitchGroup(name: string, items: SwitchItem[], variant?: "clear" | "card" | "sunk") — Group of switch toggles
+SwitchGroup(name: string, items: SwitchItem[], variant?: "clear" | "card" | "sunk", value?: $binding<Record<string, boolean>>) — Group of switch toggles
 SwitchItem(label?: string, description?: string, name: string, defaultChecked?: boolean) — Individual switch toggle
 - For Form fields, define EACH FormControl as its own reference — do NOT inline all controls in one array. This allows progressive field-by-field streaming.
 - NEVER nest Form inside Form — each Form should be a standalone container.
-- Form requires explicit buttons. Always pass a Buttons(...) reference as the third Form argument.
-- rules is an optional array of validation strings: ["required", "email", "min:8", "maxLength:100"]
-- Available rules: required, email, min:N, max:N, minLength:N, maxLength:N, pattern:REGEX, url, numeric
+- Form requires explicit buttons. Always pass a Buttons(...) reference as the second Form argument.
+- rules is an optional object: {required: true, email: true, minLength: 8, maxLength: 100}
+- Available rules: required, email, min, max, minLength, maxLength, pattern, url, numeric
 - The renderer shows error messages automatically — do NOT generate error text in the UI
+- Conditional fields: $country == "US" ? stateField : $country == "UK" ? postcodeField : addressField
+- Edit form in Modal: Modal("Edit", $showEdit, [Form("edit", Buttons([saveBtn, cancelBtn]), [fields...])]). Save button should include @Set($showEdit, false) to close modal.
 
 ### Buttons
-Button(label: string, action?: {type: "open_url", url: string} | {type: "continue_conversation", context?: string} | {type: string, params?: Record<string, any>}, variant?: "primary" | "secondary" | "tertiary", type?: "normal" | "destructive", size?: "extra-small" | "small" | "medium" | "large") — Clickable button
+Button(label: string, action?: ActionExpression, variant?: "primary" | "secondary" | "tertiary", type?: "normal" | "destructive", size?: "extra-small" | "small" | "medium" | "large") — Clickable button
 Buttons(buttons: Button[], direction?: "row" | "column") — Group of Button components. direction: "row" (default) | "column".
+- Toggle in @Each: @Each(rows, "t", Button(t.status == "open" ? "Close" : "Reopen", Action([...])))
 
 ### Data Display
 TagBlock(tags: string[]) — tags is an array of strings
 Tag(text: string, icon?: string, size?: "sm" | "md" | "lg", variant?: "neutral" | "info" | "success" | "warning" | "danger") — Styled tag/badge with optional icon and variant
+- Color-mapped Tag: Tag(value, null, "sm", value == "high" ? "danger" : value == "medium" ? "warning" : "neutral")
+
+## Action — Button Behavior
+
+Action([@steps...]) wires button clicks to operations. Steps are @-prefixed built-in actions. Steps execute in order.
+Buttons without an explicit Action prop automatically send their label to the assistant (equivalent to Action([@ToAssistant(label)])).
+
+Available steps:
+- @ToAssistant("message") — Send a message to the assistant (for conversational buttons like "Tell me more", "Explain this")
+- @OpenUrl("https://...") — Navigate to a URL
+
+Example — simple nav:
+\`\`\`
+viewBtn = Button("View", Action([@OpenUrl("https://example.com")]))
+\`\`\`
+
+- Action can be assigned to a variable or inlined: Button("Go", onSubmit) and Button("Go", Action([...])) both work
 
 ## Hoisting & Streaming (CRITICAL)
 
@@ -135,33 +196,26 @@ Always write the root = Stack(...) statement first so the UI shell appears immed
 
 ## Examples
 
-IMPORTANT: Always wrap openui-lang code in \`\`\`openui-lang fences. The renderer ONLY extracts code from fences tagged "openui-lang".
-
 Example 1 — Table (column-oriented):
 
-\`\`\`openui-lang
 root = Stack([title, tbl])
 title = TextContent("Top Languages", "large-heavy")
-tbl = Table([Col("Language", langs), Col("Users (M)", users, "number"), Col("Year", years, "number")])
+tbl = Table([Col("Language", langs), Col("Users (M)", users), Col("Year", years)])
 langs = ["Python", "JavaScript", "Java", "TypeScript", "Go"]
 users = [15.7, 14.2, 12.1, 8.5, 5.2]
 years = [1991, 1995, 1995, 2012, 2009]
-\`\`\`
 
 Example 2 — Bar chart:
 
-\`\`\`openui-lang
 root = Stack([title, chart])
 title = TextContent("Q4 Revenue", "large-heavy")
 chart = BarChart(labels, [s1, s2], "grouped")
 labels = ["Oct", "Nov", "Dec"]
 s1 = Series("Product A", [120, 150, 180])
 s2 = Series("Product B", [90, 110, 140])
-\`\`\`
 
 Example 3 — Form with validation:
 
-\`\`\`openui-lang
 root = Stack([title, form])
 title = TextContent("Contact Us", "large-heavy")
 form = Form("contact", btns, [nameField, emailField, countryField, msgField])
@@ -170,12 +224,10 @@ emailField = FormControl("Email", Input("email", "you@example.com", "email", { r
 countryField = FormControl("Country", Select("country", countryOpts, "Select...", { required: true }))
 msgField = FormControl("Message", TextArea("message", "Tell us more...", 4, { required: true, minLength: 10 }))
 countryOpts = [SelectItem("us", "United States"), SelectItem("uk", "United Kingdom"), SelectItem("de", "Germany")]
-btns = Buttons([Button("Submit", { type: "continue_conversation" }, "primary"), Button("Cancel", { type: "continue_conversation" }, "secondary")])
-\`\`\`
+btns = Buttons([Button("Submit", Action([@ToAssistant("Submit")]), "primary"), Button("Cancel", Action([@ToAssistant("Cancel")]), "secondary")])
 
 Example 4 — Tabs with mixed content:
 
-\`\`\`openui-lang
 root = Stack([title, tabs])
 title = TextContent("React vs Vue", "large-heavy")
 tabs = Tabs([tabReact, tabVue])
@@ -183,7 +235,6 @@ tabReact = TabItem("react", "React", reactContent)
 tabVue = TabItem("vue", "Vue", vueContent)
 reactContent = [TextContent("React is a library by Meta for building UIs."), Callout("info", "Note", "React uses JSX syntax.")]
 vueContent = [TextContent("Vue is a progressive framework by Evan You."), Callout("success", "Tip", "Vue has a gentle learning curve.")]
-\`\`\`
 
 
 ## Edit Mode
@@ -244,6 +295,14 @@ Before finishing, walk your output and verify:
 2. Every referenced name is defined. Every defined name (other than root) is reachable from root.
 
 - For grid-like layouts, use Stack with direction "row" and wrap=true. Avoid justify="between" unless you specifically want large gutters.
+- Table is column-oriented: \`Table([Col("Name", names), Col("Count", counts, "number")])\`. Never emit \`Table(columns, rows)\` in new code.
+- The second \`Col(...)\` argument is column data, not a type label. Never emit \`Col("Name", "string")\` unless the literal string \`"string"\` is actual data.
 - For forms, define one FormControl reference per field so controls can stream progressively.
 - For forms, always provide the second Form argument with Buttons(...) actions: Form(name, buttons, fields).
-- Never nest Form inside Form.`;
+- Never nest Form inside Form.
+- Use \`Action([...])\` for new button behavior. Do not fall back to legacy object actions like \`{ type: "continue_conversation" }\` in new code.
+- Use @Reset($var1, $var2) after form submit to restore defaults — not @Set($var, "")
+- Multi-query refresh: Action([@Run(mutation), @Run(query1), @Run(query2), @Reset(...)])
+- Manual query refresh always uses \`Action([@Run(queryRef), ...])\`. Do not invent custom actions like \`{type: "refresh"}\` or \`{type: "refresh_data"}\`.
+- $variables are reactive: changing via Select or @Set re-evaluates all Queries and expressions referencing them
+- Use existing components (Tabs, Accordion, Modal) before inventing ternary show/hide patterns`;

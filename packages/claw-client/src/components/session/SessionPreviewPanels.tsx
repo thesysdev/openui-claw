@@ -1,17 +1,69 @@
 "use client";
 
-import { useMemo } from "react";
-import { ArtifactPanel } from "@openuidev/react-ui";
 import { AppDetail } from "@/components/apps/AppDetail";
-import { ArtifactDetail } from "@/components/artifacts/ArtifactDetail";
 import { ArtifactContentView } from "@/components/artifacts/ArtifactContentView";
-import type { AppRecord, AppStore, AppSummary, ArtifactStore, ArtifactSummary } from "@/lib/engines/types";
+import { ArtifactDetail } from "@/components/artifacts/ArtifactDetail";
+import type {
+  AppRecord,
+  AppStore,
+  AppSummary,
+  ArtifactStore,
+  ArtifactSummary,
+  UploadStore,
+} from "@/lib/engines/types";
 import type { LinkedAppContext, ThreadUpload } from "@/lib/session-workspace";
 import {
   sessionAppPreviewId,
   sessionArtifactPreviewId,
   sessionUploadPreviewId,
 } from "@/lib/session-workspace";
+import { ArtifactPanel } from "@openuidev/react-ui";
+import { useEffect, useMemo, useState } from "react";
+
+function UploadPreviewPanel({
+  upload,
+  uploadStore,
+}: {
+  upload: ThreadUpload;
+  uploadStore?: UploadStore;
+}) {
+  const [fetchedDataUrl, setFetchedDataUrl] = useState<string | null>(null);
+
+  const immediatePreview = upload.textContent ?? upload.previewUrl ?? null;
+
+  useEffect(() => {
+    // Always drop prior fetched bytes first so a panel that was remounted with
+    // a different upload id can't flash the previous file's preview.
+    setFetchedDataUrl(null);
+    if (immediatePreview) return;
+    if (!uploadStore || !upload.remoteId) return;
+    let cancelled = false;
+    void uploadStore.getUpload(upload.remoteId).then((record) => {
+      if (cancelled || !record) return;
+      setFetchedDataUrl(`data:${record.mimeType};base64,${record.content}`);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [immediatePreview, upload.remoteId, uploadStore]);
+
+  const content = immediatePreview ?? fetchedDataUrl;
+
+  return (
+    <ArtifactContentView
+      title={upload.name}
+      kind={upload.kind}
+      content={content}
+      metadata={{
+        fileName: upload.name,
+        mimeType: upload.mimeType,
+        previewUrl: content ?? undefined,
+        size: upload.size,
+        status: upload.status,
+      }}
+    />
+  );
+}
 
 export function SessionPreviewPanels({
   apps,
@@ -21,6 +73,7 @@ export function SessionPreviewPanels({
   uploads,
   appStore,
   artifactStore,
+  uploadStore,
   pinnedAppIds,
   onTogglePinned,
   onRefineApp,
@@ -34,6 +87,7 @@ export function SessionPreviewPanels({
   uploads: ThreadUpload[];
   appStore?: AppStore;
   artifactStore?: ArtifactStore;
+  uploadStore?: UploadStore;
   pinnedAppIds: Set<string>;
   onTogglePinned: (appId: string) => void;
   onRefineApp: (record: AppRecord) => void | Promise<void>;
@@ -69,15 +123,10 @@ export function SessionPreviewPanels({
 
     const linkedIndex = resolvedApps.findIndex((app) => app.id === resolvedLinkedApp.id);
     if (linkedIndex === -1) {
-      return [
-        resolvedLinkedApp,
-        ...resolvedApps,
-      ];
+      return [resolvedLinkedApp, ...resolvedApps];
     }
 
-    return resolvedApps.map((app) =>
-      app.id === resolvedLinkedApp.id ? resolvedLinkedApp : app,
-    );
+    return resolvedApps.map((app) => (app.id === resolvedLinkedApp.id ? resolvedLinkedApp : app));
   }, [resolvedApps, resolvedLinkedApp]);
 
   return (
@@ -107,7 +156,7 @@ export function SessionPreviewPanels({
       {artifactStore &&
         artifacts.map((artifact) => (
           <ArtifactPanel
-            key={artifact.id}
+            key={`${artifact.id}:${artifact.updatedAt}`}
             artifactId={sessionArtifactPreviewId(artifact.id)}
             title={artifact.title}
           >
@@ -115,6 +164,7 @@ export function SessionPreviewPanels({
               <ArtifactDetail
                 artifactId={artifact.id}
                 artifacts={artifactStore}
+                updatedAt={artifact.updatedAt}
                 mode="panel"
                 onDeleted={onRefreshArtifacts}
               />
@@ -129,18 +179,7 @@ export function SessionPreviewPanels({
           title={upload.name}
         >
           <div className="h-full overflow-auto bg-zinc-50 dark:bg-zinc-950">
-            <ArtifactContentView
-              title={upload.name}
-              kind={upload.kind}
-              content={upload.textContent ?? upload.previewUrl ?? null}
-              metadata={{
-                fileName: upload.name,
-                mimeType: upload.mimeType,
-                previewUrl: upload.previewUrl,
-                size: upload.size,
-                status: upload.status,
-              }}
-            />
+            <UploadPreviewPanel upload={upload} uploadStore={uploadStore} />
           </div>
         </ArtifactPanel>
       ))}

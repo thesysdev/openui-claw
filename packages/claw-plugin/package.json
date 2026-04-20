@@ -6,12 +6,15 @@
   "scripts": {
     "generate": "tsx generate-prompt.ts"
   },
+  "dependencies": {
+    "@openuidev/lang-core": "^0.2.2"
+  },
   "peerDependencies": {
     "openclaw": "*"
   },
-  "dependencies": {},
   "devDependencies": {
     "@openuidev/react-ui": "*",
+    "@types/node": "^22.19.15",
     "openclaw": "*",
     "tsx": "^4.0.0"
   },

@@ -1,11 +1,29 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { Code2, Eye, Pin, Sparkles, Trash2 } from "lucide-react";
-import { Renderer } from "@openuidev/react-lang";
-import { openuiLibrary } from "@openuidev/react-ui/genui-lib";
-import { Callout } from "@openuidev/react-ui";
 import type { AppRecord, AppStore } from "@/lib/engines/types";
+import { Renderer } from "@openuidev/react-lang";
+import { Callout } from "@openuidev/react-ui";
+import { openuiLibrary } from "@openuidev/react-ui/genui-lib";
+import { Code2, Eye, Pin, Sparkles, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+
+function normalizeToolResult(result: unknown): unknown {
+  if (result && typeof result === "object" && !Array.isArray(result)) {
+    const candidate = result as Record<string, unknown>;
+    if (typeof candidate.stdout === "string") {
+      const trimmed = candidate.stdout.trim();
+      if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+        try {
+          return JSON.parse(trimmed);
+        } catch {
+          // Fall through to the raw tool result below.
+        }
+      }
+    }
+  }
+
+  return result;
+}
 
 interface Props {
   appId: string;
@@ -54,31 +72,22 @@ export function AppDetail({
   // gateway RPCs — no LLM hop; the plugin executes tools directly.
   // record.sessionKey scopes every tool call to the app's agent session so
   // exec approvals, memory access, etc. are attributed correctly.
-  const toolProvider = useMemo(
-    () => ({
-      tools_invoke: async (args: Record<string, unknown>) => {
-        const toolName = typeof args.tool_name === "string" ? args.tool_name : "";
-        const toolArgs =
-          args.tool_args != null && typeof args.tool_args === "object" && !Array.isArray(args.tool_args)
-            ? (args.tool_args as Record<string, unknown>)
-            : {};
-        const result = await apps.invokeTool(toolName, toolArgs, record?.sessionKey) as Record<string, unknown> | null;
-        // Auto-parse stdout JSON so Query data flows directly as parsed objects
-        if (result && typeof result.stdout === "string") {
-          const trimmed = result.stdout.trim();
-          if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
-            try {
-              return JSON.parse(trimmed);
-            } catch {
-              // fall through to raw result
-            }
-          }
-        }
-        return result;
-      },
-    }),
-    [apps, record?.sessionKey],
-  );
+  const toolProvider = useMemo(() => {
+    const invokeScopedTool = async (
+      toolName: string,
+      args: Record<string, unknown>,
+    ): Promise<unknown> => {
+      const result = await apps.invokeTool(toolName, args, record?.sessionKey);
+      return normalizeToolResult(result);
+    };
+
+    return {
+      exec: async (args: Record<string, unknown>) => invokeScopedTool("exec", args),
+      read: async (args: Record<string, unknown>) => invokeScopedTool("read", args),
+      db_query: async (args: Record<string, unknown>) => invokeScopedTool("db_query", args),
+      db_execute: async (args: Record<string, unknown>) => invokeScopedTool("db_execute", args),
+    };
+  }, [apps, record?.sessionKey]);
 
   if (loading) {
     return (
@@ -230,8 +239,8 @@ export function AppDetail({
                   typeof error === "string"
                     ? error
                     : error instanceof Error
-                    ? error.message
-                    : JSON.stringify(error),
+                      ? error.message
+                      : JSON.stringify(error),
                 ),
               );
             }}

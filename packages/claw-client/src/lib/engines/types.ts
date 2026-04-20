@@ -35,6 +35,31 @@ export interface SessionConfigOption {
   options: { id: string; label: string; description?: string }[];
 }
 
+/**
+ * Native slash command exposed by OpenClaw's `commands.list` RPC.
+ * The gateway intercepts these when the user sends `/<name> args` via
+ * `chat.send`; the client only uses them for autocomplete + help text.
+ */
+export interface GatewayCommand {
+  key: string;
+  name: string;
+  description: string;
+  argHint?: string;
+}
+
+/** Raw shape returned by `commands.list` — kept loose for forward compat. */
+export interface GatewayCommandRaw {
+  name?: unknown;
+  nativeName?: unknown;
+  textAliases?: unknown;
+  description?: unknown;
+  category?: unknown;
+  source?: unknown;
+  scope?: unknown;
+  acceptsArgs?: unknown;
+  args?: Array<{ name?: unknown } | unknown> | unknown;
+}
+
 export type StopReason = "end_turn" | "cancelled" | "max_tokens" | "error";
 
 // ── Stored message ────────────────────────────────────────────────────────────
@@ -142,6 +167,35 @@ export interface AppStore {
   invokeTool(tool: string, args: Record<string, unknown>, sessionKey?: string): Promise<unknown>;
 }
 
+// ── Upload types ──────────────────────────────────────────────────────────────
+
+export interface UploadMeta {
+  id: string;
+  sessionKey: string;
+  name: string;
+  mimeType: string;
+  size: number;
+  createdAt: string;
+}
+
+export interface UploadRecord extends UploadMeta {
+  /** Base64-encoded file content. */
+  content: string;
+}
+
+export interface UploadStore {
+  putUpload(params: {
+    sessionKey: string;
+    name: string;
+    mimeType: string;
+    content: string;
+    size?: number;
+  }): Promise<UploadMeta | null>;
+  listUploads(sessionKey?: string): Promise<UploadMeta[]>;
+  getUpload(id: string): Promise<UploadRecord | null>;
+  deleteUpload(id: string): Promise<void>;
+}
+
 // ── Engine capabilities ───────────────────────────────────────────────────────
 
 export interface EngineCapabilities {
@@ -152,6 +206,7 @@ export interface EngineCapabilities {
   sessionConfig?: boolean;
   artifacts?: boolean;
   apps?: boolean;
+  uploads?: boolean;
 }
 
 // ── Engine interface ──────────────────────────────────────────────────────────
@@ -161,7 +216,8 @@ export interface Engine {
   readonly capabilities: EngineCapabilities;
   readonly conversations: ConversationStore;
   readonly artifacts?: ArtifactStore; // present when capabilities.artifacts
-  readonly apps?: AppStore;           // present when capabilities.apps
+  readonly apps?: AppStore; // present when capabilities.apps
+  readonly uploads?: UploadStore; // present when capabilities.uploads
 
   // Lifecycle
   connect(): Promise<void>;
@@ -173,7 +229,7 @@ export interface Engine {
   sendMessage(
     sessionId: string,
     messages: unknown[],
-    abortController: AbortController
+    abortController: AbortController,
   ): Promise<Response>;
   abort(sessionId: string): Promise<void>;
 

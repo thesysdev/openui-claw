@@ -1,19 +1,19 @@
 "use client";
 
-import { Renderer, BuiltinActionType } from "@openuidev/react-lang";
-import type { ActionEvent } from "@openuidev/react-lang";
-import { openuiLibrary } from "@openuidev/react-ui/genui-lib";
-import { Shell, BehindTheScenes, Callout } from "@openuidev/react-ui";
-import { useThread } from "@openuidev/react-headless";
+import { ERROR_SENTINEL } from "@/lib/chat/history-merger";
+import { extractAssistantTimeline } from "@/lib/chat/timeline";
+import { separateContentAndContext, wrapContent, wrapContext } from "@/lib/content-parser";
+import { parseInlineResponse } from "@/lib/detection";
 import type { AssistantMessage as AssistantMsg } from "@openuidev/react-headless";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
+import { useThread } from "@openuidev/react-headless";
+import type { ActionEvent } from "@openuidev/react-lang";
+import { BuiltinActionType, Renderer } from "@openuidev/react-lang";
+import { BehindTheScenes, Callout, Shell } from "@openuidev/react-ui";
+import { openuiLibrary } from "@openuidev/react-ui/genui-lib";
 import { AlertCircle, CheckCircle2, ChevronDown, Loader2, SquareTerminal } from "lucide-react";
 import { useCallback, useMemo, useState, type ReactNode } from "react";
-import { extractAssistantTimeline } from "@/lib/chat/timeline";
-import { parseInlineResponse } from "@/lib/detection";
-import { separateContentAndContext, wrapContent, wrapContext } from "@/lib/content-parser";
-import { ERROR_SENTINEL } from "@/lib/chat/history-merger";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 interface Props {
   message: AssistantMsg;
@@ -89,13 +89,7 @@ function TimelineFrame({
   );
 }
 
-function AssistantUpdateTimelineItem({
-  content,
-  isLast,
-}: {
-  content: string;
-  isLast: boolean;
-}) {
+function AssistantUpdateTimelineItem({ content, isLast }: { content: string; isLast: boolean }) {
   return (
     <TimelineFrame
       isLast={isLast}
@@ -133,7 +127,9 @@ function ReasoningTimelineItem({
         <div className="relative z-10 mt-1 flex h-8 w-8 items-center justify-center rounded-full border border-violet-200 bg-white shadow-sm dark:border-violet-500/30 dark:bg-zinc-950">
           <span
             className={`h-2.5 w-2.5 rounded-full ${
-              isStreaming ? "animate-pulse bg-violet-500 dark:bg-violet-400" : "bg-violet-400 dark:bg-violet-300"
+              isStreaming
+                ? "animate-pulse bg-violet-500 dark:bg-violet-400"
+                : "bg-violet-400 dark:bg-violet-300"
             }`}
           />
         </div>
@@ -240,11 +236,7 @@ function ToolTraceItem({
               </p>
             </div>
             <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-              {isPending
-                ? "Running"
-                : trace.isError
-                  ? "Failed"
-                  : "Completed"}
+              {isPending ? "Running" : trace.isError ? "Failed" : "Completed"}
               {duration ? ` in ${duration}` : ""}
             </p>
           </div>
@@ -261,9 +253,7 @@ function ToolTraceItem({
           </span>
         </div>
         <div className="mt-3 space-y-2">
-          {trace.request ? (
-            <ToolPayloadBlock label="Input" content={trace.request} />
-          ) : null}
+          {trace.request ? <ToolPayloadBlock label="Input" content={trace.request} /> : null}
           {trace.output ? (
             <ToolPayloadBlock
               label={trace.isError ? "Output (error)" : "Output"}
@@ -306,7 +296,14 @@ export function AssistantMessage({ message }: Props) {
     if (!contextString) return undefined;
     try {
       const parsed = JSON.parse(contextString);
-      if (Array.isArray(parsed) && typeof parsed[0] === "object") return parsed[0];
+      if (Array.isArray(parsed)) {
+        for (let i = parsed.length - 1; i >= 0; i -= 1) {
+          const candidate = parsed[i];
+          if (candidate && typeof candidate === "object" && !Array.isArray(candidate)) {
+            return candidate;
+          }
+        }
+      }
       if (typeof parsed === "object" && !Array.isArray(parsed)) return parsed;
       return undefined;
     } catch {
@@ -334,14 +331,17 @@ export function AssistantMessage({ message }: Props) {
       if (event.type === BuiltinActionType.ContinueConversation) {
         const contentPart = wrapContent(event.humanFriendlyMessage);
         const ctx: unknown[] = [`User clicked: ${event.humanFriendlyMessage}`];
-        if (event.formState) ctx.push(event.formState);
+        const formState =
+          event.formState ??
+          (initialState && typeof initialState === "object" ? initialState : undefined);
+        if (formState) ctx.push(formState);
         processMessage({ role: "user", content: contentPart + wrapContext(JSON.stringify(ctx)) });
       } else if (event.type === BuiltinActionType.OpenUrl) {
         const url = event.params?.["url"] as string | undefined;
         if (typeof window !== "undefined" && url) window.open(url, "_blank", "noopener,noreferrer");
       }
     },
-    [processMessage],
+    [initialState, processMessage],
   );
 
   const rawContent = responseBody ?? message.content ?? "";
@@ -429,18 +429,24 @@ export function AssistantMessage({ message }: Props) {
     });
 
     toolCalls.forEach((toolCall) => {
+      if (orderedToolIds.has(toolCall.id)) {
+        const existingTrace = traceMap.get(toolCall.id);
+        if (existingTrace) {
+          if (!existingTrace.request) existingTrace.request = toolCall.function.arguments;
+          if (existingTrace.name === "Tool") existingTrace.name = toolCall.function.name;
+        }
+        return;
+      }
+
       const trace = ensureTrace(toolCall.id);
       if (!trace.request) trace.request = toolCall.function.arguments;
       if (!trace.name) trace.name = toolCall.function.name;
-
-      if (!orderedToolIds.has(toolCall.id)) {
-        orderedToolIds.add(toolCall.id);
-        items.push({
-          kind: "tool",
-          key: `tool-fallback-${toolCall.id}`,
-          traceId: toolCall.id,
-        });
-      }
+      orderedToolIds.add(toolCall.id);
+      items.push({
+        kind: "tool",
+        key: `tool-fallback-${toolCall.id}`,
+        traceId: toolCall.id,
+      });
     });
 
     if (!isStreaming) {
@@ -459,23 +465,11 @@ export function AssistantMessage({ message }: Props) {
 
   const errorIdx = visibleText.indexOf(ERROR_SENTINEL);
   const isError = errorIdx !== -1;
-  const textContent = isError
-    ? visibleText.slice(0, errorIdx)
-    : visibleText;
-  const trailingAssistantUpdate =
-    isStreaming && timelineItems.length > 0 && textContent.trim().length > 0
-      ? textContent
-      : null;
-  const finalAssistantText =
-    trailingAssistantUpdate != null ? "" : textContent;
-  const errorMessage = isError
-    ? visibleText.slice(errorIdx + ERROR_SENTINEL.length)
-    : null;
+  const textContent = isError ? visibleText.slice(0, errorIdx) : visibleText;
+  const finalAssistantText = textContent;
+  const errorMessage = isError ? visibleText.slice(errorIdx + ERROR_SENTINEL.length) : null;
 
-  const { segments } = useMemo(
-    () => parseInlineResponse(finalAssistantText),
-    [finalAssistantText],
-  );
+  const { segments } = useMemo(() => parseInlineResponse(finalAssistantText), [finalAssistantText]);
 
   const renderedSegments = segments.map((segment, i) =>
     segment.type === "openui" ? (
@@ -502,26 +496,14 @@ export function AssistantMessage({ message }: Props) {
 
   return (
     <Shell.AssistantMessageContainer>
-      {timelineItems.length > 0 || trailingAssistantUpdate ? (
+      {timelineItems.length > 0 ? (
         <BehindTheScenes isStreaming={isStreaming} toolCallsComplete={!isStreaming}>
-          {[...timelineItems, ...(trailingAssistantUpdate
-            ? [
-                {
-                  kind: "assistant_update" as const,
-                  key: `assistant-update-live-${message.id}`,
-                  text: trailingAssistantUpdate,
-                },
-              ]
-            : [])].map((item, index, items) => {
+          {timelineItems.map((item, index, items) => {
             const isLast = index === items.length - 1;
 
             if (item.kind === "assistant_update") {
               return (
-                <AssistantUpdateTimelineItem
-                  key={item.key}
-                  content={item.text}
-                  isLast={isLast}
-                />
+                <AssistantUpdateTimelineItem key={item.key} content={item.text} isLast={isLast} />
               );
             }
 
@@ -554,11 +536,7 @@ export function AssistantMessage({ message }: Props) {
       {renderedSegments}
 
       {errorMessage && (
-        <Callout
-          variant="danger"
-          title="Something went wrong"
-          description={errorMessage}
-        />
+        <Callout variant="danger" title="Something went wrong" description={errorMessage} />
       )}
     </Shell.AssistantMessageContainer>
   );

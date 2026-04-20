@@ -12,8 +12,8 @@
  *   - model:"gateway-injected" messages (compaction summaries) → ActivityMessage (role:"activity")
  */
 
-import type { ChatHistoryMessage } from "@/lib/gateway/types";
 import type { AssistantTimelineSegment } from "@/lib/chat/timeline";
+import type { ChatHistoryMessage } from "@/lib/gateway/types";
 
 export type ToolCallOutput = {
   id: string;
@@ -51,7 +51,8 @@ function extractToolCalls(content: unknown): ToolCallOutput[] {
       type: "function" as const,
       function: {
         name: c.name ?? "unknown",
-        arguments: typeof c.arguments === "string" ? c.arguments : JSON.stringify(c.arguments ?? {}),
+        arguments:
+          typeof c.arguments === "string" ? c.arguments : JSON.stringify(c.arguments ?? {}),
       },
     }));
 }
@@ -79,9 +80,7 @@ function stringifyContent(content: unknown): string | null {
   }
 }
 
-function resolveToolMessageOutput(
-  message: ChatHistoryMessage,
-): string | null {
+function resolveToolMessageOutput(message: ChatHistoryMessage): string | null {
   const candidate = message as ChatHistoryMessage & {
     result?: unknown;
     output?: unknown;
@@ -100,18 +99,50 @@ function resolveToolMessageOutput(
   );
 }
 
+function hoistTrailingAssistantUpdates(
+  message: MergedMessage & { role: "assistant" },
+): MergedMessage & { role: "assistant" } {
+  const timeline = message.timeline ?? [];
+  if (timeline.length === 0) return message;
+
+  let splitIndex = timeline.length;
+  while (splitIndex > 0 && timeline[splitIndex - 1]?.type === "assistant_update") {
+    splitIndex -= 1;
+  }
+
+  if (splitIndex === timeline.length) {
+    return message;
+  }
+
+  const trailingText = timeline
+    .slice(splitIndex)
+    .filter(
+      (segment): segment is Extract<AssistantTimelineSegment, { type: "assistant_update" }> =>
+        segment.type === "assistant_update",
+    )
+    .map((segment) => segment.text)
+    .join("");
+
+  return {
+    ...message,
+    content: `${message.content ?? ""}${trailingText}` || null,
+    timeline: timeline.slice(0, splitIndex),
+  };
+}
+
 export function mergeHistoryMessages(raw: ChatHistoryMessage[]): MergedMessage[] {
   const output: MergedMessage[] = [];
   let pending: (MergedMessage & { role: "assistant" }) | null = null;
 
   const flush = () => {
     if (pending) {
+      const finalized = hoistTrailingAssistantUpdates(pending);
       if (
-        pending.content !== null ||
-        (pending.toolCalls && pending.toolCalls.length > 0) ||
-        (pending.timeline && pending.timeline.length > 0)
+        finalized.content !== null ||
+        (finalized.toolCalls && finalized.toolCalls.length > 0) ||
+        (finalized.timeline && finalized.timeline.length > 0)
       ) {
-        output.push(pending);
+        output.push(finalized);
       }
       pending = null;
     }

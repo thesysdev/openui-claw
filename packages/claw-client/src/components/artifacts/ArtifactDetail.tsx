@@ -1,14 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { ArrowLeft, Trash2 } from "lucide-react";
+import { ArtifactContentView } from "@/components/artifacts/ArtifactContentView";
 import type { ArtifactRecord, ArtifactStore } from "@/lib/engines/types";
 import { artifactsHash } from "@/lib/hooks/useHashRoute";
-import { ArtifactContentView } from "@/components/artifacts/ArtifactContentView";
+import { ArrowLeft, Trash2 } from "lucide-react";
+import { useEffect, useState } from "react";
 
 interface Props {
   artifactId: string;
   artifacts: ArtifactStore;
+  updatedAt?: string;
   mode?: "page" | "panel";
   onDeleted?: () => void;
 }
@@ -16,6 +17,7 @@ interface Props {
 export function ArtifactDetail({
   artifactId,
   artifacts,
+  updatedAt,
   mode = "page",
   onDeleted,
 }: Props) {
@@ -28,6 +30,7 @@ export function ArtifactDetail({
   useEffect(() => {
     setLoading(true);
     setNotFound(false);
+    setRecord(null);
     artifacts
       .getArtifact(artifactId)
       .then((r) => {
@@ -35,7 +38,7 @@ export function ArtifactDetail({
         else setRecord(r);
       })
       .finally(() => setLoading(false));
-  }, [artifactId, artifacts]);
+  }, [artifactId, artifacts, updatedAt]);
 
   if (loading) {
     return (
@@ -48,9 +51,7 @@ export function ArtifactDetail({
   if (notFound || !record) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-3">
-        <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
-          Artifact not found
-        </p>
+        <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Artifact not found</p>
         <a
           href={artifactsHash()}
           className="text-xs text-zinc-400 underline underline-offset-2 hover:text-zinc-600"
@@ -62,9 +63,7 @@ export function ArtifactDetail({
   }
 
   const contentDisplay =
-    typeof record.content === "string"
-      ? record.content
-      : JSON.stringify(record.content, null, 2);
+    typeof record.content === "string" ? record.content : JSON.stringify(record.content, null, 2);
 
   async function handleDelete() {
     if (!confirmDelete) {
@@ -100,9 +99,7 @@ export function ArtifactDetail({
               <h1 className="truncate text-lg font-semibold text-zinc-900 dark:text-zinc-100">
                 {record.title}
               </h1>
-              <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-                Durable artifact
-              </p>
+              <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Durable artifact</p>
             </div>
             <span className="shrink-0 rounded-full bg-zinc-100 px-2.5 py-1 text-xs font-medium text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
               {record.kind}

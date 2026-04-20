@@ -78,9 +78,7 @@ function isTimelineSegment(value: unknown): value is AssistantTimelineSegment {
   return false;
 }
 
-export function encodeAssistantTimelineSegment(
-  segment: AssistantTimelineSegment,
-): string {
+export function encodeAssistantTimelineSegment(segment: AssistantTimelineSegment): string {
   return `${TIMELINE_MARKER_PREFIX}${encodeURIComponent(
     JSON.stringify(segment),
   )}${TIMELINE_MARKER_SUFFIX}`;
@@ -102,7 +100,7 @@ export function extractAssistantTimeline(raw: string): {
   timeline: AssistantTimelineSegment[];
   interleavedParts: AssistantTimelinePart[];
 } {
-  TIMELINE_MARKER_REGEX.lastIndex = 0;
+  const timelineMarkerRegex = new RegExp(TIMELINE_MARKER_REGEX.source, "g");
   const timeline: AssistantTimelineSegment[] = [];
   const parts: AssistantTimelinePart[] = [];
   let lastIndex = 0;
@@ -128,7 +126,7 @@ export function extractAssistantTimeline(raw: string): {
     timeline.push(segment);
   };
 
-  while ((match = TIMELINE_MARKER_REGEX.exec(raw)) !== null) {
+  while ((match = timelineMarkerRegex.exec(raw)) !== null) {
     pushTextPart(raw.slice(lastIndex, match.index));
     lastIndex = match.index + match[0].length;
 

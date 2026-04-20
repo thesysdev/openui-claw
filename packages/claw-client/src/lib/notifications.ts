@@ -37,3 +37,7 @@ export type NotificationRecord = {
   };
   metadata?: Record<string, unknown>;
 };
+
+export function shouldSurfaceNotification(notification: Pick<NotificationRecord, "kind">): boolean {
+  return notification.kind.startsWith("cron_");
+}

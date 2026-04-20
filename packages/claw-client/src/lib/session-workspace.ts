@@ -1,15 +1,9 @@
 "use client";
 
 import { separateContentAndContext } from "@/lib/content-parser";
+import type { UploadMeta } from "@/lib/engines/types";
 
-export type WorkspacePreviewKind =
-  | "image"
-  | "pdf"
-  | "markdown"
-  | "code"
-  | "text"
-  | "ppt"
-  | "file";
+export type WorkspacePreviewKind = "image" | "pdf" | "markdown" | "code" | "text" | "ppt" | "file";
 
 export type GatewayAttachmentPayload = {
   type?: string;
@@ -22,6 +16,8 @@ export type ThreadUploadStatus = "pending" | "sent";
 
 export type ThreadUpload = {
   id: string;
+  /** Plugin-side upload id returned by `uploads.put`; used to fetch bytes back on reload. */
+  remoteId?: string;
   name: string;
   mimeType: string;
   size: number;
@@ -47,15 +43,8 @@ export type ThreadWorkspaceState = {
 
 type ThreadUploadContextEntry = {
   type: "thread_uploads";
-  files: Array<{
-    id: string;
-    name: string;
-    mimeType?: string;
-    size?: number;
-    kind?: string;
-    status?: string;
-    createdAt?: number;
-  }>;
+  /** Plugin-side upload ids that bind to this user message. */
+  remoteIds: string[];
 };
 
 type LinkedAppContextEntry = {
@@ -109,11 +98,11 @@ function isLinkedAppContextEntry(value: unknown): value is LinkedAppContextEntry
 }
 
 function isThreadUploadContextEntry(value: unknown): value is ThreadUploadContextEntry {
-  return (
-    isRecord(value) &&
-    value.type === "thread_uploads" &&
-    Array.isArray(value.files)
-  );
+  if (!isRecord(value) || value.type !== "thread_uploads") return false;
+  // New compact form: { remoteIds: [...] }
+  if (Array.isArray(value.remoteIds)) return true;
+  // Legacy form: { files: [{id, remoteId?, ...}] } — accept and normalize in parser.
+  return Array.isArray(value.files);
 }
 
 function parseThreadContextEntries(contextString: string | null): ThreadContextEntry[] {
@@ -122,33 +111,55 @@ function parseThreadContextEntries(contextString: string | null): ThreadContextE
   try {
     const parsed = JSON.parse(contextString);
     if (!Array.isArray(parsed)) return [];
-    return parsed.filter(
-      (entry): entry is ThreadContextEntry =>
-        isLinkedAppContextEntry(entry) || isThreadUploadContextEntry(entry),
-    );
+    return parsed
+      .map((entry) => normalizeContextEntry(entry))
+      .filter((entry): entry is ThreadContextEntry => entry != null);
   } catch {
     return [];
   }
 }
 
-function createThreadUploadPlaceholder(
-  file: ThreadUploadContextEntry["files"][number],
-  fallbackCreatedAt: number,
-): ThreadUpload {
-  const mimeType =
-    typeof file.mimeType === "string" && file.mimeType.length > 0
-      ? file.mimeType
-      : "application/octet-stream";
-  const name = typeof file.name === "string" && file.name.length > 0 ? file.name : "Attachment";
+function normalizeContextEntry(value: unknown): ThreadContextEntry | null {
+  if (isLinkedAppContextEntry(value)) return value;
+  if (!isRecord(value) || value.type !== "thread_uploads") return null;
 
+  if (Array.isArray(value.remoteIds)) {
+    return {
+      type: "thread_uploads",
+      remoteIds: value.remoteIds.filter((id): id is string => typeof id === "string"),
+    };
+  }
+  // Legacy shape: files: [{id, remoteId?, ...}]
+  if (Array.isArray(value.files)) {
+    const remoteIds = value.files
+      .map((file) => (isRecord(file) && typeof file.remoteId === "string" ? file.remoteId : null))
+      .filter((id): id is string => id != null);
+    return { type: "thread_uploads", remoteIds };
+  }
+  return null;
+}
+
+export function extractMessageUploadIds(messageContent: unknown): string[] {
+  if (typeof messageContent !== "string") return [];
+  const { contextString } = separateContentAndContext(messageContent);
+  const entries = parseThreadContextEntries(contextString);
+  const ids: string[] = [];
+  for (const entry of entries) {
+    if (entry.type === "thread_uploads") ids.push(...entry.remoteIds);
+  }
+  return ids;
+}
+
+export function uploadMetaToThreadUpload(meta: UploadMeta): ThreadUpload {
   return {
-    id: file.id,
-    name,
-    mimeType,
-    size: typeof file.size === "number" ? file.size : 0,
-    kind: inferWorkspacePreviewKind(name, mimeType, file.kind),
-    createdAt: typeof file.createdAt === "number" ? file.createdAt : fallbackCreatedAt,
-    status: file.status === "pending" ? "pending" : "sent",
+    id: meta.id,
+    remoteId: meta.id,
+    name: meta.name,
+    mimeType: meta.mimeType,
+    size: meta.size,
+    kind: inferWorkspacePreviewKind(meta.name, meta.mimeType),
+    createdAt: Date.parse(meta.createdAt) || Date.now(),
+    status: "sent",
   };
 }
 
@@ -194,8 +205,7 @@ function readFileAsDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(typeof reader.result === "string" ? reader.result : "");
-    reader.onerror = () =>
-      reject(reader.error ?? new Error("Failed to read file"));
+    reader.onerror = () => reject(reader.error ?? new Error("Failed to read file"));
     reader.readAsDataURL(file);
   });
 }
@@ -246,35 +256,27 @@ export function buildThreadContextPayload(params: {
   }
 
   if (params.uploads && params.uploads.length > 0) {
-    payload.push({
-      type: "thread_uploads",
-      files: params.uploads.map((upload) => ({
-        id: upload.id,
-        name: upload.name,
-        mimeType: upload.mimeType,
-        size: upload.size,
-        kind: upload.kind,
-        status: upload.status,
-        createdAt: upload.createdAt,
-      })),
-    });
+    const remoteIds = params.uploads
+      .map((upload) => upload.remoteId)
+      .filter((id): id is string => typeof id === "string");
+    if (remoteIds.length > 0) {
+      payload.push({ type: "thread_uploads", remoteIds });
+    }
   }
 
   return payload;
 }
 
-export function deriveThreadWorkspaceFromMessages(
+export function deriveLinkedAppFromMessages(
   messages: ThreadWorkspaceMessageLike[],
-): ThreadWorkspaceState {
-  const uploadsInOrder: string[] = [];
-  const uploadsById = new Map<string, ThreadUpload>();
+): LinkedAppContext | null {
   let linkedApp: LinkedAppContext | null = null;
 
-  messages.forEach((message, messageIndex) => {
-    if (message.role !== "user" || typeof message.content !== "string") return;
+  for (const message of messages) {
+    if (message.role !== "user" || typeof message.content !== "string") continue;
     const { contextString } = separateContentAndContext(message.content);
 
-    parseThreadContextEntries(contextString).forEach((entry) => {
+    for (const entry of parseThreadContextEntries(contextString)) {
       if (entry.type === "linked_app") {
         linkedApp = {
           appId: entry.appId,
@@ -282,64 +284,20 @@ export function deriveThreadWorkspaceFromMessages(
           agentId: entry.agentId,
           sessionKey: entry.sessionKey,
         };
-        return;
       }
+    }
+  }
 
-      entry.files.forEach((file, fileIndex) => {
-        const fallbackCreatedAt = messageIndex * 1000 + fileIndex;
-        const nextUpload = createThreadUploadPlaceholder(file, fallbackCreatedAt);
-        const existing = uploadsById.get(file.id);
-
-        if (!existing) {
-          uploadsInOrder.push(file.id);
-        }
-
-        uploadsById.set(file.id, {
-          ...(existing ?? {}),
-          ...nextUpload,
-          attachment: existing?.attachment,
-          previewUrl: existing?.previewUrl,
-          textContent: existing?.textContent,
-        });
-      });
-    });
-  });
-
-  return {
-    uploads: uploadsInOrder
-      .map((id) => uploadsById.get(id))
-      .filter((upload): upload is ThreadUpload => upload != null),
-    linkedApp,
-  };
+  return linkedApp;
 }
 
-export function mergeThreadWorkspaces(
-  primary: ThreadWorkspaceState,
-  fallback?: ThreadWorkspaceState | null,
+/** Deprecated shim: uploads now come from the plugin, only linkedApp is derived. */
+export function deriveThreadWorkspaceFromMessages(
+  messages: ThreadWorkspaceMessageLike[],
 ): ThreadWorkspaceState {
-  if (!fallback) return primary;
-
-  const fallbackUploads = new Map(fallback.uploads.map((upload) => [upload.id, upload]));
-  const uploads = primary.uploads.map((upload) => {
-    const cached = fallbackUploads.get(upload.id);
-    fallbackUploads.delete(upload.id);
-    return {
-      ...cached,
-      ...upload,
-      attachment: upload.attachment ?? cached?.attachment,
-      previewUrl: upload.previewUrl ?? cached?.previewUrl,
-      textContent: upload.textContent ?? cached?.textContent,
-      createdAt: upload.createdAt || cached?.createdAt || Date.now(),
-    };
-  });
-
-  const trailingUploads = [...fallbackUploads.values()].sort(
-    (left, right) => left.createdAt - right.createdAt,
-  );
-
   return {
-    uploads: [...uploads, ...trailingUploads],
-    linkedApp: primary.linkedApp ?? fallback.linkedApp ?? null,
+    uploads: [],
+    linkedApp: deriveLinkedAppFromMessages(messages),
   };
 }
 

@@ -1,6 +1,19 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { AppSummary, ArtifactSummary } from "@/lib/engines/types";
+import { ConnectionState } from "@/lib/gateway/types";
+import {
+  appHash,
+  artifactHash,
+  artifactsHash,
+  homeHash,
+  navigate,
+  useHashRoute,
+} from "@/lib/hooks/useHashRoute";
+import type { ClawThread } from "@/types/claw-thread";
+import { useThreadList } from "@openuidev/react-headless";
+import { Button, Shell } from "@openuidev/react-ui";
+import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import {
   ChevronRight,
   EllipsisVertical,
@@ -13,20 +26,7 @@ import {
   Settings,
   Trash2,
 } from "lucide-react";
-import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
-import { useThreadList } from "@openuidev/react-headless";
-import { Button, Shell } from "@openuidev/react-ui";
-import { ConnectionState } from "@/lib/gateway/types";
-import type { ClawThread } from "@/types/claw-thread";
-import {
-  useHashRoute,
-  navigate,
-  artifactsHash,
-  artifactHash,
-  appHash,
-  homeHash,
-} from "@/lib/hooks/useHashRoute";
-import type { AppSummary, ArtifactSummary } from "@/lib/engines/types";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 const DOT_CLASS: Record<ConnectionState, string> = {
   [ConnectionState.DISCONNECTED]: "bg-zinc-400",
@@ -74,6 +74,7 @@ interface Props {
   apps: AppSummary[];
   artifacts: ArtifactSummary[];
   unreadNotificationCount: number;
+  hiddenThreadIds?: Set<string>;
   pinnedAppIds: Set<string>;
   onTogglePinned: (appId: string) => void;
   onDeleteApp: (appId: string) => Promise<void>;
@@ -88,6 +89,7 @@ export function AppSidebar({
   apps,
   artifacts,
   unreadNotificationCount,
+  hiddenThreadIds = new Set(),
   pinnedAppIds,
   onTogglePinned,
   onDeleteApp,
@@ -114,14 +116,15 @@ export function AppSidebar({
     [threadsCast],
   );
 
-  const displayThreads = useMemo<ClawThread[]>(() =>
-    threadsCast
-      .filter((t) => !deletedIds.has(t.id))
-      .map((t) => {
-        const override = titleOverrides.get(t.id);
-        return override ? { ...t, title: override } : t;
-      }),
-    [threadsCast, deletedIds, titleOverrides]
+  const displayThreads = useMemo<ClawThread[]>(
+    () =>
+      threadsCast
+        .filter((t) => !deletedIds.has(t.id) && !hiddenThreadIds.has(t.id))
+        .map((t) => {
+          const override = titleOverrides.get(t.id);
+          return override ? { ...t, title: override } : t;
+        }),
+    [threadsCast, deletedIds, hiddenThreadIds, titleOverrides],
   );
 
   // Clear stale local overrides/deletions when server data refreshes
@@ -164,10 +167,7 @@ export function AppSidebar({
   }, [connectionState, loadThreads]);
 
   const groups = useMemo(() => buildAgentGroups(displayThreads), [displayThreads]);
-  const groupIdsKey = useMemo(
-    () => groups.map((group) => group.agentId).join("\u0000"),
-    [groups],
-  );
+  const groupIdsKey = useMemo(() => groups.map((group) => group.agentId).join("\u0000"), [groups]);
 
   useEffect(() => {
     const agentIds = groupIdsKey.length > 0 ? groupIdsKey.split("\u0000") : [];
@@ -210,7 +210,7 @@ export function AppSidebar({
       pendingSelectRef.current = selectId;
       loadThreads();
     },
-    [loadThreads]
+    [loadThreads],
   );
 
   const handleNewSession = useCallback(
@@ -226,7 +226,7 @@ export function AppSidebar({
         setCreatingForAgent(null);
       }
     },
-    [createSession, runAfterRefresh]
+    [createSession, runAfterRefresh],
   );
 
   const startEditing = useCallback((threadId: string, currentTitle: string) => {
@@ -260,7 +260,7 @@ export function AppSidebar({
         setRenamingThreadId(null);
       }
     },
-    [editValue, renameSession, loadThreads]
+    [editValue, renameSession, loadThreads],
   );
 
   const handleDelete = useCallback(
@@ -280,7 +280,7 @@ export function AppSidebar({
         setDeletingThreadId(null);
       }
     },
-    [deleteSession, displayThreads, selectedThreadId, selectThread, loadThreads]
+    [deleteSession, displayThreads, selectedThreadId, selectThread, loadThreads],
   );
 
   const pinnedApps = useMemo(
@@ -295,339 +295,342 @@ export function AppSidebar({
 
       <Shell.SidebarContent>
         <div className="min-h-0 flex-1 overflow-y-auto pr-1">
-        <a
-          href={homeHash()}
-          className={`mx-1 mb-2 flex items-center gap-2 rounded-md px-2 py-1.5 text-xs font-medium transition-colors ${
-            homeActive
-              ? "bg-zinc-900 text-white ring-1 ring-zinc-900/10 dark:bg-zinc-100 dark:text-zinc-900 dark:ring-zinc-100/20"
-              : "text-zinc-500 hover:bg-zinc-50 hover:text-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-900/40 dark:hover:text-zinc-300"
-          }`}
-        >
-          <Home className="h-3.5 w-3.5 shrink-0" />
-          Home
-          {unreadNotificationCount > 0 ? (
-            <span className="ml-auto inline-flex min-w-5 items-center justify-center rounded-full bg-zinc-900 px-1.5 py-0.5 text-[10px] font-semibold text-white dark:bg-zinc-100 dark:text-zinc-900">
-              {unreadNotificationCount}
-            </span>
-          ) : null}
-        </a>
-
-        {pinnedApps.length > 0 && (
-          <div className="mb-3 px-1">
-            <button
-              type="button"
-              className="flex w-full min-w-0 items-center gap-1.5 px-2 py-1.5 text-left text-[11px] font-semibold leading-snug tracking-tight text-zinc-500 hover:bg-zinc-50 dark:text-zinc-400 dark:hover:bg-zinc-900/40"
-              onClick={() => setPinnedExpanded((prev) => !prev)}
-            >
-              <ChevronRight
-                className={`h-3 w-3 flex-shrink-0 text-zinc-400 transition-transform dark:text-zinc-500 ${pinnedExpanded ? "rotate-90" : ""}`}
-              />
-              <Pin className="h-3 w-3 shrink-0" />
-              <span className="truncate">Pinned</span>
-            </button>
-
-            {pinnedExpanded && (
-              <div className="ml-1.5 mt-1 border-l border-zinc-200 pl-2.5 dark:border-zinc-700">
-                <div className="space-y-0.5">
-                  {pinnedApps.map((app) => (
-                    <div
-                      key={app.id}
-                      className={`openui-shell-thread-button${activeAppId === app.id ? " openui-shell-thread-button--selected" : ""}`}
-                    >
-                      <a
-                        href={appHash(app.id)}
-                        className="openui-shell-thread-button-title"
-                        onClick={() => navigate({ view: "app", appId: app.id })}
-                      >
-                        {app.title}
-                      </a>
-                      <button
-                        type="button"
-                        className="openui-shell-thread-button-dropdown-trigger"
-                        title="Unpin app"
-                        onClick={(event) => {
-                          event.preventDefault();
-                          onTogglePinned(app.id);
-                        }}
-                      >
-                        <Pin size={14} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        <a
-          href={artifactsHash()}
-          className={`mx-1 mb-2 flex items-center gap-2 rounded-md px-2 py-1.5 text-xs font-medium transition-colors ${
-            artifactsActive
-              ? "bg-sky-50 text-sky-900 ring-1 ring-sky-200/80 dark:bg-sky-500/10 dark:text-sky-100 dark:ring-sky-500/30"
-              : "text-zinc-500 hover:bg-zinc-50 hover:text-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-900/40 dark:hover:text-zinc-300"
-          }`}
-        >
-          <ScrollText className="h-3.5 w-3.5 shrink-0" />
-          Artifacts
-        </a>
-
-        <div className="mb-3 px-1">
-          <button
-            type="button"
-            className="flex w-full min-w-0 items-center gap-1.5 px-2 py-1.5 text-left text-[11px] font-semibold leading-snug tracking-tight text-zinc-500 hover:bg-zinc-50 dark:text-zinc-400 dark:hover:bg-zinc-900/40"
-            onClick={() => setArtifactsExpanded((prev) => !prev)}
+          <a
+            href={homeHash()}
+            className={`mx-1 mb-2 flex items-center gap-2 rounded-md px-2 py-1.5 text-xs font-medium transition-colors ${
+              homeActive
+                ? "bg-zinc-900 text-white ring-1 ring-zinc-900/10 dark:bg-zinc-100 dark:text-zinc-900 dark:ring-zinc-100/20"
+                : "text-zinc-500 hover:bg-zinc-50 hover:text-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-900/40 dark:hover:text-zinc-300"
+            }`}
           >
-            <ChevronRight
-              className={`h-3 w-3 flex-shrink-0 text-zinc-400 transition-transform dark:text-zinc-500 ${artifactsExpanded ? "rotate-90" : ""}`}
-            />
-            <ScrollText className="h-3 w-3 shrink-0" />
-            <span className="truncate">Recent Artifacts</span>
-          </button>
+            <Home className="h-3.5 w-3.5 shrink-0" />
+            Home
+            {unreadNotificationCount > 0 ? (
+              <span className="ml-auto inline-flex min-w-5 items-center justify-center rounded-full bg-zinc-900 px-1.5 py-0.5 text-[10px] font-semibold text-white dark:bg-zinc-100 dark:text-zinc-900">
+                {unreadNotificationCount}
+              </span>
+            ) : null}
+          </a>
 
-          {artifactsExpanded && (
-            <div className="ml-1.5 mt-1 border-l border-zinc-200 pl-2.5 dark:border-zinc-700">
-              {artifacts.length === 0 ? (
-                <p className="py-1.5 text-[11px] text-zinc-400 dark:text-zinc-500">
-                  No artifacts yet
-                </p>
-              ) : (
-                <div className="space-y-0.5">
-                  {artifacts.slice(0, 8).map((artifact) => (
-                    <a
-                      key={artifact.id}
-                      href={artifactHash(artifact.id)}
-                      className={`openui-shell-thread-button${route?.view === "artifact" && route.artifactId === artifact.id ? " openui-shell-thread-button--selected" : ""}`}
-                      onClick={() => navigate({ view: "artifact", artifactId: artifact.id })}
-                    >
-                      <span className="openui-shell-thread-button-title">{artifact.title}</span>
-                      <span className="rounded px-1.5 py-0.5 text-[10px] text-zinc-400">
-                        {artifact.kind}
-                      </span>
-                    </a>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
+          {pinnedApps.length > 0 && (
+            <div className="mb-3 px-1">
+              <button
+                type="button"
+                className="flex w-full min-w-0 items-center gap-1.5 px-2 py-1.5 text-left text-[11px] font-semibold leading-snug tracking-tight text-zinc-500 hover:bg-zinc-50 dark:text-zinc-400 dark:hover:bg-zinc-900/40"
+                onClick={() => setPinnedExpanded((prev) => !prev)}
+              >
+                <ChevronRight
+                  className={`h-3 w-3 flex-shrink-0 text-zinc-400 transition-transform dark:text-zinc-500 ${pinnedExpanded ? "rotate-90" : ""}`}
+                />
+                <Pin className="h-3 w-3 shrink-0" />
+                <span className="truncate">Pinned</span>
+              </button>
 
-        {/* ── Apps section ── */}
-        <div className="mb-3 px-1">
-          <button
-            type="button"
-            className="flex w-full min-w-0 items-center gap-1.5 px-2 py-1.5 text-left text-[11px] font-semibold leading-snug tracking-tight text-zinc-500 hover:bg-zinc-50 dark:text-zinc-400 dark:hover:bg-zinc-900/40"
-            onClick={() => setAppsExpanded((prev) => !prev)}
-          >
-            <ChevronRight
-              className={`h-3 w-3 flex-shrink-0 text-zinc-400 transition-transform dark:text-zinc-500 ${appsExpanded ? "rotate-90" : ""}`}
-            />
-            <LayoutDashboard className="h-3 w-3 shrink-0" />
-            <span className="truncate">Apps</span>
-          </button>
-
-          {appsExpanded && (
-            <div className="ml-1.5 mt-1 border-l border-zinc-200 pl-2.5 dark:border-zinc-700">
-              {apps.length === 0 ? (
-                <p className="py-1.5 text-[11px] text-zinc-400 dark:text-zinc-500">
-                  No apps yet
-                </p>
-              ) : (
-                <div className="space-y-0.5">
-                  {apps.map((app) => {
-                    const isActive = activeAppId === app.id;
-                    const isDeleting = deletingAppId === app.id;
-                    const isPinned = pinnedAppIds.has(app.id);
-                    return (
+              {pinnedExpanded && (
+                <div className="ml-1.5 mt-1 border-l border-zinc-200 pl-2.5 dark:border-zinc-700">
+                  <div className="space-y-0.5">
+                    {pinnedApps.map((app) => (
                       <div
                         key={app.id}
-                        className={`openui-shell-thread-button${isActive ? " openui-shell-thread-button--selected" : ""}`}
+                        className={`openui-shell-thread-button${activeAppId === app.id ? " openui-shell-thread-button--selected" : ""}`}
                       >
                         <a
                           href={appHash(app.id)}
                           className="openui-shell-thread-button-title"
                           onClick={() => navigate({ view: "app", appId: app.id })}
                         >
-                          {isDeleting ? "Deleting…" : app.title}
+                          {app.title}
                         </a>
-                        {!isDeleting && (
-                          <div className="flex items-center gap-1">
-                            <button
-                              type="button"
-                              className="openui-shell-thread-button-dropdown-trigger"
-                              title={isPinned ? "Unpin app" : "Pin app"}
-                              onClick={(event) => {
-                                event.preventDefault();
-                                onTogglePinned(app.id);
-                              }}
-                            >
-                              <Pin size={14} className={isPinned ? "text-sky-500" : undefined} />
-                            </button>
-                            <button
-                              type="button"
-                              className="openui-shell-thread-button-dropdown-trigger"
-                              title="Delete app"
-                              onClick={async (e) => {
-                                e.preventDefault();
-                                setDeletingAppId(app.id);
-                                try {
-                                  await onDeleteApp(app.id);
-                                  if (isActive) navigate({ view: "home" });
-                                } finally {
-                                  setDeletingAppId(null);
-                                }
-                              }}
-                            >
-                              <Trash2 size={14} />
-                            </button>
-                          </div>
-                        )}
+                        <button
+                          type="button"
+                          className="openui-shell-thread-button-dropdown-trigger"
+                          title="Unpin app"
+                          onClick={(event) => {
+                            event.preventDefault();
+                            onTogglePinned(app.id);
+                          }}
+                        >
+                          <Pin size={14} />
+                        </button>
                       </div>
-                    );
-                  })}
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
           )}
-        </div>
 
-        {isLoadingThreads && displayThreads.length === 0 && (
-          <p className="px-3 py-2 text-xs text-zinc-400">Loading agents…</p>
-        )}
-        {groups.map((g) => {
-          const expanded = expandedByAgent[g.agentId] !== false;
-          return (
-            <div key={g.agentId} className="mb-3 px-1">
-              <button
-                type="button"
-                className="flex w-full min-w-0 items-center gap-1.5 px-2 py-1.5 text-left text-[11px] font-semibold leading-snug tracking-tight text-zinc-500 hover:bg-zinc-50 dark:text-zinc-400 dark:hover:bg-zinc-900/40"
-                onClick={() =>
-                  setExpandedByAgent((prev) => {
-                    const isOpen = prev[g.agentId] !== false;
-                    return { ...prev, [g.agentId]: !isOpen };
-                  })
-                }
-              >
-                <ChevronRight
-                  className={`h-3 w-3 flex-shrink-0 text-zinc-400 transition-transform dark:text-zinc-500 ${expanded ? "rotate-90" : ""}`}
-                />
-                <span className="truncate">{g.headerTitle}</span>
-              </button>
+          <a
+            href={artifactsHash()}
+            className={`mx-1 mb-2 flex items-center gap-2 rounded-md px-2 py-1.5 text-xs font-medium transition-colors ${
+              artifactsActive
+                ? "bg-sky-50 text-sky-900 ring-1 ring-sky-200/80 dark:bg-sky-500/10 dark:text-sky-100 dark:ring-sky-500/30"
+                : "text-zinc-500 hover:bg-zinc-50 hover:text-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-900/40 dark:hover:text-zinc-300"
+            }`}
+          >
+            <ScrollText className="h-3.5 w-3.5 shrink-0" />
+            Artifacts
+          </a>
 
-              {expanded && (
-                <div className="ml-1.5 mt-1 space-y-0.5 border-l border-zinc-200 pl-2.5 dark:border-zinc-700">
-                  {g.threads.map((t) => {
-                    const isEditing = editingThreadId === t.id;
-                    const isRenaming = renamingThreadId === t.id;
-                    const isDeleting = deletingThreadId === t.id;
-                    const isExtra = t.clawKind !== "main";
-                    const isBusy = isRenaming || isDeleting;
-                    const label = isDeleting
-                      ? "Deleting…"
-                      : isRenaming
-                      ? "Renaming…"
-                      : isExtra
-                      ? t.title
-                      : "Main";
+          <div className="mb-3 px-1">
+            <button
+              type="button"
+              className="flex w-full min-w-0 items-center gap-1.5 px-2 py-1.5 text-left text-[11px] font-semibold leading-snug tracking-tight text-zinc-500 hover:bg-zinc-50 dark:text-zinc-400 dark:hover:bg-zinc-900/40"
+              onClick={() => setArtifactsExpanded((prev) => !prev)}
+            >
+              <ChevronRight
+                className={`h-3 w-3 flex-shrink-0 text-zinc-400 transition-transform dark:text-zinc-500 ${artifactsExpanded ? "rotate-90" : ""}`}
+              />
+              <ScrollText className="h-3 w-3 shrink-0" />
+              <span className="truncate">Recent Artifacts</span>
+            </button>
 
-                    return (
-                      <div
-                        key={t.id}
-                        className={`openui-shell-thread-button${activeChatId === t.id ? " openui-shell-thread-button--selected" : ""}`}
+            {artifactsExpanded && (
+              <div className="ml-1.5 mt-1 border-l border-zinc-200 pl-2.5 dark:border-zinc-700">
+                {artifacts.length === 0 ? (
+                  <p className="py-1.5 text-[11px] text-zinc-400 dark:text-zinc-500">
+                    No artifacts yet
+                  </p>
+                ) : (
+                  <div className="space-y-0.5">
+                    {artifacts.slice(0, 8).map((artifact) => (
+                      <a
+                        key={artifact.id}
+                        href={artifactHash(artifact.id)}
+                        className={`openui-shell-thread-button${route?.view === "artifact" && route.artifactId === artifact.id ? " openui-shell-thread-button--selected" : ""}`}
+                        onClick={() => navigate({ view: "artifact", artifactId: artifact.id })}
                       >
-                        {isEditing ? (
-                          <input
-                            ref={editInputRef}
-                            className="openui-shell-thread-button-title w-full bg-transparent outline-none"
-                            value={editValue}
-                            onChange={(e) => setEditValue(e.target.value)}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") {
-                                e.preventDefault();
-                                commitRename(t.id);
-                              } else if (e.key === "Escape") {
-                                cancelEditing();
-                              }
-                            }}
-                            onBlur={() => commitRename(t.id)}
-                            maxLength={64}
-                          />
-                        ) : (
-                          <>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                selectThread(t.id);
-                                navigate({ view: "chat", sessionId: t.id });
+                        <span className="openui-shell-thread-button-title">{artifact.title}</span>
+                        <span className="rounded px-1.5 py-0.5 text-[10px] text-zinc-400">
+                          {artifact.kind}
+                        </span>
+                      </a>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* ── Apps section ── */}
+          <div className="mb-3 px-1">
+            <button
+              type="button"
+              className="flex w-full min-w-0 items-center gap-1.5 px-2 py-1.5 text-left text-[11px] font-semibold leading-snug tracking-tight text-zinc-500 hover:bg-zinc-50 dark:text-zinc-400 dark:hover:bg-zinc-900/40"
+              onClick={() => setAppsExpanded((prev) => !prev)}
+            >
+              <ChevronRight
+                className={`h-3 w-3 flex-shrink-0 text-zinc-400 transition-transform dark:text-zinc-500 ${appsExpanded ? "rotate-90" : ""}`}
+              />
+              <LayoutDashboard className="h-3 w-3 shrink-0" />
+              <span className="truncate">Apps</span>
+            </button>
+
+            {appsExpanded && (
+              <div className="ml-1.5 mt-1 border-l border-zinc-200 pl-2.5 dark:border-zinc-700">
+                {apps.length === 0 ? (
+                  <p className="py-1.5 text-[11px] text-zinc-400 dark:text-zinc-500">No apps yet</p>
+                ) : (
+                  <div className="space-y-0.5">
+                    {apps.map((app) => {
+                      const isActive = activeAppId === app.id;
+                      const isDeleting = deletingAppId === app.id;
+                      const isPinned = pinnedAppIds.has(app.id);
+                      return (
+                        <div
+                          key={app.id}
+                          className={`openui-shell-thread-button${isActive ? " openui-shell-thread-button--selected" : ""}`}
+                        >
+                          <a
+                            href={appHash(app.id)}
+                            className="openui-shell-thread-button-title"
+                            onClick={() => navigate({ view: "app", appId: app.id })}
+                          >
+                            {isDeleting ? "Deleting…" : app.title}
+                          </a>
+                          {!isDeleting && (
+                            <div className="flex items-center gap-1">
+                              <button
+                                type="button"
+                                className="openui-shell-thread-button-dropdown-trigger"
+                                title={isPinned ? "Unpin app" : "Pin app"}
+                                onClick={(event) => {
+                                  event.preventDefault();
+                                  onTogglePinned(app.id);
+                                }}
+                              >
+                                <Pin size={14} className={isPinned ? "text-sky-500" : undefined} />
+                              </button>
+                              <button
+                                type="button"
+                                className="openui-shell-thread-button-dropdown-trigger"
+                                title="Delete app"
+                                onClick={async (e) => {
+                                  e.preventDefault();
+                                  setDeletingAppId(app.id);
+                                  try {
+                                    await onDeleteApp(app.id);
+                                    if (isActive) navigate({ view: "home" });
+                                  } finally {
+                                    setDeletingAppId(null);
+                                  }
+                                }}
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {isLoadingThreads && displayThreads.length === 0 && (
+            <p className="px-3 py-2 text-xs text-zinc-400">Loading agents…</p>
+          )}
+          {groups.map((g) => {
+            const expanded = expandedByAgent[g.agentId] !== false;
+            return (
+              <div key={g.agentId} className="mb-3 px-1">
+                <button
+                  type="button"
+                  className="flex w-full min-w-0 items-center gap-1.5 px-2 py-1.5 text-left text-[11px] font-semibold leading-snug tracking-tight text-zinc-500 hover:bg-zinc-50 dark:text-zinc-400 dark:hover:bg-zinc-900/40"
+                  onClick={() =>
+                    setExpandedByAgent((prev) => {
+                      const isOpen = prev[g.agentId] !== false;
+                      return { ...prev, [g.agentId]: !isOpen };
+                    })
+                  }
+                >
+                  <ChevronRight
+                    className={`h-3 w-3 flex-shrink-0 text-zinc-400 transition-transform dark:text-zinc-500 ${expanded ? "rotate-90" : ""}`}
+                  />
+                  <span className="truncate">{g.headerTitle}</span>
+                </button>
+
+                {expanded && (
+                  <div className="ml-1.5 mt-1 space-y-0.5 border-l border-zinc-200 pl-2.5 dark:border-zinc-700">
+                    {g.threads.map((t) => {
+                      const isEditing = editingThreadId === t.id;
+                      const isRenaming = renamingThreadId === t.id;
+                      const isDeleting = deletingThreadId === t.id;
+                      const isExtra = t.clawKind !== "main";
+                      const isBusy = isRenaming || isDeleting;
+                      const label = isDeleting
+                        ? "Deleting…"
+                        : isRenaming
+                          ? "Renaming…"
+                          : isExtra
+                            ? t.title
+                            : "Main";
+
+                      return (
+                        <div
+                          key={t.id}
+                          className={`openui-shell-thread-button${activeChatId === t.id ? " openui-shell-thread-button--selected" : ""}`}
+                        >
+                          {isEditing ? (
+                            <input
+                              ref={editInputRef}
+                              className="openui-shell-thread-button-title w-full bg-transparent outline-none"
+                              value={editValue}
+                              onChange={(e) => setEditValue(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  e.preventDefault();
+                                  commitRename(t.id);
+                                } else if (e.key === "Escape") {
+                                  cancelEditing();
+                                }
                               }}
-                              onDoubleClick={
-                                isExtra && !isBusy
-                                  ? (e) => {
-                                      e.preventDefault();
-                                      startEditing(t.id, t.title);
-                                    }
-                                  : undefined
-                              }
-                              className="openui-shell-thread-button-title"
-                            >
-                              {label}
-                            </button>
+                              onBlur={() => commitRename(t.id)}
+                              maxLength={64}
+                            />
+                          ) : (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  selectThread(t.id);
+                                  navigate({ view: "chat", sessionId: t.id });
+                                }}
+                                onDoubleClick={
+                                  isExtra && !isBusy
+                                    ? (e) => {
+                                        e.preventDefault();
+                                        startEditing(t.id, t.title);
+                                      }
+                                    : undefined
+                                }
+                                className="openui-shell-thread-button-title"
+                              >
+                                {label}
+                              </button>
 
-                            {isExtra && !isBusy && (
-                              <DropdownMenu.Root>
-                                <DropdownMenu.Trigger asChild>
-                                  <button className="openui-shell-thread-button-dropdown-trigger">
-                                    <EllipsisVertical size={14} />
-                                  </button>
-                                </DropdownMenu.Trigger>
-                                <DropdownMenu.Portal>
-                                  <DropdownMenu.Content
-                                    className="openui-shell-thread-button-dropdown-menu"
-                                    side="bottom"
-                                    align="start"
-                                    sideOffset={2}
-                                  >
-                                    <DropdownMenu.Item
-                                      className="openui-shell-thread-button-dropdown-menu-item"
-                                      onSelect={() => startEditing(t.id, t.title)}
+                              {isExtra && !isBusy && (
+                                <DropdownMenu.Root>
+                                  <DropdownMenu.Trigger asChild>
+                                    <button className="openui-shell-thread-button-dropdown-trigger">
+                                      <EllipsisVertical size={14} />
+                                    </button>
+                                  </DropdownMenu.Trigger>
+                                  <DropdownMenu.Portal>
+                                    <DropdownMenu.Content
+                                      className="openui-shell-thread-button-dropdown-menu"
+                                      side="bottom"
+                                      align="start"
+                                      sideOffset={2}
                                     >
-                                      <Pencil size={14} className="openui-shell-thread-button-dropdown-menu-item-icon" />
-                                      Rename
-                                    </DropdownMenu.Item>
-                                    <DropdownMenu.Item
-                                      className="openui-shell-thread-button-dropdown-menu-item"
-                                      onSelect={() => handleDelete(t.id)}
-                                    >
-                                      <Trash2 size={14} className="openui-shell-thread-button-dropdown-menu-item-icon" />
-                                      Delete
-                                    </DropdownMenu.Item>
-                                  </DropdownMenu.Content>
-                                </DropdownMenu.Portal>
-                              </DropdownMenu.Root>
-                            )}
-                          </>
-                        )}
-                      </div>
-                    );
-                  })}
+                                      <DropdownMenu.Item
+                                        className="openui-shell-thread-button-dropdown-menu-item"
+                                        onSelect={() => startEditing(t.id, t.title)}
+                                      >
+                                        <Pencil
+                                          size={14}
+                                          className="openui-shell-thread-button-dropdown-menu-item-icon"
+                                        />
+                                        Rename
+                                      </DropdownMenu.Item>
+                                      <DropdownMenu.Item
+                                        className="openui-shell-thread-button-dropdown-menu-item"
+                                        onSelect={() => handleDelete(t.id)}
+                                      >
+                                        <Trash2
+                                          size={14}
+                                          className="openui-shell-thread-button-dropdown-menu-item-icon"
+                                        />
+                                        Delete
+                                      </DropdownMenu.Item>
+                                    </DropdownMenu.Content>
+                                  </DropdownMenu.Portal>
+                                </DropdownMenu.Root>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      );
+                    })}
 
-
-                  <Button
-                    type="button"
-                    variant="tertiary"
-                    size="extra-small"
-                    disabled={creatingForAgent === g.agentId}
-                    iconLeft={<Plus className="h-3.5 w-3.5 shrink-0 opacity-80" aria-hidden />}
-                    className="mt-1 w-full justify-start gap-1.5 px-1 font-normal"
-                    onClick={() => handleNewSession(g.agentId)}
-                  >
-                    {creatingForAgent === g.agentId ? "Creating…" : "New session"}
-                  </Button>
-                </div>
-              )}
-            </div>
-          );
-        })}
+                    <Button
+                      type="button"
+                      variant="tertiary"
+                      size="extra-small"
+                      disabled={creatingForAgent === g.agentId}
+                      iconLeft={<Plus className="h-3.5 w-3.5 shrink-0 opacity-80" aria-hidden />}
+                      className="mt-1 w-full justify-start gap-1.5 px-1 font-normal"
+                      onClick={() => handleNewSession(g.agentId)}
+                    >
+                      {creatingForAgent === g.agentId ? "Creating…" : "New session"}
+                    </Button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       </Shell.SidebarContent>
 
