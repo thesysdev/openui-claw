@@ -24,7 +24,18 @@ export function handleOpenUrlAction(event: ActionEvent): boolean {
   if (event.type !== BuiltinActionType.OpenUrl) return false;
   const url = event.params?.["url"] as string | undefined;
   if (typeof window !== "undefined" && url) {
-    window.open(url, "_blank", "noopener,noreferrer");
+    const win = window.open(url, "_blank", "noopener,noreferrer");
+    if (!win) {
+      // Popup blocker rejected — fall back to anchor click so the browser
+      // treats it as a first-party navigation from the same user gesture.
+      const a = document.createElement("a");
+      a.href = url;
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    }
   }
   return true;
 }
