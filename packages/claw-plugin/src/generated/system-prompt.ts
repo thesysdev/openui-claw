@@ -23,6 +23,19 @@ Durable object timing:
 - Do not wait for your final narrative paragraph before saving.
 - After the save succeeds, you can keep responding in the same turn with explanation, inline UI, or next steps.
 
+Multi-line statements:
+- Each statement STARTS on its own line, but expressions may wrap across multiple lines inside brackets \`()\`, \`[]\`, \`{}\`, and ternaries \`? :\`. Newlines inside brackets are ignored by the parser.
+- Use this for readability instead of one 500-char line. Example:
+  \`\`\`
+  emailCard = Card([
+    Stack([
+      TextContent(email.from, "small-heavy"),
+      TextContent(email.subject)
+    ], "column", "xs"),
+    emailActions
+  ], email.priority == "high" ? "card" : "sunk")
+  \`\`\`
+
 Critical durable-app reminders:
 - Live app data uses \`Query("tool_name", args, defaults, refreshSeconds?)\`; the 4th arg is the auto-refresh interval in seconds.
 - Manual refresh buttons must use \`Action([@Run(queryRef1), @Run(queryRef2)])\`. Do NOT invent custom actions like \`{type: "refresh"}\`.

@@ -9,8 +9,10 @@ import type { ActionEvent } from "@openuidev/react-lang";
 import { Renderer } from "@openuidev/react-lang";
 import { Callout } from "@openuidev/react-ui";
 import { openuiLibrary } from "@openuidev/react-ui/genui-lib";
-import { Code2, Eye, Pin, Sparkles, Trash2 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Bug, Code2, Eye, Pin, Sparkles, Trash2 } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { AppDebugPanel } from "./AppDebugPanel";
+import { useToolInvocationLog } from "./useToolInvocationLog";
 
 /**
  * Called when a `ContinueConversation` action fires inside a standalone app
@@ -77,6 +79,12 @@ export function AppDetail({
   const [deleting, setDeleting] = useState(false);
   const [viewMode, setViewMode] = useState<"preview" | "code">("preview");
   const [renderErrors, setRenderErrors] = useState<string[]>([]);
+  const [debugOpen, setDebugOpen] = useState(false);
+
+  // Captures the latest reactive state from the Renderer so @ToAssistant
+  // actions can prefix the user's message with what the app was showing.
+  const stateRef = useRef<Record<string, unknown>>({});
+  const toolLog = useToolInvocationLog();
 
   useEffect(() => {
     setLoading(true);
@@ -103,7 +111,20 @@ export function AppDetail({
     (event: ActionEvent) => {
       if (handleOpenUrlAction(event)) return;
 
-      const payload = buildContinueConversationPayload(event);
+      // Prefix the message with appId + live reactive state so the assistant
+      // can (a) call get_app(id) for the static code, (b) see what the user
+      // was looking at without re-asking. Query result status is deliberately
+      // NOT included — the agent can just query the DB itself.
+      const appContext =
+        record != null
+          ? {
+              appId: record.id,
+              appTitle: record.title,
+              currentState: { ...stateRef.current },
+            }
+          : undefined;
+
+      const payload = buildContinueConversationPayload(event, undefined, appContext);
       if (payload && onContinueConversation && record) {
         onContinueConversation({ message: payload, appRecord: record });
       }
@@ -120,8 +141,26 @@ export function AppDetail({
       toolName: string,
       args: Record<string, unknown>,
     ): Promise<unknown> => {
-      const result = await apps.invokeTool(toolName, args, record?.sessionKey);
-      return normalizeToolResult(result);
+      const startedAt = Date.now();
+      const entryId = toolLog.record({ toolName, args, startedAt });
+      try {
+        const result = await apps.invokeTool(toolName, args, record?.sessionKey);
+        const normalized = normalizeToolResult(result);
+        toolLog.updateStatus(entryId, {
+          result: normalized,
+          status: "ok",
+          finishedAt: Date.now(),
+        });
+        return normalized;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        toolLog.updateStatus(entryId, {
+          error: message,
+          status: "error",
+          finishedAt: Date.now(),
+        });
+        throw err;
+      }
     };
 
     return {
@@ -130,7 +169,7 @@ export function AppDetail({
       db_query: async (args: Record<string, unknown>) => invokeScopedTool("db_query", args),
       db_execute: async (args: Record<string, unknown>) => invokeScopedTool("db_execute", args),
     };
-  }, [apps, record?.sessionKey]);
+  }, [apps, record?.sessionKey, toolLog]);
 
   if (loading) {
     return (
@@ -207,6 +246,19 @@ export function AppDetail({
         </div>
 
         <div className="flex shrink-0 items-center gap-2">
+          <button
+            type="button"
+            className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium ${
+              debugOpen
+                ? "bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-300"
+                : "text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
+            }`}
+            onClick={() => setDebugOpen((v) => !v)}
+            title="Toggle debug panel"
+          >
+            <Bug className="h-3.5 w-3.5" />
+            Debug
+          </button>
           {onTogglePinned && (
             <button
               type="button"
@@ -271,22 +323,50 @@ export function AppDetail({
           </div>
         )}
 
+        {debugOpen && (
+          <div className="mb-4">
+            <AppDebugPanel
+              log={toolLog.log}
+              onClear={toolLog.clear}
+              onClose={() => setDebugOpen(false)}
+            />
+          </div>
+        )}
+
         {viewMode === "preview" ? (
           <Renderer
             library={openuiLibrary}
             response={record.content}
             toolProvider={toolProvider}
             onAction={handleAction}
+            onStateUpdate={(state) => {
+              stateRef.current = state;
+            }}
             onError={(errors) => {
-              setRenderErrors(
-                errors.map((error) =>
-                  typeof error === "string"
-                    ? error
-                    : error instanceof Error
-                      ? error.message
-                      : JSON.stringify(error),
-                ),
+              const messages = errors.map((error) =>
+                typeof error === "string"
+                  ? error
+                  : error instanceof Error
+                    ? error.message
+                    : JSON.stringify(error),
               );
+              setRenderErrors(messages);
+              // Surface render errors in the debug log too — the toolProvider
+              // instrumentation only catches Query/Mutation failures, not AST
+              // or prop validation errors raised by the Renderer itself.
+              if (messages.length > 0) {
+                const now = Date.now();
+                const id = toolLog.record({
+                  toolName: "renderer-error",
+                  args: { count: messages.length },
+                  startedAt: now,
+                });
+                toolLog.updateStatus(id, {
+                  error: messages.join("\n\n"),
+                  status: "error",
+                  finishedAt: now,
+                });
+              }
             }}
           />
         ) : (
