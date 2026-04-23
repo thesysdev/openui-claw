@@ -2,14 +2,281 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ────────────────────────────────────────────────────────────────────────── */
+/* Design tokens — bloom palette (light + dark)                               */
+/* ────────────────────────────────────────────────────────────────────────── */
+
+:root {
+  /* ── Colors (bloom light) ── */
+  --color-background: #FFFFFF;
+  --color-foreground: #F3F3F3;
+  --color-popover-background: #FFFFFF;
+  --color-sunk-light: #F0F0F0;
+  --color-sunk: #E5E5E5;
+  --color-sunk-deep: #D4D4D4;
+  --color-elevated-light: #FFFFFF;
+  --color-elevated: #FFFFFF;
+  --color-elevated-strong: #FFFFFF;
+  --color-elevated-intense: #FFFFFF;
+  --color-overlay: rgba(0, 0, 0, 0.45);
+  --color-highlight-subtle: #F5F0FF;
+  --color-highlight: #EDE5FF;
+  --color-highlight-strong: #D8CCFA;
+  --color-highlight-intense: #B89DF5;
+  --color-inverted-background: #1A1A1A;
+  --color-info-background: #E7F5FF;
+  --color-success-background: #EBFBEE;
+  --color-alert-background: #FFF9DB;
+  --color-danger-background: #FFF5F5;
+  --color-purple-background: #F3F0FF;
+  --color-pink-background: #FFF0F6;
+  --color-text-neutral-primary: 26 26 26;
+  --color-text-neutral-secondary: 82 82 82;
+  --color-text-neutral-tertiary: 128 128 128;
+  --color-text-neutral-link: #7C3AED;
+  --color-text-brand: #7C3AED;
+  --color-text-white: #FFFFFF;
+  --color-text-black: #000000;
+  --color-text-accent-primary: 109 40 217;
+  --color-text-accent-secondary: 124 58 237;
+  --color-text-accent-tertiary: 167 139 250;
+  --color-text-success-primary: #2B8A3E;
+  --color-text-success-inverted: #FFFFFF;
+  --color-text-alert-primary: #E67700;
+  --color-text-alert-inverted: #FFFFFF;
+  --color-text-danger-primary: #E03131;
+  --color-text-danger-secondary: #F03E3E;
+  --color-text-danger-tertiary: #FF6B6B;
+  --color-text-danger-inverted-primary: #FFFFFF;
+  --color-text-danger-inverted-secondary: #FFE3E3;
+  --color-text-danger-inverted-tertiary: #FFC9C9;
+  --color-text-info-primary: #1971C2;
+  --color-text-info-inverted: #FFFFFF;
+  --color-text-pink-primary: #C2255C;
+  --color-text-pink-inverted: #FFFFFF;
+  --color-text-purple-primary: #7048E8;
+  --color-text-purple-inverted: #FFFFFF;
+  --color-interactive-accent-default: #7C3AED;
+  --color-interactive-accent-hover: #6D28D9;
+  --color-interactive-accent-disabled: #DDD6FE;
+  --color-interactive-accent-pressed: #5B21B6;
+  --color-interactive-destructive-default: #E03131;
+  --color-interactive-destructive-hover: #C92A2A;
+  --color-interactive-destructive-disabled: #FFC9C9;
+  --color-interactive-destructive-pressed: #B02525;
+  --color-interactive-destructive-accent-default: #FFF5F5;
+  --color-interactive-destructive-accent-hover: #FFE3E3;
+  --color-interactive-destructive-accent-pressed: #FFC9C9;
+  --color-interactive-destructive-accent-disabled: #FFF5F5;
+  --color-border-default: 212 212 212;
+  --color-border-interactive: #A0A0A0;
+  --color-border-interactive-emphasis: #808080;
+  --color-border-interactive-selected: #7C3AED;
+  --color-border-accent: #DDD6FE;
+  --color-border-accent-emphasis: #A78BFA;
+  --color-border-accent-selected: #7C3AED;
+  --color-border-info: #A5D8FF;
+  --color-border-info-emphasis: #339AF0;
+  --color-border-alert: #FFE066;
+  --color-border-alert-emphasis: #FCC419;
+  --color-border-success: #8CE99A;
+  --color-border-success-emphasis: #51CF66;
+  --color-border-danger: #FFC9C9;
+  --color-border-danger-emphasis: #FF6B6B;
+  --color-chat-user-response-bg: #7C3AED;
+  --color-chat-user-response-text: #FFFFFF;
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06);
+  --shadow-md: 0 1px 3px rgba(0, 0, 0, 0.08);
+  --shadow-lg: 0 1px 3px rgba(0, 0, 0, 0.1);
+  --shadow-xl: 0 1px 4px rgba(0, 0, 0, 0.06);
+  --shadow-card: 0 4px 16px rgba(0, 0, 0, 0.12);
+  --shadow-float: 0 4px 16px rgba(0, 0, 0, 0.15);
+  --shadow-panel: 4px 0 24px rgba(0, 0, 0, 0.15);
+
+  /* ── Layout (spacing + radius) ── */
+  --space-000: 0px;
+  --space-3xs: 2px;
+  --space-2xs: 4px;
+  --space-xs: 6px;
+  --space-s: 8px;
+  --space-sm: 10px;
+  --space-m: 12px;
+  --space-ml: 16px;
+  --space-l: 20px;
+  --space-xl: 24px;
+  --space-2xl: 32px;
+  --space-3xl: 48px;
+  --radius-none: 0px;
+  --radius-3xs: 1px;
+  --radius-2xs: 2px;
+  --radius-xs: 3px;
+  --radius-s: 4px;
+  --radius-m: 6px;
+  --radius-l: 8px;
+  --radius-xl: 10px;
+  --radius-2xl: 12px;
+  --radius-3xl: 14px;
+  --radius-4xl: 16px;
+  --radius-5xl: 18px;
+  --radius-6xl: 20px;
+  --radius-7xl: 22px;
+  --radius-8xl: 24px;
+  --radius-9xl: 28px;
+  --radius-full: 9999px;
+
+  /* ── Typography ── */
+  --font-body: 'Inter', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --font-code: 'JetBrains Mono', 'Fira Code', 'SF Mono', 'Cascadia Code', monospace;
+  --font-heading: 'Inter', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --font-label: 'Inter', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --font-numbers: 'JetBrains Mono', 'Fira Code', 'SF Mono', 'Cascadia Code', monospace;
+  /* Typography: three canonical body sizes app-wide. */
+  --font-size-sm: 12px;
+  --font-size-md: 14px;
+  --font-size-lg: 20px;
+  /* Exception: only the sidebar Logo uses this. */
+  --font-size-logo: 22px;
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-bold: 600;
+  --font-weight-heavy: 700;
+  --line-height-body: 1.5;
+  --line-height-heading: 1.25;
+  --line-height-heading-large: 1.15;
+  --line-height-label: 1.35;
+  --line-height-code: 1.6;
+
+  /* ── Bloom category colors (for icon tiles) ──
+   * Space-separated RGB channels so Tailwind can compose opacity with
+   * the `/<alpha>` modifier, e.g. bg-cat-app/10 → rgb(22 163 74 / 0.1).
+   */
+  --bloom-cat-agent: 37 99 235;
+  --bloom-cat-app: 22 163 74;
+  --bloom-cat-artifact: 219 39 119;
+  --bloom-cat-activity: 13 148 136;
+  --bloom-cat-task: 37 99 235;
+  --bloom-cat-context: 124 58 237;
+
+  /* ── Status indicators (dots, badges) ── */
+  --color-status-online: #10B981;
+  --color-status-warning: #F59E0B;
+  --color-status-error: #EF4444;
+  --color-status-muted: #A1A1AA;
+}
+
+.dark {
+  /* ── Colors (bloom dark) ── */
+  --color-background: #141414;
+  --color-foreground: #1A1A1A;
+  --color-popover-background: #262626;
+  --color-sunk-light: #1A1A1A;
+  --color-sunk: #141414;
+  --color-sunk-deep: #0F0F0F;
+  --color-elevated-light: #262626;
+  --color-elevated: #2E2E2E;
+  --color-elevated-strong: #3D3D3D;
+  --color-elevated-intense: #525252;
+  --color-overlay: rgba(0, 0, 0, 0.65);
+  --color-highlight-subtle: #222222;
+  --color-highlight: #2A2A2A;
+  --color-highlight-strong: #333333;
+  --color-highlight-intense: #3D3D3D;
+  --color-inverted-background: #FFFFFF;
+  --color-info-background: #1A2A1A;
+  --color-success-background: #152A15;
+  --color-alert-background: #2A2510;
+  --color-danger-background: #2C1515;
+  --color-purple-background: #1F1535;
+  --color-pink-background: #2C1525;
+  --color-text-neutral-primary: 229 229 229;
+  --color-text-neutral-secondary: 160 160 160;
+  --color-text-neutral-tertiary: 128 128 128;
+  --color-text-neutral-link: #C4B5FA;
+  --color-text-brand: #C4B5FA;
+  --color-text-white: #FFFFFF;
+  --color-text-black: #000000;
+  --color-text-accent-primary: 196 181 250;
+  --color-text-accent-secondary: 184 157 245;
+  --color-text-accent-tertiary: 167 139 250;
+  --color-text-success-primary: #69DB7C;
+  --color-text-success-inverted: #141414;
+  --color-text-alert-primary: #FFD43B;
+  --color-text-alert-inverted: #141414;
+  --color-text-danger-primary: #D63031;
+  --color-text-danger-secondary: #E03131;
+  --color-text-danger-tertiary: #FF6B6B;
+  --color-text-danger-inverted-primary: #141414;
+  --color-text-danger-inverted-secondary: #2C1515;
+  --color-text-danger-inverted-tertiary: #3D1C1C;
+  --color-text-info-primary: #74C0FC;
+  --color-text-info-inverted: #141414;
+  --color-text-pink-primary: #F783AC;
+  --color-text-pink-inverted: #141414;
+  --color-text-purple-primary: #B197FC;
+  --color-text-purple-inverted: #141414;
+  --color-interactive-accent-default: #A78BFA;
+  --color-interactive-accent-hover: #C4B5FA;
+  --color-interactive-accent-disabled: #2A2A2A;
+  --color-interactive-accent-pressed: #8B5CF6;
+  --color-interactive-destructive-default: #D63031;
+  --color-interactive-destructive-hover: #FF8787;
+  --color-interactive-destructive-disabled: #3D1C1C;
+  --color-interactive-destructive-pressed: #FA5252;
+  --color-interactive-destructive-accent-default: #2C1515;
+  --color-interactive-destructive-accent-hover: #3D1C1C;
+  --color-interactive-destructive-accent-pressed: #4D2323;
+  --color-interactive-destructive-accent-disabled: #1E1010;
+  --color-border-default: 44 44 44;
+  --color-border-interactive: #525252;
+  --color-border-interactive-emphasis: #666666;
+  --color-border-interactive-selected: #C4B5FA;
+  --color-border-accent: #333333;
+  --color-border-accent-emphasis: #444444;
+  --color-border-accent-selected: #C4B5FA;
+  --color-border-info: #1C3D5C;
+  --color-border-info-emphasis: #1E6CB0;
+  --color-border-alert: #4D3E0A;
+  --color-border-alert-emphasis: #8A6D0B;
+  --color-border-success: #1D4425;
+  --color-border-success-emphasis: #2B6E36;
+  --color-border-danger: #4D2323;
+  --color-border-danger-emphasis: #8A2C2C;
+  --color-chat-user-response-bg: #8B5CF6;
+  --color-chat-user-response-text: #FFFFFF;
+  --shadow-xs: none;
+  --shadow-sm: none;
+  --shadow-md: none;
+  --shadow-lg: none;
+  --shadow-xl: none;
+  --shadow-card: 0 4px 16px rgba(0, 0, 0, 0.35);
+  --shadow-float: 0 4px 16px rgba(0, 0, 0, 0.4);
+  --shadow-panel: 4px 0 24px rgba(0, 0, 0, 0.3);
+
+  /* ── Bloom category colors (dark) — RGB channels for alpha composition ── */
+  --bloom-cat-agent: 96 165 250;
+  --bloom-cat-app: 74 222 128;
+  --bloom-cat-artifact: 244 114 182;
+  --bloom-cat-activity: 94 234 212;
+  --bloom-cat-task: 96 165 250;
+  --bloom-cat-context: 167 139 250;
+
+  /* ── Status indicators (dark) ── */
+  --color-status-online: #34D399;
+  --color-status-warning: #FBBF24;
+  --color-status-error: #F87171;
+  --color-status-muted: #52525B;
+}
+
+/* ────────────────────────────────────────────────────────────────────────── */
+/* Global layout                                                              */
+/* ────────────────────────────────────────────────────────────────────────── */
+
 html,
 body {
   height: 100%;
   overflow: hidden;
-  background:
-    radial-gradient(circle at top left, rgba(148, 163, 184, 0.12), transparent 24%),
-    radial-gradient(circle at top right, rgba(56, 189, 248, 0.1), transparent 20%),
-    linear-gradient(to bottom, #fafafa, #f8fafc);
+  background: var(--color-background);
 }
 
 /* ── Composer toolbar (session controls) ──────────────────────────────────── */
@@ -18,7 +285,7 @@ body {
   max-width: 880px;
   width: 100%;
   margin: 0 auto;
-  padding: 0 calc(32px + var(--openui-space-s, 8px));
+  padding: 0 calc(32px + var(--space-s));
 }
 
 .openui-shell-container--mobile .composer-toolbar {
@@ -27,65 +294,62 @@ body {
 
 .openui-shell-thread-container--artifact-active .composer-toolbar {
   padding-left: 0;
-  padding-right: var(--openui-space-m, 16px);
+  padding-right: var(--space-m);
 }
 
 .composer-toolbar__inner {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
-  background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.92));
-  border: 1px solid rgba(228, 228, 231, 0.9);
-  border-bottom: none;
-  border-radius: var(--openui-radius-2xl, 24px) var(--openui-radius-2xl, 24px) 0 0;
-  padding: 6px 12px;
-  box-shadow: 0 18px 40px -32px rgba(15, 23, 42, 0.35);
+  gap: var(--space-s);
+  background: transparent;
+  border: none;
+  padding: var(--space-xs) var(--space-m);
+  box-shadow: none;
 }
 
 /* Remove top border-radius from composer card when toolbar is present */
 .composer-toolbar + .openui-shell-thread-composer .openui-shell-thread-composer__input-wrapper {
   border-top-left-radius: 0;
   border-top-right-radius: 0;
-  border-top-color: var(--openui-border-default, #f0f0f0);
+  border-top-color: var(--color-border-default);
 }
 
 .composer-toolbar__controls {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-xs);
 }
 
 .composer-toolbar__select-group {
   display: flex;
   align-items: center;
-  gap: 3px;
+  gap: var(--space-3xs);
 }
 
 .composer-toolbar__icon {
   width: 13px;
   height: 13px;
-  color: var(--openui-text-neutral-secondary, #a1a1aa);
+  color: var(--color-text-neutral-secondary);
   flex-shrink: 0;
 }
 
 .composer-toolbar__select {
   height: 22px;
   border: none;
-  border-radius: 4px;
+  border-radius: var(--radius-s);
   background: transparent;
-  padding: 0 4px;
-  font: var(--openui-text-label-sm, 11px/1.2 system-ui);
-  letter-spacing: var(--openui-text-label-sm-letter-spacing, normal);
-  color: var(--openui-text-neutral-secondary, #71717a);
+  padding: 0 var(--space-2xs);
+  font-size: var(--font-size-xs);
+  font-family: var(--font-label);
+  color: var(--color-text-neutral-secondary);
   outline: none;
   cursor: pointer;
   appearance: auto;
 }
 
 .composer-toolbar__select:hover {
-  background-color: var(--openui-elevated, #f4f4f5);
+  background-color: var(--color-sunk-light);
 }
 
 .composer-toolbar__select--model {
@@ -103,41 +367,87 @@ body {
 }
 
 .composer-toolbar__context-label {
-  font: var(--openui-text-label-sm, 11px/1.2 system-ui);
-  color: var(--openui-text-neutral-secondary, #71717a);
+  font-size: var(--font-size-xs);
+  font-family: var(--font-label);
+  color: var(--color-text-neutral-secondary);
   white-space: nowrap;
 }
 
 /* ── Thread layout when session workspace pane is visible ─────────────────── */
 
 .openui-claw-thread-container .openui-shell-thread-scroll-area {
-  padding-left: 16px;
-  padding-right: 16px;
-  background:
-    radial-gradient(circle at top, rgba(148, 163, 184, 0.08), transparent 26%),
-    linear-gradient(to bottom, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0));
+  padding-left: var(--space-ml);
+  padding-right: var(--space-ml);
+  background: transparent;
 }
 
 .openui-claw-thread-container .openui-shell-thread-messages {
-  max-width: none;
-  margin: 0;
-  padding-top: 12px;
-  padding-bottom: 8px;
+  /* Center the message column in the scroll area. 48rem matches the
+     per-message max-w-3xl cap. */
+  max-width: 48rem;
+  margin: 0 auto;
+  padding-top: var(--space-m);
+  padding-bottom: var(--space-s);
+  gap: 0 !important;
 }
 
 .openui-claw-thread-container .openui-shell-thread-message-assistant {
   padding-right: 0;
+  padding-top: 0 !important;
+  /* 8px gap between the user message and the assistant (thinking state). */
+  margin-top: var(--space-s) !important;
+  /* 40px gap below the full assistant response. */
+  margin-bottom: 40px !important;
+}
+
+.openui-claw-thread-container .openui-shell-thread-message-assistant__content {
+  padding-top: 0 !important;
+  margin-top: 0 !important;
+  /* Symmetric gap around the ThinkingPanel — matches the 8px above
+     the thinking state (user → assistant margin). */
+  gap: var(--space-s) !important;
+}
+
+/* Hide avatar/logo on both sides — we want a clean, left-aligned chat. */
+.openui-claw-thread-container .openui-shell-thread-message-assistant__logo,
+.openui-claw-thread-container .openui-shell-thread-message-user__avatar,
+.openui-claw-thread-container .openui-shell-thread-message-user__logo {
+  display: none !important;
 }
 
 .openui-claw-thread-container .openui-shell-thread-message-user {
   padding-left: 0;
   padding-right: 0;
-  margin-top: 10px;
+  margin-top: var(--space-2xs);
+  margin-bottom: 0;
+  justify-content: flex-start !important;
+  align-self: flex-start !important;
+  margin-right: auto !important;
+}
+
+.openui-claw-thread-container .openui-shell-thread-message-user .openui-genui-user-message {
+  margin-left: 0 !important;
+  margin-right: auto !important;
+  align-self: flex-start !important;
+  width: 100% !important;
+  max-width: 48rem !important;
 }
 
 .openui-claw-thread-container .openui-shell-thread-message-user__content {
-  max-width: min(100%, 720px);
-  padding: 12px 18px;
+  /* Match the assistant response width (Tailwind max-w-3xl = 48rem). */
+  max-width: 48rem !important;
+  width: 100% !important;
+  padding: var(--space-m) var(--space-l);
+  margin-left: 0 !important;
+  margin-right: auto !important;
+  background: var(--color-sunk-light) !important;
+  color: rgb(var(--color-text-neutral-primary)) !important;
+  font-size: var(--font-size-md) !important;
+  line-height: var(--line-height-body) !important;
+}
+
+.dark .openui-claw-thread-container .openui-shell-thread-message-user__content {
+  background: var(--color-foreground) !important;
 }
 
 .openui-claw-thread-container .openui-shell-thread-error {
@@ -147,33 +457,21 @@ body {
 
 .openui-claw-thread-container .composer-toolbar,
 .openui-claw-thread-container .openui-claw-session-composer {
-  max-width: 980px;
-  margin: 0 auto;
+  /* 848px = 768px (chat bubble max-w-3xl) + 80px extra on each side.
+     `width: calc(100% - 24px)` guarantees ≥ 12px gap on each side even on
+     narrow viewports where the max-width cap doesn't kick in. */
+  max-width: 848px;
+  width: calc(100% - 24px);
+  margin-left: auto;
+  margin-right: auto;
 }
 
-.openui-claw-session-composer > div {
-  background:
-    linear-gradient(145deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.88));
-  border-color: rgba(228, 228, 231, 0.9);
-  box-shadow: 0 20px 40px -34px rgba(15, 23, 42, 0.36);
-}
-
-.dark body {
-  background:
-    radial-gradient(circle at top left, rgba(71, 85, 105, 0.14), transparent 24%),
-    radial-gradient(circle at top right, rgba(14, 165, 233, 0.1), transparent 18%),
-    linear-gradient(to bottom, #09090b, #111827);
-}
-
-.dark .composer-toolbar__inner,
-.dark .openui-claw-session-composer > div {
-  background:
-    linear-gradient(145deg, rgba(24, 24, 27, 0.96), rgba(23, 37, 84, 0.78));
-  border-color: rgba(63, 63, 70, 0.9);
-}
+/* Composer card now styled inline via Tailwind classes on the component —
+   no global override needed. Kept the rule empty-shell for anyone
+   scanning the file. */
 
 .openui-claw-thread-container .composer-toolbar {
-  padding: 0 16px;
+  padding: 0 var(--space-ml);
 }
 
 @media (max-width: 640px) {
@@ -183,7 +481,7 @@ body {
   }
 
   .openui-claw-thread-container .composer-toolbar {
-    padding: 0 12px;
+    padding: 0 var(--space-m);
   }
 
   .openui-claw-thread-container .openui-shell-thread-message-user__content {
