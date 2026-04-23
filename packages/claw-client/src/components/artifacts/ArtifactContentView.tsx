@@ -60,11 +60,11 @@ export function ArtifactContentView({
 
   if (resolvedKind === "image" && previewSource) {
     return (
-      <div className="flex h-full items-center justify-center bg-zinc-950/40 p-4">
+      <div className="flex h-full items-center justify-center bg-inverted-background/40 p-ml">
         <img
           src={previewSource}
           alt={title}
-          className="max-h-full max-w-full rounded-xl border border-zinc-800 object-contain shadow-2xl"
+          className="max-h-full max-w-full rounded-xl border border-border-default object-contain shadow-xl"
         />
       </div>
     );
@@ -75,14 +75,14 @@ export function ArtifactContentView({
       <iframe
         src={previewSource}
         title={title}
-        className="h-full min-h-[520px] w-full rounded-b-xl border-0 bg-white"
+        className="h-full min-h-[520px] w-full rounded-b-xl border-0 bg-background"
       />
     );
   }
 
   if ((resolvedKind === "code" || resolvedKind === "text") && textContent) {
     return (
-      <pre className="h-full overflow-auto rounded-b-xl bg-zinc-950 p-4 text-xs text-zinc-100">
+      <pre className="h-full overflow-auto rounded-b-xl bg-inverted-background p-ml text-sm text-text-white">
         {textContent}
       </pre>
     );
@@ -90,15 +90,15 @@ export function ArtifactContentView({
 
   if (resolvedKind === "ppt") {
     return (
-      <div className="flex h-full items-center justify-center p-6">
-        <div className="max-w-sm rounded-2xl border border-zinc-200 bg-white p-6 text-center dark:border-zinc-800 dark:bg-zinc-900">
-          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-zinc-100 dark:bg-zinc-800">
-            <FileArchive className="h-6 w-6 text-zinc-500" />
+      <div className="flex h-full items-center justify-center p-xl">
+        <div className="max-w-sm rounded-2xl border border-border-default bg-background p-xl text-center">
+          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-foreground">
+            <FileArchive className="h-6 w-6 text-text-neutral-tertiary" />
           </div>
-          <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+          <h3 className="text-sm font-semibold text-text-neutral-primary">
             Preview coming soon
           </h3>
-          <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
+          <p className="mt-2 text-sm text-text-neutral-tertiary">
             This presentation is stored and available in the workspace, but slide rendering is not wired yet.
           </p>
         </div>
@@ -107,33 +107,33 @@ export function ArtifactContentView({
   }
 
   return (
-    <div className="flex h-full items-center justify-center p-6">
-      <div className="max-w-md rounded-2xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
+    <div className="flex h-full items-center justify-center p-xl">
+      <div className="max-w-md rounded-2xl border border-border-default bg-background p-xl">
         <div className="mb-4 flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-zinc-100 dark:bg-zinc-800">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-foreground">
             {resolvedKind === "image" ? (
-              <FileImage className="h-5 w-5 text-zinc-500" />
+              <FileImage className="h-5 w-5 text-text-neutral-tertiary" />
             ) : resolvedKind === "code" ? (
-              <FileCode2 className="h-5 w-5 text-zinc-500" />
+              <FileCode2 className="h-5 w-5 text-text-neutral-tertiary" />
             ) : (
-              <FileText className="h-5 w-5 text-zinc-500" />
+              <FileText className="h-5 w-5 text-text-neutral-tertiary" />
             )}
           </div>
           <div className="min-w-0">
-            <p className="truncate text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+            <p className="truncate text-sm font-semibold text-text-neutral-primary">
               {title}
             </p>
-            <p className="truncate text-xs text-zinc-500 dark:text-zinc-400">
+            <p className="truncate text-sm text-text-neutral-tertiary">
               {mimeType || kind || "File"}
             </p>
           </div>
         </div>
         {textContent ? (
-          <pre className="max-h-[420px] overflow-auto rounded-xl bg-zinc-950 p-4 text-xs text-zinc-100">
+          <pre className="max-h-[420px] overflow-auto rounded-xl bg-inverted-background p-ml text-sm text-text-white">
             {textContent}
           </pre>
         ) : (
-          <p className="text-sm text-zinc-500 dark:text-zinc-400">
+          <p className="text-sm text-text-neutral-tertiary">
             This file type does not have a rich preview yet.
           </p>
         )}

@@ -9,7 +9,16 @@ import type { ActionEvent } from "@openuidev/react-lang";
 import { Renderer } from "@openuidev/react-lang";
 import { Callout } from "@openuidev/react-ui";
 import { openuiLibrary } from "@openuidev/react-ui/genui-lib";
-import { Bug, Code2, Eye, Pin, Sparkles, Trash2 } from "lucide-react";
+import { Bug, Code2, Eye, Pin, Sparkles, Trash2, X } from "lucide-react";
+import { TopBar } from "@/components/chat/TopBar";
+import {
+  TitleSwitcher,
+  type TitleSwitcherItem,
+} from "@/components/chat/TitleSwitcher";
+import { Button } from "@/components/ui/Button";
+import { IconButton } from "@/components/layout/sidebar/IconButton";
+import { TextTile } from "@/components/layout/sidebar/Tile";
+import { DetailTopBar } from "@/components/layout/DetailTopBar";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AppDebugPanel } from "./AppDebugPanel";
 import { useToolInvocationLog } from "./useToolInvocationLog";
@@ -58,7 +67,17 @@ interface Props {
    * responsible for routing the message to the app's origin thread.
    */
   onContinueConversation?: AppContinueConversationHandler;
+  /** Close the fullscreen detail (e.g. navigate home). */
+  onClose?: () => void;
+  /** Opens the parent agent chat. */
+  onCustomize?: (record: AppRecord) => void;
+  /** Share action. */
+  onShare?: (record: AppRecord) => void;
   mode?: "page" | "panel";
+  /** Peers shown in the title switcher dropdown. */
+  siblings?: TitleSwitcherItem[];
+  /** Called when the user picks a different peer from the title dropdown. */
+  onSwitch?: (appId: string) => void;
 }
 
 export function AppDetail({
@@ -70,7 +89,12 @@ export function AppDetail({
   onTogglePinned,
   onRefine,
   onContinueConversation,
+  onClose,
+  onCustomize,
+  onShare,
   mode = "page",
+  siblings,
+  onSwitch,
 }: Props) {
   const [record, setRecord] = useState<AppRecord | null>(null);
   const [loading, setLoading] = useState(true);
@@ -174,7 +198,7 @@ export function AppDetail({
   if (loading) {
     return (
       <div className="flex h-full items-center justify-center">
-        <p className="text-sm text-zinc-400">Loading app…</p>
+        <p className="text-sm text-text-neutral-tertiary">Loading app…</p>
       </div>
     );
   }
@@ -182,7 +206,7 @@ export function AppDetail({
   if (notFound || !record) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-3">
-        <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">App not found</p>
+        <p className="text-sm font-medium text-text-neutral-secondary">App not found</p>
       </div>
     );
   }
@@ -205,114 +229,136 @@ export function AppDetail({
   return (
     <div className="flex h-full flex-col">
       {mode === "page" && (
-        <div className="border-b border-zinc-200 px-5 py-4 dark:border-zinc-800">
-          <div className="min-w-0">
-            <h1 className="truncate text-lg font-semibold text-zinc-900 dark:text-zinc-100">
-              {record.title}
-            </h1>
-            <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-              Interactive app created by {record.agentId}
-            </p>
-          </div>
-        </div>
+        <DetailTopBar
+          title={record.title}
+          onClose={onClose ?? (() => undefined)}
+          onCustomize={onCustomize ? () => onCustomize(record) : undefined}
+          onShare={onShare ? () => onShare(record) : undefined}
+          onDelete={onDeleted ? () => setConfirmDelete(true) : undefined}
+          onRefresh={() => {
+            // Cheap reload: re-fetch by bumping a local timestamp. The parent
+            // may pass `updatedAt` to force a refetch; here we just refresh
+            // via a route-level mechanism if available, else reload the page.
+            window.location.reload();
+          }}
+        />
       )}
 
-      <div className="flex shrink-0 items-center justify-between gap-3 border-b border-zinc-200 px-4 py-2 dark:border-zinc-800">
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium ${
-              viewMode === "preview"
-                ? "bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100"
-                : "text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
-            }`}
-            onClick={() => setViewMode("preview")}
-          >
-            <Eye className="h-3.5 w-3.5" />
-            Preview
-          </button>
-          <button
-            type="button"
-            className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium ${
-              viewMode === "code"
-                ? "bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100"
-                : "text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
-            }`}
-            onClick={() => setViewMode("code")}
-          >
-            <Code2 className="h-3.5 w-3.5" />
-            Code
-          </button>
-        </div>
-
-        <div className="flex shrink-0 items-center gap-2">
-          <button
-            type="button"
-            className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium ${
-              debugOpen
-                ? "bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-300"
-                : "text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
-            }`}
-            onClick={() => setDebugOpen((v) => !v)}
-            title="Toggle debug panel"
-          >
-            <Bug className="h-3.5 w-3.5" />
-            Debug
-          </button>
-          {onTogglePinned && (
-            <button
-              type="button"
-              className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium ${
-                isPinned
-                  ? "bg-sky-50 text-sky-600 dark:bg-sky-500/10 dark:text-sky-300"
-                  : "text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
-              }`}
-              onClick={() => onTogglePinned(appId)}
+      <TopBar
+        actions={
+          <>
+            <Button
+              variant="tertiary"
+              size="md"
+              icon={Bug}
+              onClick={() => setDebugOpen((v) => !v)}
+              title="Toggle debug panel"
+              className={
+                debugOpen ? "bg-alert-background text-text-alert-primary" : ""
+              }
             >
-              <Pin className="h-3.5 w-3.5" />
-              {isPinned ? "Pinned" : "Pin"}
-            </button>
-          )}
-          {onRefine && (
-            <button
-              type="button"
-              className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
-              onClick={() => void onRefine(record)}
-            >
-              <Sparkles className="h-3.5 w-3.5" />
-              Refine
-            </button>
-          )}
-          {confirmDelete ? (
-            <>
-              <button
-                onClick={() => setConfirmDelete(false)}
-                className="rounded-md px-2.5 py-1 text-xs text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
+              Debug
+            </Button>
+            {onTogglePinned && (
+              <Button
+                variant={isPinned ? "secondary" : "tertiary"}
+                size="md"
+                icon={Pin}
+                onClick={() => onTogglePinned(appId)}
               >
-                Cancel
-              </button>
-              <button
+                {isPinned ? "Pinned" : "Pin"}
+              </Button>
+            )}
+            {onRefine && (
+              <Button
+                variant="tertiary"
+                size="md"
+                icon={Sparkles}
+                onClick={() => void onRefine(record)}
+              >
+                Refine
+              </Button>
+            )}
+            {confirmDelete ? (
+              <>
+                <Button
+                  variant="borderless"
+                  size="sm"
+                  onClick={() => setConfirmDelete(false)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  disabled={deleting}
+                  onClick={handleDelete}
+                >
+                  {deleting ? "Deleting…" : "Confirm delete"}
+                </Button>
+              </>
+            ) : (
+              <IconButton
+                icon={Trash2}
+                variant="tertiary"
+                size="md"
+                title="Delete app"
                 onClick={handleDelete}
-                disabled={deleting}
-                className="rounded-md bg-red-500 px-2.5 py-1 text-xs font-medium text-white hover:bg-red-600 disabled:opacity-50"
-              >
-                {deleting ? "Deleting…" : "Confirm delete"}
-              </button>
-            </>
-          ) : (
-            <button
-              type="button"
-              onClick={handleDelete}
-              className="rounded-md p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-red-500 dark:hover:bg-zinc-800 dark:hover:text-red-400"
-              title="Delete app"
-            >
-              <Trash2 className="h-4 w-4" />
-            </button>
-          )}
+              />
+            )}
+            {mode === "panel" && onClose ? (
+              <IconButton
+                icon={X}
+                variant="tertiary"
+                size="md"
+                title="Close"
+                aria-label="Close"
+                onClick={onClose}
+              />
+            ) : null}
+          </>
+        }
+      >
+        {mode === "panel" ? (
+          <>
+            <TextTile label={record.title} category="apps" />
+            {siblings && siblings.length >= 1 && onSwitch ? (
+              <TitleSwitcher
+                activeId={appId}
+                currentLabel={record.title}
+                items={siblings}
+                onSelect={onSwitch}
+              />
+            ) : (
+              <span className="font-label text-md font-medium text-text-neutral-primary">
+                {record.title}
+              </span>
+            )}
+          </>
+        ) : null}
+        <div className="flex items-center gap-1">
+          <IconButton
+            icon={Eye}
+            variant="pill"
+            size="md"
+            title="Preview"
+            aria-label="Preview"
+            active={viewMode === "preview"}
+            onClick={() => setViewMode("preview")}
+          />
+          <IconButton
+            icon={Code2}
+            variant="pill"
+            size="md"
+            title="Code"
+            aria-label="Code"
+            active={viewMode === "code"}
+            onClick={() => setViewMode("code")}
+          />
         </div>
-      </div>
+      </TopBar>
 
-      <div className="min-h-0 flex-1 overflow-auto p-4">
+      <div className="min-h-0 flex-1 overflow-auto p-ml">
         {renderErrors.length > 0 && (
           <div className="mb-4">
             <Callout
@@ -370,7 +416,7 @@ export function AppDetail({
             }}
           />
         ) : (
-          <pre className="overflow-auto rounded-2xl bg-zinc-950 p-4 text-xs text-zinc-100">
+          <pre className="overflow-auto rounded-2xl bg-inverted-background p-ml text-sm text-text-white">
             {record.content}
           </pre>
         )}
