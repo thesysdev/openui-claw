@@ -1,9 +1,18 @@
 "use client";
 
 import { ArtifactContentView } from "@/components/artifacts/ArtifactContentView";
+import { DetailTopBar } from "@/components/layout/DetailTopBar";
+import { TopBar } from "@/components/chat/TopBar";
+import {
+  TitleSwitcher,
+  type TitleSwitcherItem,
+} from "@/components/chat/TitleSwitcher";
+import { Button } from "@/components/ui/Button";
+import { IconButton } from "@/components/layout/sidebar/IconButton";
+import { TextTile } from "@/components/layout/sidebar/Tile";
 import type { ArtifactRecord, ArtifactStore } from "@/lib/engines/types";
 import { artifactsHash } from "@/lib/hooks/useHashRoute";
-import { ArrowLeft, Trash2 } from "lucide-react";
+import { Sparkles, Trash2, X } from "lucide-react";
 import { useEffect, useState } from "react";
 
 interface Props {
@@ -12,6 +21,14 @@ interface Props {
   updatedAt?: string;
   mode?: "page" | "panel";
   onDeleted?: () => void;
+  onClose?: () => void;
+  onCustomize?: (record: ArtifactRecord) => void;
+  onShare?: (record: ArtifactRecord) => void;
+  onRefine?: (record: ArtifactRecord) => void | Promise<void>;
+  /** Peers shown in the title switcher dropdown. */
+  siblings?: TitleSwitcherItem[];
+  /** Called when the user picks a different peer from the title dropdown. */
+  onSwitch?: (artifactId: string) => void;
 }
 
 export function ArtifactDetail({
@@ -20,6 +37,12 @@ export function ArtifactDetail({
   updatedAt,
   mode = "page",
   onDeleted,
+  onClose,
+  onCustomize,
+  onShare,
+  onRefine,
+  siblings,
+  onSwitch,
 }: Props) {
   const [record, setRecord] = useState<ArtifactRecord | null>(null);
   const [loading, setLoading] = useState(true);
@@ -43,7 +66,7 @@ export function ArtifactDetail({
   if (loading) {
     return (
       <div className="flex h-full items-center justify-center">
-        <p className="text-sm text-zinc-400">Loading…</p>
+        <p className="text-sm text-text-neutral-tertiary">Loading…</p>
       </div>
     );
   }
@@ -51,10 +74,10 @@ export function ArtifactDetail({
   if (notFound || !record) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-3">
-        <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Artifact not found</p>
+        <p className="text-sm font-medium text-text-neutral-secondary">Artifact not found</p>
         <a
           href={artifactsHash()}
-          className="text-xs text-zinc-400 underline underline-offset-2 hover:text-zinc-600"
+          className="text-sm text-text-neutral-tertiary underline underline-offset-2 hover:text-text-neutral-secondary"
         >
           ← Back to artifacts
         </a>
@@ -86,67 +109,65 @@ export function ArtifactDetail({
   return (
     <div className="flex h-full flex-col">
       {mode === "page" && (
-        <div className="border-b border-zinc-200 px-5 py-4 dark:border-zinc-800">
-          <a
-            href={artifactsHash()}
-            className="mb-3 inline-flex items-center gap-1 text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
-          >
-            <ArrowLeft className="h-3 w-3" />
-            Artifacts
-          </a>
-          <div className="flex items-start justify-between gap-4">
-            <div className="min-w-0">
-              <h1 className="truncate text-lg font-semibold text-zinc-900 dark:text-zinc-100">
-                {record.title}
-              </h1>
-              <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Durable artifact</p>
-            </div>
-            <span className="shrink-0 rounded-full bg-zinc-100 px-2.5 py-1 text-xs font-medium text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
-              {record.kind}
-            </span>
-          </div>
-        </div>
+        <DetailTopBar
+          title={record.title}
+          onClose={onClose ?? (() => { window.location.hash = artifactsHash(); })}
+          onCustomize={onCustomize ? () => onCustomize(record) : undefined}
+          onShare={onShare ? () => onShare(record) : undefined}
+          onDelete={() => void handleDelete()}
+          onRefresh={() => window.location.reload()}
+        />
       )}
 
-      <div className="flex items-center justify-between gap-3 border-b border-zinc-200 px-4 py-2 dark:border-zinc-800">
-        <div className="flex items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
-          <span className="rounded-full bg-zinc-100 px-2.5 py-1 font-medium dark:bg-zinc-800">
-            {record.kind}
-          </span>
-          <span>{new Date(record.updatedAt).toLocaleString()}</span>
-        </div>
-
-        <div className="flex shrink-0 items-center gap-2">
-          {confirmDelete ? (
+      {mode === "panel" ? (
+        <TopBar
+          actions={
             <>
-              <button
-                type="button"
-                onClick={() => setConfirmDelete(false)}
-                className="rounded-md px-2.5 py-1 text-xs text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleDelete}
-                disabled={deleting}
-                className="rounded-md bg-red-500 px-2.5 py-1 text-xs font-medium text-white hover:bg-red-600 disabled:opacity-50"
-              >
-                {deleting ? "Deleting…" : "Confirm delete"}
-              </button>
+              {onRefine ? (
+                <Button
+                  variant="tertiary"
+                  size="md"
+                  icon={Sparkles}
+                  onClick={() => void onRefine(record)}
+                >
+                  Refine
+                </Button>
+              ) : null}
+              <IconButton
+                icon={Trash2}
+                variant="tertiary"
+                size="md"
+                title="Delete artifact"
+                onClick={() => void handleDelete()}
+              />
+              {onClose ? (
+                <IconButton
+                  icon={X}
+                  variant="tertiary"
+                  size="md"
+                  title="Close"
+                  aria-label="Close"
+                  onClick={onClose}
+                />
+              ) : null}
             </>
+          }
+        >
+          <TextTile label={record.title} category="artifacts" />
+          {siblings && siblings.length >= 1 && onSwitch ? (
+            <TitleSwitcher
+              activeId={artifactId}
+              currentLabel={record.title}
+              items={siblings}
+              onSelect={onSwitch}
+            />
           ) : (
-            <button
-              type="button"
-              onClick={handleDelete}
-              className="rounded-md p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-red-500 dark:hover:bg-zinc-800 dark:hover:text-red-400"
-              title="Delete artifact"
-            >
-              <Trash2 className="h-4 w-4" />
-            </button>
+            <span className="font-label text-md font-medium text-text-neutral-primary">
+              {record.title}
+            </span>
           )}
-        </div>
-      </div>
+        </TopBar>
+      ) : null}
 
       <div className="min-h-0 flex-1 overflow-auto">
         <ArtifactContentView
