@@ -12,17 +12,113 @@ import type { GatewayCommand } from "@/lib/engines/types";
 import type { LinkedAppContext, ThreadUpload } from "@/lib/session-workspace";
 import { buildThreadContextPayload } from "@/lib/session-workspace";
 import { useThread } from "@openuidev/react-headless";
-import { ArrowUp, Paperclip, RotateCw, Square, X } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { CornerDownLeft, Plus, RotateCw, Square, X } from "lucide-react";
+import { IconButton } from "@/components/layout/sidebar/IconButton";
+import type { ModelChoice } from "@/types/gateway-responses";
+import { qualifyModel } from "@/lib/models";
+
+const THINKING_LEVELS = [
+  { value: "", label: "Default" },
+  { value: "off", label: "Off" },
+  { value: "minimal", label: "Minimal" },
+  { value: "low", label: "Low" },
+  { value: "medium", label: "Medium" },
+  { value: "high", label: "High" },
+  { value: "xhigh", label: "Extra High" },
+] as const;
+
+/**
+ * Text-button dropdown — renders the current label as a borderless Button; on
+ * click, reveals a small panel of options above the trigger (composer sits at
+ * the bottom of the page, so the panel opens upward).
+ */
+function TextButtonSelect({
+  value,
+  options,
+  onChange,
+  title,
+}: {
+  value: string;
+  options: ReadonlyArray<{ value: string; label: string }>;
+  onChange: (value: string) => void;
+  title?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  const current = options.find((o) => o.value === value) ?? options[0];
+
+  return (
+    <div ref={ref} className="relative">
+      <Button
+        variant="borderless"
+        size="sm"
+        onClick={() => setOpen((o) => !o)}
+        title={title}
+        className="!font-normal"
+      >
+        {current?.label ?? "Default"}
+      </Button>
+      {open ? (
+        <div className="absolute bottom-full right-0 z-50 mb-2xs min-w-[160px] rounded-lg border border-border-default bg-popover-background p-3xs shadow-xl dark:bg-elevated">
+          {options.map((opt) => {
+            const isActive = opt.value === value;
+            return (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => {
+                  onChange(opt.value);
+                  setOpen(false);
+                }}
+                className={`flex w-full items-center rounded-m px-s py-xs text-left font-body text-sm transition-colors ${
+                  isActive
+                    ? "bg-sunk-light text-text-neutral-primary dark:bg-highlight-subtle"
+                    : "text-text-neutral-secondary hover:bg-sunk-light dark:hover:bg-highlight-subtle"
+                }`}
+              >
+                <span
+                  className={
+                    isActive ? "font-medium" : "font-regular"
+                  }
+                >
+                  {opt.label}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Button } from "@/components/ui/Button";
 
 function UploadChip({ label, onRemove }: { label: string; onRemove?: () => void }) {
   return (
-    <span className="inline-flex max-w-full items-center gap-1 rounded-full border border-zinc-200 bg-zinc-100 px-2.5 py-1 text-[11px] font-medium text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
+    <span className="inline-flex max-w-full items-center gap-1 rounded-full border border-border-default bg-foreground px-2.5 py-1 text-sm font-medium text-text-neutral-secondary">
       <span className="max-w-[180px] truncate sm:max-w-none">{label}</span>
       {onRemove ? (
         <button
           type="button"
-          className="rounded-full p-0.5 text-zinc-400 transition-colors hover:bg-zinc-200 hover:text-zinc-700 dark:hover:bg-zinc-700 dark:hover:text-zinc-100"
+          className="rounded-full p-0.5 text-text-neutral-tertiary transition-colors hover:bg-sunk hover:text-text-neutral-secondary"
           onClick={onRemove}
           title={`Remove ${label}`}
         >
@@ -58,7 +154,7 @@ function SlashMenu({
 }) {
   if (entries.length === 0) return null;
   return (
-    <div className="mx-3 mb-2 overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
+    <div className="mx-3 mb-2 overflow-hidden rounded-2xl border border-border-default bg-background shadow-lg">
       {entries.map((entry, index) => (
         <button
           key={`${entry.source}:${entry.name}`}
@@ -67,21 +163,21 @@ function SlashMenu({
           onMouseEnter={() => onHover(index)}
           className={`flex w-full items-start gap-3 px-3 py-2 text-left text-sm transition-colors ${
             index === activeIndex
-              ? "bg-sky-50 dark:bg-sky-500/10"
-              : "hover:bg-zinc-50 dark:hover:bg-zinc-800/60"
+              ? "bg-info-background"
+              : "hover:bg-sunk-light"
           }`}
         >
-          <span className="font-mono text-xs font-semibold text-sky-700 dark:text-sky-400">
+          <span className="font-mono text-sm font-semibold text-text-info-primary">
             /{entry.name}
           </span>
-          <span className="flex-1 text-xs text-zinc-600 dark:text-zinc-300">
+          <span className="flex-1 text-sm text-text-neutral-secondary">
             {entry.description}
             {entry.argHint ? (
-              <span className="ml-1 text-zinc-400 dark:text-zinc-500">{entry.argHint}</span>
+              <span className="ml-1 text-text-neutral-tertiary">{entry.argHint}</span>
             ) : null}
           </span>
           {entry.source === "gateway" ? (
-            <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] uppercase tracking-wide text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
+            <span className="rounded-full bg-foreground px-2 py-0.5 text-sm uppercase tracking-wide text-text-neutral-tertiary">
               gateway
             </span>
           ) : null}
@@ -100,6 +196,11 @@ export function SessionComposer({
   commandContext,
   gatewayCommands = [],
   onDispatchGatewayCommand,
+  models = [],
+  currentModel = "",
+  currentEffort = "",
+  onModelChange,
+  onEffortChange,
 }: {
   uploads: ThreadUpload[];
   linkedApp: LinkedAppContext | null;
@@ -108,6 +209,13 @@ export function SessionComposer({
   onUploadsSent: (uploadIds: string[]) => void;
   commandContext?: () => CommandContext;
   gatewayCommands?: GatewayCommand[];
+  models?: ModelChoice[];
+  /** Qualified model id (provider/id) currently selected, or "" for default. */
+  currentModel?: string;
+  /** Current thinking/effort level, or "" for default. */
+  currentEffort?: string;
+  onModelChange?: (value: string) => void;
+  onEffortChange?: (value: string) => void;
   /**
    * Called when the user submits a slash command that matches a gateway
    * command we know how to intercept locally (e.g. `/reset` → `sessions.reset`
@@ -129,6 +237,16 @@ export function SessionComposer({
     () => uploads.filter((upload) => upload.status === "pending"),
     [uploads],
   );
+
+  // Auto-grow the textarea: reset height then pin to scrollHeight. Capped by
+  // the `max-h-48` class on the element itself (which enables scrolling after
+  // the cap is hit).
+  useEffect(() => {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    ta.style.height = "auto";
+    ta.style.height = `${ta.scrollHeight}px`;
+  }, [textContent]);
 
   const slashMatches = useMemo<SlashEntry[]>(() => {
     const trimmed = textContent.trimStart();
@@ -293,7 +411,7 @@ export function SessionComposer({
   };
 
   return (
-    <div className="openui-claw-session-composer w-full px-3 pb-3 dark:text-zinc-100 sm:px-4 sm:pb-4">
+    <div className="openui-claw-session-composer mb-3 w-full rounded-xl bg-sunk-light p-[2px] dark:bg-foreground">
       {slashMatches.length > 0 && (
         <SlashMenu
           entries={slashMatches}
@@ -303,9 +421,10 @@ export function SessionComposer({
         />
       )}
 
-      <div className="overflow-hidden rounded-[28px] border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
+      {/* Bordered input card — only the textarea + send/stop button live here. */}
+      <div className="overflow-hidden rounded-lg border border-border-default/40 bg-background shadow-md dark:border-border-default/20">
         {(pendingUploads.length > 0 || linkedApp) && (
-          <div className="flex flex-wrap items-center gap-2 border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
+          <div className="flex flex-wrap items-center gap-2 border-b border-border-default px-4 py-3">
             {linkedApp ? <UploadChip label={`Refining ${linkedApp.title}`} /> : null}
             {pendingUploads.map((upload) => (
               <UploadChip
@@ -317,23 +436,14 @@ export function SessionComposer({
           </div>
         )}
 
-        <div className="flex items-end gap-3 px-4 py-3">
-          <button
-            type="button"
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-zinc-200 text-zinc-500 transition-colors hover:bg-zinc-50 hover:text-zinc-700 dark:border-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-900 dark:hover:text-zinc-200"
-            onClick={onPickFiles}
-            title="Attach files"
-          >
-            <Paperclip className="h-4 w-4" />
-          </button>
-
+        <div className="flex items-center gap-2 px-3 py-2">
           <textarea
             ref={textareaRef}
             value={textContent}
             onChange={(event) => setTextContent(event.target.value)}
             rows={1}
-            placeholder={isCommandInput ? "" : "Type your query here or /command"}
-            className="max-h-48 min-h-[40px] flex-1 resize-none bg-transparent py-2 text-sm text-zinc-900 outline-none placeholder:text-zinc-400 dark:text-zinc-100 dark:placeholder:text-zinc-500"
+            placeholder={isCommandInput ? "" : "Type / for commands"}
+            className="max-h-48 flex-1 resize-none bg-transparent py-1 text-sm leading-6 text-text-neutral-primary outline-none placeholder:text-text-neutral-tertiary"
             onKeyDown={(event) => {
               if (slashMatches.length > 0) {
                 if (event.key === "ArrowDown") {
@@ -367,33 +477,70 @@ export function SessionComposer({
               }
             }}
           />
-
           {canRegenerate ? (
-            <button
-              type="button"
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-zinc-200 text-zinc-500 transition-colors hover:bg-zinc-50 hover:text-zinc-700 dark:border-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-900 dark:hover:text-zinc-200"
-              onClick={() => void handleRegenerate()}
+            <IconButton
+              icon={RotateCw}
+              variant="tertiary"
+              size="md"
               title="Regenerate last response"
-            >
-              <RotateCw className="h-4 w-4" />
-            </button>
+              onClick={() => void handleRegenerate()}
+            />
           ) : null}
-
-          <button
-            type="button"
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-zinc-900 text-white transition-colors hover:bg-zinc-700 disabled:cursor-not-allowed disabled:bg-zinc-300 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200 dark:disabled:bg-zinc-800"
-            onClick={isRunning ? cancelMessage : () => void handleSubmit()}
-            disabled={!isRunning && isDisabled}
+          <IconButton
+            icon={isRunning ? Square : CornerDownLeft}
+            variant="primary"
+            size="md"
             title={
               isRunning ? "Stop" : parsedCommand ? `Run /${parsedCommand.command.name}` : "Send"
             }
-          >
-            {isRunning ? (
-              <Square className="h-4 w-4 fill-current" />
-            ) : (
-              <ArrowUp className="h-4 w-4" />
-            )}
-          </button>
+            disabled={!isRunning && isDisabled}
+            onClick={isRunning ? cancelMessage : () => void handleSubmit()}
+          />
+        </div>
+      </div>
+
+      {/* Controls row — lives OUTSIDE the bordered card, no fill. */}
+      <div className="flex items-center justify-between gap-3 px-1">
+        <div className="flex items-center gap-xs">
+          <IconButton
+            icon={Plus}
+            variant="tertiary"
+            size="md"
+            title="Add context / attach files"
+            onClick={onPickFiles}
+          />
+        </div>
+        <div className="flex items-center gap-3xs font-body text-sm text-text-neutral-tertiary">
+          {onModelChange ? (
+            <TextButtonSelect
+              value={currentModel}
+              onChange={onModelChange}
+              title="Model"
+              options={[
+                { value: "", label: "Default" },
+                ...models.map((m) => ({
+                  value: qualifyModel(m.id, m.provider),
+                  label: m.name,
+                })),
+              ]}
+            />
+          ) : null}
+          {onModelChange && onEffortChange ? (
+            <span aria-hidden="true" className="text-text-neutral-tertiary/60">
+              ·
+            </span>
+          ) : null}
+          {onEffortChange ? (
+            <TextButtonSelect
+              value={currentEffort}
+              onChange={onEffortChange}
+              title="Reasoning effort"
+              options={THINKING_LEVELS.map((t) => ({
+                value: t.value,
+                label: t.label,
+              }))}
+            />
+          ) : null}
         </div>
       </div>
     </div>
