@@ -184,7 +184,7 @@ export function SessionPreviewPanels({
           artifactId={sessionUploadPreviewId(upload.id)}
           title={upload.name}
         >
-          <div className="h-full overflow-auto bg-zinc-50 dark:bg-zinc-950">
+          <div className="h-full overflow-auto bg-sunk-light">
             <UploadPreviewPanel upload={upload} uploadStore={uploadStore} />
           </div>
         </ArtifactPanel>

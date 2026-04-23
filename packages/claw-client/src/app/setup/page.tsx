@@ -35,17 +35,17 @@ export default function SetupPage() {
 
   if (status === "error") {
     return (
-      <div className="flex min-h-full items-center justify-center p-4">
+      <div className="flex min-h-full items-center justify-center p-ml">
         <div className="text-center max-w-sm">
-          <h1 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 mb-2">
+          <h1 className="text-lg font-semibold text-text-neutral-primary mb-2">
             Setup Failed
           </h1>
-          <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-4">
+          <p className="text-sm text-text-neutral-tertiary mb-4">
             {errorMsg}
           </p>
           <a
             href="/"
-            className="text-sm font-medium text-zinc-900 dark:text-zinc-100 underline underline-offset-2 hover:text-zinc-600 dark:hover:text-zinc-300"
+            className="text-sm font-medium text-text-neutral-primary underline underline-offset-2 hover:text-text-neutral-secondary"
           >
             Go to Claw
           </a>
@@ -55,8 +55,8 @@ export default function SetupPage() {
   }
 
   return (
-    <div className="flex min-h-full items-center justify-center p-4">
-      <p className="text-sm text-zinc-500 dark:text-zinc-400">
+    <div className="flex min-h-full items-center justify-center p-ml">
+      <p className="text-sm text-text-neutral-tertiary">
         Configuring...
       </p>
     </div>

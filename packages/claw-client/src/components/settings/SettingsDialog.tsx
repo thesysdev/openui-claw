@@ -49,7 +49,7 @@ export function SettingsDialog({ open, currentSettings, onClose, onSave }: Props
   return (
     <dialog
       ref={dialogRef}
-      className="backdrop:bg-black/50 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 rounded-xl shadow-2xl p-6 w-full max-w-md outline-none"
+      className="backdrop:bg-overlay bg-background text-text-neutral-primary rounded-xl shadow-xl p-ml w-full max-w-md outline-none"
       onClose={onClose}
     >
       <h2 className="text-lg font-semibold mb-3">Gateway Settings</h2>
@@ -61,9 +61,9 @@ export function SettingsDialog({ open, currentSettings, onClose, onSave }: Props
         </TabsList>
 
         <TabsContent value="manual">
-          <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-4">
+          <p className="text-sm text-text-neutral-tertiary mb-4">
             Connect Claw to your OpenClaw gateway. Run{" "}
-            <code className="font-mono bg-zinc-100 dark:bg-zinc-800 px-1 rounded">
+            <code className="font-mono bg-foreground px-1 rounded">
               openclaw config show
             </code>{" "}
             in a terminal to see your gateway URL and token.
@@ -71,7 +71,7 @@ export function SettingsDialog({ open, currentSettings, onClose, onSave }: Props
 
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
             <div className="flex flex-col gap-1">
-              <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+              <label className="text-sm font-medium text-text-neutral-secondary">
                 Gateway URL
               </label>
               <input
@@ -80,9 +80,9 @@ export function SettingsDialog({ open, currentSettings, onClose, onSave }: Props
                 placeholder="ws://localhost:18789"
                 value={gatewayUrl}
                 onChange={(e) => setGatewayUrl(e.target.value)}
-                className="rounded-lg border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-800 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-zinc-400 dark:focus:ring-zinc-500"
+                className="rounded-lg border border-border-default bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-border-default"
               />
-              <p className="text-xs text-zinc-400 dark:text-zinc-500">
+              <p className="text-sm text-text-neutral-tertiary">
                 Use{" "}
                 <code className="font-mono">ws://</code> for local,{" "}
                 <code className="font-mono">wss://</code> for remote.
@@ -90,7 +90,7 @@ export function SettingsDialog({ open, currentSettings, onClose, onSave }: Props
             </div>
 
             <div className="flex flex-col gap-1">
-              <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+              <label className="text-sm font-medium text-text-neutral-secondary">
                 Auth Token
               </label>
               <input
@@ -98,11 +98,11 @@ export function SettingsDialog({ open, currentSettings, onClose, onSave }: Props
                 placeholder="Paste your token here"
                 value={token}
                 onChange={(e) => setToken(e.target.value)}
-                className="rounded-lg border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-800 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-zinc-400 dark:focus:ring-zinc-500"
+                className="rounded-lg border border-border-default bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-border-default"
               />
-              <p className="text-xs text-zinc-400 dark:text-zinc-500">
+              <p className="text-sm text-text-neutral-tertiary">
                 Run{" "}
-                <code className="font-mono bg-zinc-100 dark:bg-zinc-800 px-1 rounded">
+                <code className="font-mono bg-foreground px-1 rounded">
                   openclaw auth token
                 </code>{" "}
                 to get your token. Stored locally — only needed once per device.
@@ -113,13 +113,13 @@ export function SettingsDialog({ open, currentSettings, onClose, onSave }: Props
               <button
                 type="button"
                 onClick={onClose}
-                className="px-4 py-2 rounded-lg text-sm text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+                className="px-4 py-2 rounded-lg text-sm text-text-neutral-secondary hover:bg-foreground transition-colors"
               >
                 Cancel
               </button>
               <button
                 type="submit"
-                className="px-4 py-2 rounded-lg text-sm font-medium bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 hover:bg-zinc-700 dark:hover:bg-zinc-300 transition-colors"
+                className="px-4 py-2 rounded-lg text-sm font-medium bg-inverted-background text-text-white hover:opacity-90 transition-colors"
               >
                 Save & Connect
               </button>
@@ -133,7 +133,7 @@ export function SettingsDialog({ open, currentSettings, onClose, onSave }: Props
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 rounded-lg text-sm text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+              className="px-4 py-2 rounded-lg text-sm text-text-neutral-secondary hover:bg-foreground transition-colors"
             >
               Close
             </button>
