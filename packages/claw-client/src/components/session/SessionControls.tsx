@@ -44,9 +44,9 @@ export function ComposerToolbar({ meta, models, onPatch, sessionKey }: Props) {
 
   const usageColor =
     usagePct === null ? "" :
-    usagePct >= 90 ? "#ef4444" :
-    usagePct >= 70 ? "#f59e0b" :
-    "#22c55e";
+    usagePct >= 90 ? "var(--color-status-error)" :
+    usagePct >= 70 ? "var(--color-status-warning)" :
+    "var(--color-status-online)";
 
   const handleThinkingChange = useCallback(
     (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -109,7 +109,7 @@ export function ComposerToolbar({ meta, models, onPatch, sessionKey }: Props) {
               title={`${usedTokens.toLocaleString()} / ${contextTokens.toLocaleString()} tokens (${Math.round(usagePct!)}%)`}
             >
               <svg width="18" height="18" viewBox="0 0 18 18" className="composer-toolbar__context-ring">
-                <circle cx="9" cy="9" r={r} fill="none" stroke="var(--openui-border-default, #e4e4e7)" strokeWidth="2" />
+                <circle cx="9" cy="9" r={r} fill="none" stroke="rgb(var(--color-border-default))" strokeWidth="2" />
                 <circle
                   cx="9" cy="9" r={r}
                   fill="none"

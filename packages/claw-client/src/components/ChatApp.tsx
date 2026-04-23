@@ -7,16 +7,27 @@ import {
 import { ArtifactDetail } from "@/components/artifacts/ArtifactDetail";
 import { ArtifactsView } from "@/components/artifacts/ArtifactsView";
 import { CommandPalette } from "@/components/CommandPalette";
-import { HomeDashboard } from "@/components/home/HomeDashboard";
+import { HomeView } from "@/components/home/HomeView";
 import { AppSidebar } from "@/components/layout/AppSidebar";
 import {
   NotificationInboxDrawer,
   NotificationInboxPane,
 } from "@/components/notifications/NotificationInbox";
+import { AgentTopBar } from "@/components/chat/AgentTopBar";
+import { RefineTray } from "@/components/chat/RefineTray";
+import { TopBar } from "@/components/chat/TopBar";
+import { IconButton } from "@/components/layout/sidebar/IconButton";
+import { CategoryTile, TextTile } from "@/components/layout/sidebar/Tile";
+import {
+  buildAppSiblings,
+  buildArtifactSiblings,
+  makeAgentNameResolver,
+} from "@/lib/siblings";
+import { useRefineTrayDrag } from "@/lib/hooks/useRefineTrayDrag";
 import { AssistantMessage } from "@/components/rendering/AssistantMessage";
 import { UserMessage } from "@/components/rendering/UserMessage";
 import { SessionComposer } from "@/components/session/SessionComposer";
-import { ComposerToolbar } from "@/components/session/SessionControls";
+import { qualifyModel } from "@/lib/models";
 import { SessionPreviewPanels } from "@/components/session/SessionPreviewPanels";
 import {
   SessionWorkspaceDrawer,
@@ -37,6 +48,7 @@ import type {
   AppRecord,
   AppStore,
   AppSummary,
+  ArtifactRecord,
   ArtifactStore,
   ArtifactSummary,
   GatewayCommand,
@@ -69,7 +81,7 @@ import {
   useThreadList,
 } from "@openuidev/react-headless";
 import { Shell, ThemeProvider } from "@openuidev/react-ui";
-import { BellRing, PanelRightOpen, X } from "lucide-react";
+import { BellRing, Database, FileText, LayoutGrid, PanelRightOpen, Plus, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 // Same default used by FullScreen — swap for a custom Claw logo later.
@@ -103,39 +115,39 @@ function NotificationToastViewport({
   if (toasts.length === 0) return null;
 
   return (
-    <div className="pointer-events-none fixed right-4 top-4 z-[80] flex w-[min(92vw,380px)] flex-col gap-3">
+    <div className="pointer-events-none fixed right-ml top-ml z-[80] flex w-[min(92vw,380px)] flex-col gap-m">
       {toasts.map((toast) => (
         <div
           key={toast.id}
-          className="pointer-events-auto overflow-hidden rounded-2xl border border-zinc-200/80 bg-white/95 shadow-[0_24px_60px_-36px_rgba(15,23,42,0.4)] backdrop-blur dark:border-zinc-800/80 dark:bg-zinc-950/92"
+          className="pointer-events-auto overflow-hidden rounded-2xl border border-border-default/80 bg-background shadow-float"
         >
-          <div className="flex items-start gap-3 px-4 py-3 transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-900/80">
-            <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300">
-              <BellRing className="h-4 w-4" />
+          <div className="flex items-start gap-m px-ml py-m transition-colors hover:bg-sunk-light">
+            <div className="mt-3xs flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-info-background text-text-info-primary">
+              <BellRing className="h-ml w-ml" />
             </div>
             <button
               type="button"
               className="min-w-0 flex-1 text-left"
               onClick={() => onOpen(toast.notification, toast.id)}
             >
-              <div className="flex items-center gap-2">
-                <p className="truncate text-sm font-semibold text-zinc-950 dark:text-zinc-50">
+              <div className="flex items-center gap-s">
+                <p className="truncate text-sm font-bold text-text-neutral-primary">
                   {toast.notification.title}
                 </p>
                 {toast.notification.unread ? (
-                  <span className="inline-flex h-2 w-2 shrink-0 rounded-full bg-sky-500" />
+                  <span className="inline-flex h-s w-s shrink-0 rounded-full bg-text-info-primary" />
                 ) : null}
               </div>
-              <p className="mt-1 max-h-[4.5rem] overflow-hidden text-sm text-zinc-600 dark:text-zinc-300">
+              <p className="mt-2xs max-h-[4.5rem] overflow-hidden text-sm text-text-neutral-secondary">
                 {toast.notification.message}
               </p>
             </button>
             <button
               type="button"
-              className="rounded-xl p-1 text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
+              className="rounded-xl p-2xs text-text-neutral-tertiary transition-colors hover:bg-sunk-light hover:text-text-neutral-primary"
               onClick={() => onDismiss(toast.id)}
             >
-              <X className="h-4 w-4" />
+              <X className="h-ml w-ml" />
             </button>
           </div>
         </div>
@@ -173,6 +185,7 @@ function ThreadArea({
   workspacePaneCollapsed,
   onToggleWorkspacePaneCollapsed,
   gatewayCommands,
+  createSession,
 }: {
   sessionMeta: Map<string, SessionRow>;
   availableModels: ModelChoice[];
@@ -205,8 +218,9 @@ function ThreadArea({
   workspacePaneCollapsed: boolean;
   onToggleWorkspacePaneCollapsed: (collapsed: boolean) => void;
   gatewayCommands: GatewayCommand[];
+  createSession: (agentId: string) => Promise<string | null>;
 }) {
-  const { selectedThreadId } = useThreadList();
+  const { threads: allThreadsRaw, selectedThreadId } = useThreadList();
   const isRunning = useThread((state) => state.isRunning);
   const threadMessages = useThread((state) => state.messages);
   const setThreadMessages = useThread((state) => state.setMessages);
@@ -214,6 +228,24 @@ function ThreadArea({
   const { activeArtifactId } = useActiveArtifact();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const previousRunningRef = useRef(false);
+  // Embed mode — rendered inside the refine tray iframe. URL carries `?embed=1`.
+  const isEmbed =
+    typeof window !== "undefined" &&
+    new URLSearchParams(window.location.search).get("embed") === "1";
+  // Sync the iframe's dark-class with its parent so the embedded chat picks
+  // up the active theme. Same-origin → we can reach into window.parent safely.
+  useEffect(() => {
+    if (!isEmbed) return;
+    try {
+      const parentIsDark =
+        window.parent?.document?.documentElement?.classList?.contains("dark") ??
+        false;
+      if (parentIsDark) document.documentElement.classList.add("dark");
+      else document.documentElement.classList.remove("dark");
+    } catch {
+      // cross-origin: nothing we can do — parent is expected to be same-origin.
+    }
+  }, [isEmbed]);
   const [commandToast, setCommandToast] = useState<{
     message: string;
     kind: "info" | "success" | "error";
@@ -237,6 +269,23 @@ function ThreadArea({
   } | null>(null);
   const [mobileWorkspaceOpen, setMobileWorkspaceOpen] = useState(false);
 
+  // Listen for workspace-open messages from the refine tray's parent
+  // (when this page is loaded inside the refine tray iframe with `?embed=1`).
+  useEffect(() => {
+    if (!isEmbed) return;
+    const onMessage = (e: MessageEvent) => {
+      if (e.data?.type === "claw:toggle-workspace")
+        setMobileWorkspaceOpen((o) => !o);
+      if (e.data?.type === "claw:open-workspace") setMobileWorkspaceOpen(true);
+    };
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, [isEmbed]);
+
+  // Refine tray — slides in from the left of the full-screen preview modal
+  // showing the parent agent's chat. Resizable via drag handle on the right.
+  const refineTray = useRefineTrayDrag();
+
   const sessionKey = useMemo(() => {
     if (!selectedThreadId) return null;
     return resolveChatSessionKey(selectedThreadId, knownAgentIds.current);
@@ -256,7 +305,13 @@ function ThreadArea({
       sessionKey ? artifactList.filter((artifact) => artifact.source.sessionId === sessionKey) : [],
     [artifactList, sessionKey],
   );
-  const workspaceCount = workspace.uploads.length + (workspace.linkedApp ? 1 : 0);
+
+  const paneApps = sessionApps;
+  const paneArtifacts = sessionArtifacts;
+  const paneUploads = workspace.uploads;
+  const paneLinkedApp = workspace.linkedApp;
+
+  const workspaceCount = paneUploads.length + (paneLinkedApp ? 1 : 0);
 
   useEffect(() => {
     const wasRunning = previousRunningRef.current;
@@ -537,7 +592,7 @@ function ThreadArea({
 
   return (
     <UploadsProvider store={uploads} sessionKey={sessionKey} seeds={uploadSeeds}>
-      <div className="flex h-full min-w-0 flex-1 overflow-hidden">
+      <div className="flex h-full min-w-0 flex-1 overflow-hidden bg-background dark:bg-sunk">
         <input
           ref={fileInputRef}
           type="file"
@@ -547,7 +602,62 @@ function ThreadArea({
         />
 
         <Shell.ThreadContainer className="openui-claw-thread-container min-w-0 flex-1">
-          <Shell.MobileHeader />
+          {isEmbed ? null : <Shell.MobileHeader />}
+          {(() => {
+            // Derive the top-bar data from the current thread list. Scoped
+            // into an IIFE so we don't leak locals elsewhere.
+            const allThreads = allThreadsRaw as unknown as ClawThread[];
+            const currentThread = allThreads.find(
+              (t) => t.id === selectedThreadId,
+            );
+            if (!currentThread) return null;
+            const currentAgentId = currentThread.clawAgentId ?? currentThread.id;
+            // Map of agentId → main thread title (or first thread title as fallback).
+            const agentNameMap = new Map<string, string>();
+            for (const t of allThreads) {
+              const aid = t.clawAgentId ?? t.id;
+              if (!agentNameMap.has(aid)) agentNameMap.set(aid, aid);
+              if (t.clawKind === "main") agentNameMap.set(aid, t.title);
+            }
+            const allAgents = [...agentNameMap.entries()].map(([id, name]) => ({
+              id,
+              name,
+            }));
+            const sessions = allThreads.filter(
+              (t) => (t.clawAgentId ?? t.id) === currentAgentId,
+            );
+            return (
+              <AgentTopBar
+                agent={{
+                  id: currentAgentId,
+                  name: agentNameMap.get(currentAgentId) ?? currentAgentId,
+                }}
+                allAgents={allAgents}
+                activeSession={{
+                  id: currentThread.id,
+                  title: currentThread.title,
+                }}
+                sessions={sessions}
+                onBack={() => navigate({ view: "home" })}
+                onSwitchAgent={(a) => {
+                  // Open that agent's main thread if present, else any thread.
+                  const target =
+                    allThreads.find(
+                      (t) => (t.clawAgentId ?? t.id) === a.id && t.clawKind === "main",
+                    ) ?? allThreads.find((t) => (t.clawAgentId ?? t.id) === a.id);
+                  if (target)
+                    navigate({ view: "chat", sessionId: target.id });
+                }}
+                onSelectSession={(threadId) =>
+                  navigate({ view: "chat", sessionId: threadId })
+                }
+                onNewSession={async () => {
+                  const newId = await createSession(currentAgentId);
+                  if (newId) navigate({ view: "chat", sessionId: newId });
+                }}
+              />
+            );
+          })()}
           <Shell.ScrollArea>
             {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
             <Shell.Messages
@@ -556,24 +666,6 @@ function ThreadArea({
               loader={<Shell.MessageLoading />}
             />
           </Shell.ScrollArea>
-          <ComposerToolbar
-            meta={meta}
-            models={availableModels}
-            onPatch={patchSession}
-            sessionKey={sessionKey}
-          />
-          <div className="px-3 pb-2 sm:px-4 lg:hidden">
-            <button
-              type="button"
-              className="flex w-full items-center justify-between rounded-2xl border border-zinc-200 bg-white/90 px-4 py-3 text-left text-sm font-medium text-zinc-700 shadow-sm transition-colors hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
-              onClick={() => setMobileWorkspaceOpen(true)}
-            >
-              <span>Thread workspace</span>
-              <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-semibold text-zinc-500 dark:bg-zinc-800 dark:text-zinc-300">
-                {workspaceCount + sessionApps.length + sessionArtifacts.length}
-              </span>
-            </button>
-          </div>
           <SessionComposer
             uploads={workspace.uploads}
             linkedApp={workspace.linkedApp}
@@ -590,47 +682,142 @@ function ThreadArea({
             commandContext={buildCommandContext}
             gatewayCommands={gatewayCommands}
             onDispatchGatewayCommand={dispatchGatewayCommand}
+            models={availableModels}
+            currentModel={
+              meta?.model
+                ? qualifyModel(meta.model, meta.modelProvider ?? "")
+                : ""
+            }
+            currentEffort={meta?.thinkingLevel ?? ""}
+            onModelChange={
+              sessionKey
+                ? (value) => {
+                    void patchSession(sessionKey, { model: value || null });
+                  }
+                : undefined
+            }
+            onEffortChange={
+              sessionKey
+                ? (value) => {
+                    void patchSession(sessionKey, { thinkingLevel: value || null });
+                  }
+                : undefined
+            }
           />
           {commandToast && (
             <div className="pointer-events-none absolute left-1/2 top-4 z-40 -translate-x-1/2 transform">
               <div
-                className={`pointer-events-auto rounded-xl border px-4 py-2 text-xs font-medium shadow-lg ${
+                className={`pointer-events-auto rounded-xl border px-ml py-s text-xs font-medium shadow-lg ${
                   commandToast.kind === "error"
-                    ? "border-red-200 bg-red-50 text-red-700 dark:border-red-500/30 dark:bg-red-950/70 dark:text-red-200"
+                    ? "border-border-danger bg-danger-background text-text-danger-primary"
                     : commandToast.kind === "success"
-                      ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-950/70 dark:text-emerald-200"
-                      : "border-zinc-200 bg-white text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"
+                      ? "border-border-success bg-success-background text-text-success-primary"
+                      : "border-border-default bg-background text-text-neutral-secondary"
                 }`}
               >
                 {commandToast.message}
               </div>
             </div>
           )}
-          <SessionPreviewPanels
-            apps={sessionApps}
-            allApps={appList}
-            linkedApp={workspace.linkedApp}
-            artifacts={sessionArtifacts}
-            uploads={workspace.uploads}
-            appStore={apps}
-            artifactStore={artifacts}
-            uploadStore={uploads}
-            pinnedAppIds={pinnedAppIds}
-            onTogglePinned={onTogglePinned}
-            onRefineApp={onRefineApp}
-            onAppContinueConversation={onAppContinueConversation}
-            onRefreshApps={onRefreshSummaries}
-            onRefreshArtifacts={onRefreshSummaries}
-          />
         </Shell.ThreadContainer>
+
+        {activeArtifactId ? (() => {
+          const appMatch = activeArtifactId.startsWith("session-app:")
+            ? activeArtifactId.slice("session-app:".length)
+            : null;
+          const artifactMatch = activeArtifactId.startsWith("session-artifact:")
+            ? activeArtifactId.slice("session-artifact:".length)
+            : null;
+          const app = appMatch ? paneApps.find((a) => a.id === appMatch) : null;
+          const artifact = artifactMatch
+            ? paneArtifacts.find((a) => a.id === artifactMatch)
+            : null;
+          const handleClose = () =>
+            artifactStore.getState().closeArtifact(activeArtifactId);
+          if (!app && !artifact) return null;
+          const threadsAll = allThreadsRaw as unknown as ClawThread[];
+          const agentNameFor = makeAgentNameResolver(threadsAll);
+          const resolveRefineThreadId = (sessionKey: string | undefined) =>
+            sessionKey
+              ? sessionRouteIdFromSessionKey(sessionKey, knownAgentIds.current)
+              : null;
+          // Open the refine tray instead of navigating away — lets the user
+          // see the parent agent's chat alongside the live app modal.
+          const handleRefineApp = (record: AppRecord) => {
+            const id = resolveRefineThreadId(record.sessionKey);
+            if (id) refineTray.openFor(id);
+          };
+          const handleRefineArtifact = (record: ArtifactRecord) => {
+            const id = resolveRefineThreadId(record.source?.sessionId);
+            if (id) refineTray.openFor(id);
+          };
+          const appSiblings = buildAppSiblings(appList, agentNameFor);
+          const artifactSiblings = buildArtifactSiblings(artifactList, agentNameFor);
+          const trayAgentId = refineTray.threadId
+            ? threadsAll.find((t) => t.id === refineTray.threadId)?.clawAgentId ??
+              threadsAll.find((t) => t.id === refineTray.threadId)?.id ??
+              "agent"
+            : "agent";
+          return (
+            <div className="fixed inset-0 z-[60] flex bg-background dark:bg-sunk">
+              <RefineTray
+                threadId={refineTray.threadId}
+                agentName={agentNameFor(trayAgentId)}
+                width={refineTray.width}
+                onDragStart={refineTray.onDragStart}
+                onClose={refineTray.close}
+              />
+
+              <div className="flex min-w-0 flex-1 flex-col">
+                {app && apps ? (
+                  <AppDetail
+                    appId={app.id}
+                    apps={apps}
+                    updatedAt={app.updatedAt}
+                    mode="panel"
+                    isPinned={pinnedAppIds.has(app.id)}
+                    onTogglePinned={onTogglePinned}
+                    onRefine={handleRefineApp}
+                    onContinueConversation={onAppContinueConversation}
+                    onDeleted={onRefreshSummaries}
+                    onClose={handleClose}
+                    siblings={appSiblings}
+                    onSwitch={(nextAppId) =>
+                      artifactStore
+                        .getState()
+                        .openArtifact(sessionAppPreviewId(nextAppId))
+                    }
+                  />
+                ) : null}
+                {artifact && artifacts ? (
+                  <ArtifactDetail
+                    artifactId={artifact.id}
+                    artifacts={artifacts}
+                    updatedAt={artifact.updatedAt}
+                    mode="panel"
+                    onDeleted={onRefreshSummaries}
+                    onClose={handleClose}
+                    onRefine={handleRefineArtifact}
+                    siblings={artifactSiblings}
+                    onSwitch={(nextArtId) =>
+                      artifactStore
+                        .getState()
+                        .openArtifact(sessionArtifactPreviewId(nextArtId))
+                    }
+                  />
+                ) : null}
+              </div>
+            </div>
+          );
+        })() : null}
 
         <SessionWorkspaceDrawer
           open={mobileWorkspaceOpen}
           onClose={() => setMobileWorkspaceOpen(false)}
-          apps={sessionApps}
-          artifacts={sessionArtifacts}
-          uploads={workspace.uploads}
-          linkedApp={workspace.linkedApp}
+          apps={paneApps}
+          artifacts={paneArtifacts}
+          uploads={paneUploads}
+          linkedApp={paneLinkedApp}
           pinnedAppIds={pinnedAppIds}
           activePreviewId={activeArtifactId}
           onOpenApp={(appId) => {
@@ -652,23 +839,136 @@ function ThreadArea({
           }}
         />
 
-        {workspacePaneCollapsed ? (
-          <div className="hidden h-full w-14 shrink-0 border-l border-zinc-200/70 bg-gradient-to-b from-white/96 via-white/92 to-slate-50/65 dark:border-zinc-800 dark:from-zinc-950/92 dark:via-zinc-950/82 dark:to-slate-950/25 lg:flex">
-            <button
-              type="button"
-              className="m-2 flex h-10 w-10 items-center justify-center rounded-2xl text-zinc-500 transition-colors hover:bg-white/80 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
-              onClick={() => onToggleWorkspacePaneCollapsed(false)}
-              aria-label="Expand thread workspace"
-            >
-              <PanelRightOpen className="h-4 w-4" />
-            </button>
-          </div>
+        {isEmbed ? null : workspacePaneCollapsed ? (
+          <aside className="hidden h-full w-12 shrink-0 flex-col items-center overflow-y-auto border-l border-border-default/50 bg-transparent dark:border-border-default/16 lg:flex">
+            <div className="flex min-h-[48px] w-full items-center justify-center border-b border-border-default px-2xs dark:border-border-default/16">
+              <IconButton
+                icon={PanelRightOpen}
+                variant="tertiary"
+                size="md"
+                title="Expand thread workspace"
+                aria-label="Expand thread workspace"
+                onClick={() => onToggleWorkspacePaneCollapsed(false)}
+              />
+            </div>
+
+            {/* Apps */}
+            <div className="flex w-full flex-col items-center gap-2xs py-m">
+              <CategoryTile icon={LayoutGrid} category="apps" subtle />
+              {paneApps.map((app) => {
+                const isActive = activeArtifactId === sessionAppPreviewId(app.id);
+                return (
+                  <button
+                    key={app.id}
+                    type="button"
+                    title={app.title}
+                    onClick={() =>
+                      artifactStore.getState().openArtifact(sessionAppPreviewId(app.id))
+                    }
+                    className="rounded-m p-2xs transition-colors hover:bg-sunk-light dark:hover:bg-highlight-subtle"
+                  >
+                    <TextTile label={app.title} category={isActive ? "apps" : null} active={isActive} />
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="h-px w-full bg-border-default/50 dark:bg-border-default/16" />
+
+            {/* Artifacts */}
+            <div className="flex w-full flex-col items-center gap-2xs py-m">
+              <CategoryTile icon={FileText} category="artifacts" subtle />
+              {paneArtifacts.map((art) => {
+                const isActive =
+                  activeArtifactId === sessionArtifactPreviewId(art.id);
+                return (
+                  <button
+                    key={art.id}
+                    type="button"
+                    title={art.title}
+                    onClick={() =>
+                      artifactStore
+                        .getState()
+                        .openArtifact(sessionArtifactPreviewId(art.id))
+                    }
+                    className="rounded-m p-2xs transition-colors hover:bg-sunk-light dark:hover:bg-highlight-subtle"
+                  >
+                    <TextTile
+                      label={art.title}
+                      category={isActive ? "artifacts" : null}
+                      active={isActive}
+                    />
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="h-px w-full bg-border-default/50 dark:bg-border-default/16" />
+
+            {/* Context */}
+            <div className="flex w-full flex-col items-center gap-2xs py-m">
+              <CategoryTile icon={Database} category="home" subtle />
+              {paneLinkedApp ? (() => {
+                const isActive =
+                  activeArtifactId ===
+                  sessionAppPreviewId(paneLinkedApp.appId);
+                return (
+                  <button
+                    type="button"
+                    title={paneLinkedApp.title}
+                    onClick={() =>
+                      artifactStore
+                        .getState()
+                        .openArtifact(sessionAppPreviewId(paneLinkedApp.appId))
+                    }
+                    className="rounded-m p-2xs transition-colors hover:bg-sunk-light dark:hover:bg-highlight-subtle"
+                  >
+                    <TextTile
+                      label={paneLinkedApp.title}
+                      category={isActive ? "apps" : null}
+                      active={isActive}
+                    />
+                  </button>
+                );
+              })() : null}
+              {paneUploads.map((upload) => {
+                const isActive =
+                  activeArtifactId === sessionUploadPreviewId(upload.id);
+                return (
+                  <button
+                    key={upload.id}
+                    type="button"
+                    title={upload.name}
+                    onClick={() =>
+                      artifactStore
+                        .getState()
+                        .openArtifact(sessionUploadPreviewId(upload.id))
+                    }
+                    className="rounded-m p-2xs transition-colors hover:bg-sunk-light dark:hover:bg-highlight-subtle"
+                  >
+                    <TextTile
+                      label={upload.name}
+                      category={isActive ? "home" : null}
+                      active={isActive}
+                    />
+                  </button>
+                );
+              })}
+              <IconButton
+                icon={Plus}
+                variant="tertiary"
+                size="md"
+                title="Add context"
+                onClick={openFilePicker}
+              />
+            </div>
+          </aside>
         ) : (
           <SessionWorkspacePane
-            apps={sessionApps}
-            artifacts={sessionArtifacts}
-            uploads={workspace.uploads}
-            linkedApp={workspace.linkedApp}
+            apps={paneApps}
+            artifacts={paneArtifacts}
+            uploads={paneUploads}
+            linkedApp={paneLinkedApp}
             pinnedAppIds={pinnedAppIds}
             activePreviewId={activeArtifactId}
             onCollapse={() => onToggleWorkspacePaneCollapsed(true)}
@@ -790,6 +1090,10 @@ function ChatAppInner({
   const [notificationPaneCollapsed, setNotificationPaneCollapsed] = useState(false);
   const [workspacePaneCollapsed, setWorkspacePaneCollapsed] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  // Refine tray for the standalone app/artifact route views — same hook used
+  // by the in-chat modal, separate instance since the two views are mutually
+  // exclusive.
+  const routeRefineTray = useRefineTrayDrag();
 
   useEffect(() => {
     const listener = (event: KeyboardEvent) => {
@@ -1194,43 +1498,27 @@ function ChatAppInner({
   if (route.view === "home") {
     mainContent = (
       <div className="flex h-full min-w-0 flex-1 overflow-hidden">
-        <div className="min-w-0 flex-1">
-          <HomeDashboard
-            threads={threads}
-            apps={appList}
-            artifacts={artifactList}
-            notifications={notifications}
-            cronJobs={cronJobs}
-            cronRuns={cronRuns}
-            cronStatus={cronStatus}
-            pinnedAppIds={pinnedAppIds}
-            onOpenThread={(threadId) => navigate({ view: "chat", sessionId: threadId })}
-            onOpenApp={(appId) => navigate({ view: "app", appId })}
-            onOpenArtifact={(artifactId) => navigate({ view: "artifact", artifactId })}
-            onOpenNotifications={() => setMobileNotificationInboxOpen(true)}
-          />
-        </div>
-        {notificationPaneCollapsed ? (
-          <div className="hidden h-full w-14 shrink-0 border-l border-zinc-200/70 bg-gradient-to-b from-white/95 via-white/90 to-sky-50/35 dark:border-zinc-800 dark:from-zinc-950/92 dark:via-zinc-950/82 dark:to-sky-950/25 xl:flex">
-            <button
-              type="button"
-              className="m-2 flex h-10 w-10 items-center justify-center rounded-2xl text-zinc-500 transition-colors hover:bg-white/80 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
-              onClick={() => setNotificationPaneCollapsed(false)}
-              aria-label="Expand notifications"
-            >
-              <PanelRightOpen className="h-4 w-4" />
-            </button>
-          </div>
-        ) : (
-          <NotificationInboxPane
-            notifications={notifications}
-            onCollapse={() => setNotificationPaneCollapsed(true)}
-            onMarkAllRead={async () => {
-              await onMarkNotificationsRead();
-            }}
-            onOpenNotification={openNotification}
-          />
-        )}
+        <HomeView
+          threads={threads}
+          apps={appList}
+          artifacts={artifactList}
+          notifications={notifications}
+          cronJobs={cronJobs}
+          cronRuns={cronRuns}
+          onNavigate={(view) =>
+            navigate({ view: view === "artifacts" ? "artifacts" : "home" })
+          }
+          onOpenThread={(threadId) => navigate({ view: "chat", sessionId: threadId })}
+          onOpenApp={(appId) => navigate({ view: "app", appId })}
+          onOpenArtifact={(artifactId) => navigate({ view: "artifact", artifactId })}
+          onOpenNotif={async (notifId) => {
+            const target = notifications.find((n) => n.id === notifId);
+            if (target) await openNotification(target);
+          }}
+          onMarkNotifRead={(notifId) => {
+            void onMarkNotificationsRead([notifId]);
+          }}
+        />
         <NotificationInboxDrawer
           open={mobileNotificationInboxOpen}
           onClose={() => setMobileNotificationInboxOpen(false)}
@@ -1251,34 +1539,72 @@ function ChatAppInner({
         <ArtifactsView artifacts={artifacts} />
       </Shell.ThreadContainer>
     );
-  } else if (route.view === "artifact" && artifacts) {
+  } else if ((route.view === "artifact" && artifacts) || (route.view === "app" && apps)) {
+    // Full-screen modal view for standalone app/artifact URLs — mirrors the
+    // in-chat preview modal so the UX is identical whether the user lands
+    // here via sidebar nav, home page, or an in-thread workspace tile.
+    const routeThreads = threads as unknown as ClawThread[];
+    const agentNameFor = makeAgentNameResolver(routeThreads);
+    const appSiblings = buildAppSiblings(appList, agentNameFor);
+    const artifactSiblings = buildArtifactSiblings(artifactList, agentNameFor);
+    const openRefineFromSessionKey = (sessionKey: string | undefined) => {
+      const id = sessionKey
+        ? sessionRouteIdFromSessionKey(sessionKey, knownAgentIds.current)
+        : null;
+      if (id) routeRefineTray.openFor(id);
+    };
+    const trayAgentId = routeRefineTray.threadId
+      ? routeThreads.find((t) => t.id === routeRefineTray.threadId)?.clawAgentId ??
+        routeThreads.find((t) => t.id === routeRefineTray.threadId)?.id ??
+        "agent"
+      : "agent";
     mainContent = (
-      <Shell.ThreadContainer>
-        <ArtifactDetail
-          artifactId={route.artifactId}
-          artifacts={artifacts}
-          updatedAt={activeArtifactUpdatedAt}
-          onDeleted={onRefreshArtifacts}
+      <div className="fixed inset-0 z-[60] flex bg-background dark:bg-sunk">
+        <RefineTray
+          threadId={routeRefineTray.threadId}
+          agentName={agentNameFor(trayAgentId)}
+          width={routeRefineTray.width}
+          onDragStart={routeRefineTray.onDragStart}
+          onClose={routeRefineTray.close}
         />
-      </Shell.ThreadContainer>
-    );
-  } else if (route.view === "app" && apps) {
-    mainContent = (
-      <Shell.ThreadContainer>
-        <AppDetail
-          appId={route.appId}
-          apps={apps}
-          updatedAt={activeAppUpdatedAt}
-          isPinned={pinnedAppIds.has(route.appId)}
-          onTogglePinned={onTogglePinned}
-          onRefine={handleRefineApp}
-          onContinueConversation={handleAppContinueConversation}
-          onDeleted={() => {
-            onRefreshApps();
-            navigate({ view: "home" });
-          }}
-        />
-      </Shell.ThreadContainer>
+
+        <div className="flex min-w-0 flex-1 flex-col">
+          {route.view === "app" && apps ? (
+            <AppDetail
+              appId={route.appId}
+              apps={apps}
+              updatedAt={activeAppUpdatedAt}
+              mode="panel"
+              isPinned={pinnedAppIds.has(route.appId)}
+              onTogglePinned={onTogglePinned}
+              onRefine={(record) => openRefineFromSessionKey(record.sessionKey)}
+              onContinueConversation={handleAppContinueConversation}
+              onDeleted={() => {
+                onRefreshApps();
+                navigate({ view: "home" });
+              }}
+              onClose={() => navigate({ view: "home" })}
+              siblings={appSiblings}
+              onSwitch={(nextAppId) => navigate({ view: "app", appId: nextAppId })}
+            />
+          ) : null}
+          {route.view === "artifact" && artifacts ? (
+            <ArtifactDetail
+              artifactId={route.artifactId}
+              artifacts={artifacts}
+              updatedAt={activeArtifactUpdatedAt}
+              mode="panel"
+              onDeleted={onRefreshArtifacts}
+              onClose={() => navigate({ view: "home" })}
+              onRefine={(record) => openRefineFromSessionKey(record.source?.sessionId)}
+              siblings={artifactSiblings}
+              onSwitch={(nextArtId) =>
+                navigate({ view: "artifact", artifactId: nextArtId })
+              }
+            />
+          ) : null}
+        </div>
+      </div>
     );
   } else {
     mainContent = (
@@ -1286,6 +1612,7 @@ function ChatAppInner({
         sessionMeta={sessionMeta}
         availableModels={availableModels}
         patchSession={patchSession}
+        createSession={createSession}
         resetSession={resetSession}
         compactSession={compactSession}
         onSessionChanged={onSessionChanged}
@@ -1323,22 +1650,29 @@ function ChatAppInner({
     );
   }
 
+  // Embed mode: when the URL carries `?embed=1` (used by the refine
+  // tray's iframe), hide the navigation rails so only the thread UI renders.
+  const isEmbed =
+    typeof window !== "undefined" &&
+    new URLSearchParams(window.location.search).get("embed") === "1";
+
   return (
     <Shell.Container agentName="Claw" logoUrl={LOGO_URL}>
-      <AppSidebar
-        connectionState={connectionState}
-        onSettingsClick={onSettingsClick}
-        createSession={createSession}
-        renameSession={renameSession}
-        deleteSession={deleteSession}
-        apps={appList}
-        artifacts={artifactList}
-        unreadNotificationCount={unreadNotificationCount}
-        hiddenThreadIds={hiddenRefinementThreadIds}
-        pinnedAppIds={pinnedAppIds}
-        onTogglePinned={onTogglePinned}
-        onDeleteApp={onDeleteApp}
-      />
+      {isEmbed ? null : (
+        <AppSidebar
+          connectionState={connectionState}
+          onSettingsClick={onSettingsClick}
+          createSession={createSession}
+          renameSession={renameSession}
+          deleteSession={deleteSession}
+          apps={appList}
+          artifacts={artifactList}
+          unreadNotificationCount={unreadNotificationCount}
+          hiddenThreadIds={hiddenRefinementThreadIds}
+          pinnedAppIds={pinnedAppIds}
+          onOpenCommandPalette={() => setPaletteOpen(true)}
+        />
+      )}
       {mainContent}
       <NotificationToastViewport
         toasts={toastNotices}
@@ -1682,11 +2016,11 @@ export default function ChatApp() {
         />
 
         {connectionState === ConnectionState.PAIRING && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-            <div className="bg-white dark:bg-zinc-900 rounded-xl shadow-2xl p-6 max-w-md w-full mx-4 text-center">
-              <div className="w-10 h-10 mx-auto mb-4 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-overlay backdrop-blur-sm">
+            <div className="bg-background rounded-xl shadow-float p-xl max-w-md w-full mx-ml text-center">
+              <div className="w-10 h-10 mx-auto mb-ml rounded-full bg-alert-background flex items-center justify-center">
                 <svg
-                  className="w-5 h-5 text-amber-600 dark:text-amber-400"
+                  className="w-l h-l text-text-alert-primary"
                   fill="none"
                   viewBox="0 0 24 24"
                   strokeWidth={2}
@@ -1699,19 +2033,19 @@ export default function ChatApp() {
                   />
                 </svg>
               </div>
-              <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 mb-2">
+              <h2 className="text-lg font-bold text-text-neutral-primary mb-s">
                 Device Pairing Required
               </h2>
-              <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-4">
+              <p className="text-sm text-text-neutral-tertiary mb-ml">
                 This device needs to be approved on your server before it can connect.
               </p>
               <div className="relative group">
-                <code className="block px-3 py-2 pr-10 bg-zinc-100 dark:bg-zinc-800 rounded text-xs font-mono text-zinc-700 dark:text-zinc-300 break-all select-all text-left">
+                <code className="block px-m py-s pr-10 bg-sunk-light rounded-s text-xs font-code text-text-neutral-secondary break-all select-all text-left">
                   openclaw devices approve {pairingDeviceId}
                 </code>
                 <button
                   type="button"
-                  className="absolute top-1.5 right-1.5 p-1 rounded hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors"
+                  className="absolute top-xs right-xs p-2xs rounded-s hover:bg-sunk text-text-neutral-tertiary hover:text-text-neutral-secondary transition-colors"
                   onClick={() => {
                     navigator.clipboard.writeText(`openclaw devices approve ${pairingDeviceId}`);
                   }}
@@ -1732,7 +2066,7 @@ export default function ChatApp() {
                   </svg>
                 </button>
               </div>
-              <p className="text-xs text-zinc-400 dark:text-zinc-500 mt-4">
+              <p className="text-xs text-text-neutral-tertiary mt-ml">
                 Retrying automatically&hellip;
               </p>
             </div>

@@ -127,20 +127,20 @@ export function CommandPalette({
 
   return (
     <div
-      className="fixed inset-0 z-[90] flex items-start justify-center bg-black/40 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-[90] flex items-start justify-center bg-overlay p-4 backdrop-blur-sm"
       onClick={onClose}
     >
       <div
-        className="mt-[12vh] w-full max-w-xl overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-2xl dark:border-zinc-800 dark:bg-zinc-950"
+        className="mt-[12vh] w-full max-w-xl overflow-hidden rounded-2xl border border-border-default bg-background shadow-xl"
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
+        <div className="border-b border-border-default px-4 py-3">
           <input
             ref={inputRef}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Search threads, apps, artifacts, commands…"
-            className="w-full bg-transparent text-sm text-zinc-900 outline-none placeholder:text-zinc-400 dark:text-zinc-100 dark:placeholder:text-zinc-500"
+            className="w-full bg-transparent text-sm text-text-neutral-primary outline-none placeholder:text-text-neutral-tertiary"
             onKeyDown={(event) => {
               if (event.key === "Escape") {
                 event.preventDefault();
@@ -168,7 +168,7 @@ export function CommandPalette({
         </div>
         <div className="max-h-[50vh] overflow-y-auto">
           {filtered.length === 0 ? (
-            <div className="px-4 py-6 text-center text-xs text-zinc-500 dark:text-zinc-400">
+            <div className="px-4 py-6 text-center text-sm text-text-neutral-tertiary">
               No matches
             </div>
           ) : (
@@ -182,16 +182,16 @@ export function CommandPalette({
                   onMouseEnter={() => setActiveIndex(index)}
                   className={`flex w-full items-start gap-3 px-4 py-2 text-left text-sm transition-colors ${
                     index === activeIndex
-                      ? "bg-sky-50 dark:bg-sky-500/10"
-                      : "hover:bg-zinc-50 dark:hover:bg-zinc-800/60"
+                      ? "bg-info-background"
+                      : "hover:bg-sunk-light"
                   }`}
                 >
-                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-foreground text-text-neutral-secondary">
                     <Icon className="h-3.5 w-3.5" />
                   </span>
                   <span className="flex min-w-0 flex-1 flex-col">
-                    <span className="truncate text-zinc-900 dark:text-zinc-100">{row.label}</span>
-                    <span className="truncate text-[11px] text-zinc-500 dark:text-zinc-400">
+                    <span className="truncate text-text-neutral-primary">{row.label}</span>
+                    <span className="truncate text-sm text-text-neutral-tertiary">
                       {row.hint}
                     </span>
                   </span>
@@ -200,7 +200,7 @@ export function CommandPalette({
             })
           )}
         </div>
-        <div className="border-t border-zinc-200 bg-zinc-50 px-4 py-2 text-[11px] text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400">
+        <div className="border-t border-border-default bg-sunk-light px-4 py-2 text-sm text-text-neutral-tertiary">
           <span>↑/↓ navigate</span>
           <span className="ml-4">↵ open</span>
           <span className="ml-4">esc close</span>

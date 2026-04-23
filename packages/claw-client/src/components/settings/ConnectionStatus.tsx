@@ -14,23 +14,23 @@ const STATES: Record<
 > = {
   [ConnectionState.DISCONNECTED]: {
     label: "Disconnected",
-    dot: "bg-zinc-400",
+    dot: "bg-status-muted",
   },
   [ConnectionState.CONNECTING]: {
     label: "Connecting…",
-    dot: "bg-yellow-400 animate-pulse",
+    dot: "bg-status-warning animate-pulse",
   },
   [ConnectionState.CONNECTED]: {
     label: "Connected",
-    dot: "bg-green-400",
+    dot: "bg-status-online",
   },
   [ConnectionState.AUTH_FAILED]: {
     label: "Auth failed — click to reconfigure",
-    dot: "bg-red-500",
+    dot: "bg-status-error",
   },
   [ConnectionState.PAIRING]: {
     label: "Device pairing required",
-    dot: "bg-amber-400 animate-pulse",
+    dot: "bg-status-warning animate-pulse",
   },
 };
 
@@ -41,11 +41,11 @@ export function ConnectionStatus({ state, onSettingsClick }: Props) {
     <button
       onClick={onSettingsClick}
       title="Open settings"
-      className="fixed bottom-4 right-4 z-50 flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium bg-white/90 dark:bg-zinc-800/90 backdrop-blur border border-zinc-200 dark:border-zinc-700 shadow-sm hover:shadow-md transition-shadow"
+      className="fixed bottom-4 right-4 z-50 flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-medium bg-background/90 backdrop-blur border border-border-default shadow-sm hover:shadow-md transition-shadow"
     >
       <span className={`inline-block h-2 w-2 rounded-full ${dot}`} />
-      <span className="text-zinc-700 dark:text-zinc-300">{label}</span>
-      <Settings className="h-3.5 w-3.5 text-zinc-400" />
+      <span className="text-text-neutral-secondary">{label}</span>
+      <Settings className="h-3.5 w-3.5 text-text-neutral-tertiary" />
     </button>
   );
 }

@@ -12,28 +12,40 @@ import {
 } from "@/lib/hooks/useHashRoute";
 import type { ClawThread } from "@/types/claw-thread";
 import { useThreadList } from "@openuidev/react-headless";
-import { Button, Shell } from "@openuidev/react-ui";
-import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import {
   ChevronRight,
-  EllipsisVertical,
+  Cpu,
+  FileText,
   Home,
-  LayoutDashboard,
-  Pencil,
-  Pin,
-  Plus,
-  ScrollText,
+  LayoutGrid,
+  Moon,
+  PanelLeft,
+  PanelLeftClose,
+  Search,
   Settings,
-  Trash2,
+  Sun,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { AgentTab } from "./sidebar/AgentTab";
+import { ExpandCollapse } from "./sidebar/ExpandCollapse";
+import { IconButton } from "./sidebar/IconButton";
+import { Logo } from "./sidebar/Logo";
+import { NavTab, UnreadBadge } from "./sidebar/NavTab";
+import { SectionSeparator } from "./sidebar/Separator";
+import { SectionTab } from "./sidebar/SectionTab";
+import { SessionRow } from "./sidebar/SessionRow";
+import { Tag } from "./sidebar/Tag";
+import { BorderTile, CategoryTile, IconTile, TextTile } from "./sidebar/Tile";
+
+// ─── Connection status styling ───────────────────────────────────────────────
+
 const DOT_CLASS: Record<ConnectionState, string> = {
-  [ConnectionState.DISCONNECTED]: "bg-zinc-400",
-  [ConnectionState.CONNECTING]: "bg-yellow-400 animate-pulse",
-  [ConnectionState.CONNECTED]: "bg-green-400",
-  [ConnectionState.AUTH_FAILED]: "bg-red-500",
-  [ConnectionState.PAIRING]: "bg-amber-400 animate-pulse",
+  [ConnectionState.DISCONNECTED]: "bg-status-muted",
+  [ConnectionState.CONNECTING]: "bg-status-warning animate-pulse",
+  [ConnectionState.CONNECTED]: "bg-status-online",
+  [ConnectionState.AUTH_FAILED]: "bg-status-error",
+  [ConnectionState.PAIRING]: "bg-status-warning animate-pulse",
 };
 
 const STATUS_LABEL: Record<ConnectionState, string> = {
@@ -43,6 +55,8 @@ const STATUS_LABEL: Record<ConnectionState, string> = {
   [ConnectionState.AUTH_FAILED]: "Auth failed",
   [ConnectionState.PAIRING]: "Pairing…",
 };
+
+// ─── Agent grouping ──────────────────────────────────────────────────────────
 
 type AgentGroup = {
   agentId: string;
@@ -65,6 +79,8 @@ function buildAgentGroups(threads: ClawThread[]): AgentGroup[] {
   return [...map.values()];
 }
 
+// ─── Props ───────────────────────────────────────────────────────────────────
+
 interface Props {
   connectionState: ConnectionState;
   onSettingsClick: () => void;
@@ -76,9 +92,10 @@ interface Props {
   unreadNotificationCount: number;
   hiddenThreadIds?: Set<string>;
   pinnedAppIds: Set<string>;
-  onTogglePinned: (appId: string) => void;
-  onDeleteApp: (appId: string) => Promise<void>;
+  onOpenCommandPalette?: () => void;
 }
+
+// ─── Main component ──────────────────────────────────────────────────────────
 
 export function AppSidebar({
   connectionState,
@@ -91,26 +108,58 @@ export function AppSidebar({
   unreadNotificationCount,
   hiddenThreadIds = new Set(),
   pinnedAppIds,
-  onTogglePinned,
-  onDeleteApp,
+  onOpenCommandPalette,
 }: Props) {
-  const { threads, isLoadingThreads, selectedThreadId, loadThreads, selectThread } =
-    useThreadList();
+  // ── Data hooks ──
+  const {
+    threads,
+    isLoadingThreads,
+    selectedThreadId,
+    loadThreads,
+    selectThread,
+  } = useThreadList();
   const threadsCast = threads as ClawThread[];
 
   const route = useHashRoute();
   const homeActive = route?.view === "home";
-  const artifactsActive = route?.view === "artifacts" || route?.view === "artifact";
   const activeAppId = route?.view === "app" ? route.appId : null;
   const activeChatId = route?.view === "chat" ? route.sessionId : null;
 
-  const [pinnedExpanded, setPinnedExpanded] = useState(true);
-  const [appsExpanded, setAppsExpanded] = useState(true);
-  const [artifactsExpanded, setArtifactsExpanded] = useState(true);
-  const [deletingAppId, setDeletingAppId] = useState<string | null>(null);
+  // ── Local state ──
+  const [navCollapsed, setNavCollapsed] = useState(false);
+  const [isDark, setIsDark] = useState(() => {
+    if (typeof document === "undefined") return false;
+    return document.documentElement.classList.contains("dark");
+  });
+  const toggleDark = useCallback(() => {
+    setIsDark((prev) => {
+      const next = !prev;
+      if (next) document.documentElement.classList.add("dark");
+      else document.documentElement.classList.remove("dark");
+      return next;
+    });
+  }, []);
+  const [sectionsOpen, setSectionsOpen] = useState({
+    agents: true,
+    apps: true,
+    artifacts: true,
+  });
+  const toggleSection = (key: keyof typeof sectionsOpen) =>
+    setSectionsOpen((prev) => ({ ...prev, [key]: !prev[key] }));
+
+  const [expandedAgent, setExpandedAgent] = useState<string | null>(null);
+  const [hov, setHov] = useState<string | null>(null);
 
   const [titleOverrides, setTitleOverrides] = useState<Map<string, string>>(() => new Map());
   const [deletedIds, setDeletedIds] = useState<Set<string>>(() => new Set());
+  const [creatingForAgent, setCreatingForAgent] = useState<string | null>(null);
+  const [editingThreadId, setEditingThreadId] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState("");
+  const [renamingThreadId, setRenamingThreadId] = useState<string | null>(null);
+  const [deletingThreadId, setDeletingThreadId] = useState<string | null>(null);
+  const editInputRef = useRef<HTMLInputElement | null>(null);
+  const pendingSelectRef = useRef<string | null>(null);
+
   const serverThreadIdsKey = useMemo(
     () => threadsCast.map((t) => t.id).join("\u0000"),
     [threadsCast],
@@ -127,7 +176,6 @@ export function AppSidebar({
     [threadsCast, deletedIds, hiddenThreadIds, titleOverrides],
   );
 
-  // Clear stale local overrides/deletions when server data refreshes
   useEffect(() => {
     if (isLoadingThreads) return;
     const serverIds = new Set(
@@ -150,16 +198,6 @@ export function AppSidebar({
     });
   }, [isLoadingThreads, serverThreadIdsKey]);
 
-  const [expandedByAgent, setExpandedByAgent] = useState<Record<string, boolean>>({});
-  const [creatingForAgent, setCreatingForAgent] = useState<string | null>(null);
-  const [editingThreadId, setEditingThreadId] = useState<string | null>(null);
-  const [editValue, setEditValue] = useState("");
-  const [renamingThreadId, setRenamingThreadId] = useState<string | null>(null);
-  const [deletingThreadId, setDeletingThreadId] = useState<string | null>(null);
-  const editInputRef = useRef<HTMLInputElement | null>(null);
-
-  const pendingSelectRef = useRef<string | null>(null);
-
   useEffect(() => {
     if (connectionState === ConnectionState.CONNECTED) {
       loadThreads();
@@ -167,22 +205,6 @@ export function AppSidebar({
   }, [connectionState, loadThreads]);
 
   const groups = useMemo(() => buildAgentGroups(displayThreads), [displayThreads]);
-  const groupIdsKey = useMemo(() => groups.map((group) => group.agentId).join("\u0000"), [groups]);
-
-  useEffect(() => {
-    const agentIds = groupIdsKey.length > 0 ? groupIdsKey.split("\u0000") : [];
-    setExpandedByAgent((prev) => {
-      const next = { ...prev };
-      let changed = false;
-      for (const agentId of agentIds) {
-        if (next[agentId] === undefined) {
-          next[agentId] = true;
-          changed = true;
-        }
-      }
-      return changed ? next : prev;
-    });
-  }, [groupIdsKey]);
 
   useEffect(() => {
     if (
@@ -205,6 +227,19 @@ export function AppSidebar({
     }
   }, [isLoadingThreads, displayThreads, selectThread]);
 
+  // Auto-expand the active agent; collapse when the active view is elsewhere.
+  useEffect(() => {
+    if (route?.view === "chat" && activeChatId) {
+      const match = displayThreads.find((t) => t.id === activeChatId);
+      if (match?.clawAgentId) {
+        setExpandedAgent(match.clawAgentId);
+        return;
+      }
+    }
+    setExpandedAgent(null);
+  }, [route?.view, activeChatId, displayThreads]);
+
+  // ── Handlers ──
   const runAfterRefresh = useCallback(
     (selectId: string) => {
       pendingSelectRef.current = selectId;
@@ -248,7 +283,6 @@ export function AppSidebar({
       const trimmed = editValue.trim();
       setEditingThreadId(null);
       if (!trimmed) return;
-
       setRenamingThreadId(threadId);
       try {
         const ok = await renameSession(threadId, trimmed);
@@ -283,372 +317,390 @@ export function AppSidebar({
     [deleteSession, displayThreads, selectedThreadId, selectThread, loadThreads],
   );
 
-  const pinnedApps = useMemo(
-    () => apps.filter((app) => pinnedAppIds.has(app.id)),
-    [apps, pinnedAppIds],
+  /** Apps sorted by recency (pinned first, then by updatedAt desc). */
+  const sortedApps = useMemo(() => {
+    const pinRank = (id: string) => (pinnedAppIds.has(id) ? 1 : 0);
+    return [...apps].sort((a, b) => {
+      const pin = pinRank(b.id) - pinRank(a.id);
+      if (pin !== 0) return pin;
+      return b.updatedAt.localeCompare(a.updatedAt);
+    });
+  }, [apps, pinnedAppIds]);
+
+  /** Artifacts sorted by updatedAt desc. */
+  const sortedArtifacts = useMemo(
+    () => [...artifacts].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
+    [artifacts],
   );
 
+  /** Agent groups sorted by most-recent thread createdAt desc. */
+  const recentGroups = useMemo(() => {
+    const latestCreatedAt = (threads: ClawThread[]): string =>
+      threads.reduce<string>(
+        (latest, t) => (String(t.createdAt) > latest ? String(t.createdAt) : latest),
+        "",
+      );
+    return [...groups].sort((a, b) =>
+      latestCreatedAt(b.threads).localeCompare(latestCreatedAt(a.threads)),
+    );
+  }, [groups]);
+
+  const openSearch = useCallback(() => {
+    if (onOpenCommandPalette) {
+      onOpenCommandPalette();
+      return;
+    }
+    window.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "k", metaKey: true, bubbles: true }),
+    );
+  }, [onOpenCommandPalette]);
+
+  const nc = navCollapsed;
+
+  // ─── Render ────────────────────────────────────────────────────────────────
+
   return (
-    <Shell.SidebarContainer>
-      <Shell.SidebarHeader />
-      <Shell.SidebarSeparator />
+    <aside
+      className="relative flex h-full shrink-0 flex-col overflow-hidden border-r border-border-default/50 dark:border-border-default/16 bg-foreground dark:bg-sunk-deep"
+      style={{
+        width: nc ? 48 : 260,
+        transition: "width 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+      }}
+    >
+      {/* ── Header: logo + collapse ── */}
+      <div
+        className={`flex min-h-[52px] items-center ${
+          nc ? "justify-center px-0" : "justify-between px-ml"
+        } pt-ml pb-m transition-[padding] duration-300`}
+      >
+        <Logo name="OpenClaw" suffix="UI" collapsed={nc} />
+        <IconButton
+          icon={nc ? PanelLeft : PanelLeftClose}
+          variant="tertiary"
+          size="md"
+          title={nc ? "Expand sidebar" : "Collapse sidebar"}
+          onClick={() => setNavCollapsed(!nc)}
+        />
+      </div>
 
-      <Shell.SidebarContent>
-        <div className="min-h-0 flex-1 overflow-y-auto pr-1">
-          <a
-            href={homeHash()}
-            className={`mx-1 mb-2 flex items-center gap-2 rounded-md px-2 py-1.5 text-xs font-medium transition-colors ${
-              homeActive
-                ? "bg-zinc-900 text-white ring-1 ring-zinc-900/10 dark:bg-zinc-100 dark:text-zinc-900 dark:ring-zinc-100/20"
-                : "text-zinc-500 hover:bg-zinc-50 hover:text-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-900/40 dark:hover:text-zinc-300"
-            }`}
-          >
-            <Home className="h-3.5 w-3.5 shrink-0" />
-            Home
-            {unreadNotificationCount > 0 ? (
-              <span className="ml-auto inline-flex min-w-5 items-center justify-center rounded-full bg-zinc-900 px-1.5 py-0.5 text-[10px] font-semibold text-white dark:bg-zinc-100 dark:text-zinc-900">
-                {unreadNotificationCount}
-              </span>
-            ) : null}
-          </a>
+      <SectionSeparator />
 
-          {pinnedApps.length > 0 && (
-            <div className="mb-3 px-1">
-              <button
-                type="button"
-                className="flex w-full min-w-0 items-center gap-1.5 px-2 py-1.5 text-left text-[11px] font-semibold leading-snug tracking-tight text-zinc-500 hover:bg-zinc-50 dark:text-zinc-400 dark:hover:bg-zinc-900/40"
-                onClick={() => setPinnedExpanded((prev) => !prev)}
-              >
-                <ChevronRight
-                  className={`h-3 w-3 flex-shrink-0 text-zinc-400 transition-transform dark:text-zinc-500 ${pinnedExpanded ? "rotate-90" : ""}`}
-                />
-                <Pin className="h-3 w-3 shrink-0" />
-                <span className="truncate">Pinned</span>
-              </button>
+      {/* ── Search ── */}
+      <div className={`${nc ? "px-2xs" : "px-s"} transition-[padding] duration-300`}>
+        <NavTab
+          tile={<IconTile icon={Search} />}
+          label="Search"
+          hovered={hov === "search"}
+          collapsed={nc}
+          onClick={openSearch}
+          onMouseEnter={() => setHov("search")}
+          onMouseLeave={() => setHov(null)}
+          title="Search"
+          trailing={<Tag size="sm" variant="neutral">⌘K</Tag>}
+        />
+      </div>
 
-              {pinnedExpanded && (
-                <div className="ml-1.5 mt-1 border-l border-zinc-200 pl-2.5 dark:border-zinc-700">
-                  <div className="space-y-0.5">
-                    {pinnedApps.map((app) => (
-                      <div
-                        key={app.id}
-                        className={`openui-shell-thread-button${activeAppId === app.id ? " openui-shell-thread-button--selected" : ""}`}
-                      >
-                        <a
-                          href={appHash(app.id)}
-                          className="openui-shell-thread-button-title"
-                          onClick={() => navigate({ view: "app", appId: app.id })}
-                        >
-                          {app.title}
-                        </a>
-                        <button
-                          type="button"
-                          className="openui-shell-thread-button-dropdown-trigger"
-                          title="Unpin app"
-                          onClick={(event) => {
-                            event.preventDefault();
-                            onTogglePinned(app.id);
-                          }}
-                        >
-                          <Pin size={14} />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+      {/* ── Home ── */}
+      <div className={`${nc ? "px-2xs" : "px-s"} transition-[padding] duration-300`}>
+        <NavTab
+          tile={<IconTile icon={Home} />}
+          label="Home"
+          href={homeHash()}
+          active={homeActive}
+          hovered={hov === "home"}
+          collapsed={nc}
+          onClick={() => navigate({ view: "home" })}
+          onMouseEnter={() => setHov("home")}
+          onMouseLeave={() => setHov(null)}
+          trailing={<UnreadBadge count={unreadNotificationCount} />}
+          title="Home"
+        />
+      </div>
+
+      <SectionSeparator />
+
+      {/* ── Scrollable middle: agents, apps, artifacts ── */}
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        {/* Agents */}
+        <div className={`${nc ? "px-2xs" : "px-s"} transition-[padding] duration-300`}>
+          <SectionTab
+            category="agents"
+            icon={Cpu}
+            label="Agents"
+            open={sectionsOpen.agents}
+            hovered={hov === "agents-head"}
+            collapsed={nc}
+            onClick={() => toggleSection("agents")}
+            onMouseEnter={() => setHov("agents-head")}
+            onMouseLeave={() => setHov(null)}
+          />
+          <ExpandCollapse open={sectionsOpen.agents} duration={0.4}>
+            <div className="pb-3xs">
+              {isLoadingThreads && groups.length === 0 ? (
+                <p className="px-s py-xs text-xs text-text-neutral-tertiary">
+                  Loading agents…
+                </p>
+              ) : (
+                recentGroups.slice(0, 5).map((g) => {
+                  const isActiveAgent = g.threads.some((t) => t.id === activeChatId);
+                  const isExpanded = expandedAgent === g.agentId;
+                  const isH = hov === g.agentId;
+                  const sessions = g.threads;
+                  const main = sessions.find((t) => t.clawKind === "main");
+                  const extras = sessions.filter((t) => t.clawKind !== "main");
+                  const ordered = main ? [main, ...extras] : sessions;
+
+                  return (
+                    <AgentTab
+                      key={g.agentId}
+                      name={g.headerTitle}
+                      active={isActiveAgent}
+                      hovered={isH}
+                      expanded={isExpanded}
+                      collapsed={nc}
+                      hasSessions={sessions.length > 0}
+                      onMouseEnter={() => setHov(g.agentId)}
+                      onMouseLeave={() => setHov(null)}
+                      onToggle={() => {
+                        if (isExpanded) {
+                          setExpandedAgent(null);
+                        } else {
+                          setExpandedAgent(g.agentId);
+                          if (main) {
+                            selectThread(main.id);
+                            navigate({ view: "chat", sessionId: main.id });
+                          }
+                        }
+                      }}
+                      onNewSession={() => handleNewSession(g.agentId)}
+                      creating={creatingForAgent === g.agentId}
+                    >
+                      {ordered.map((t) => {
+                        const isEditing = editingThreadId === t.id;
+                        const isRenaming = renamingThreadId === t.id;
+                        const isDeleting = deletingThreadId === t.id;
+                        const isExtra = t.clawKind !== "main";
+                        const busy = isRenaming || isDeleting;
+                        const sesActive = activeChatId === t.id;
+                        const sesHov = hov === `ses-${t.id}`;
+                        const label = isDeleting
+                          ? "Deleting…"
+                          : isRenaming
+                            ? "Renaming…"
+                            : isExtra
+                              ? t.title
+                              : "Main";
+                        return (
+                          <SessionRow
+                            key={t.id}
+                            ref={isEditing ? editInputRef : undefined}
+                            label={label}
+                            active={sesActive}
+                            hovered={sesHov}
+                            isExtra={isExtra}
+                            busy={busy}
+                            editing={isEditing}
+                            editValue={editValue}
+                            onEditChange={setEditValue}
+                            onEditCommit={() => commitRename(t.id)}
+                            onEditCancel={cancelEditing}
+                            onClick={() => {
+                              selectThread(t.id);
+                              navigate({ view: "chat", sessionId: t.id });
+                            }}
+                            onDoubleClick={() => startEditing(t.id, t.title)}
+                            onMouseEnter={() => setHov(`ses-${t.id}`)}
+                            onMouseLeave={() => setHov(null)}
+                            onRename={() => startEditing(t.id, t.title)}
+                            onDelete={() => handleDelete(t.id)}
+                          />
+                        );
+                      })}
+                    </AgentTab>
+                  );
+                })
               )}
-            </div>
-          )}
-
-          <a
-            href={artifactsHash()}
-            className={`mx-1 mb-2 flex items-center gap-2 rounded-md px-2 py-1.5 text-xs font-medium transition-colors ${
-              artifactsActive
-                ? "bg-sky-50 text-sky-900 ring-1 ring-sky-200/80 dark:bg-sky-500/10 dark:text-sky-100 dark:ring-sky-500/30"
-                : "text-zinc-500 hover:bg-zinc-50 hover:text-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-900/40 dark:hover:text-zinc-300"
-            }`}
-          >
-            <ScrollText className="h-3.5 w-3.5 shrink-0" />
-            Artifacts
-          </a>
-
-          <div className="mb-3 px-1">
-            <button
-              type="button"
-              className="flex w-full min-w-0 items-center gap-1.5 px-2 py-1.5 text-left text-[11px] font-semibold leading-snug tracking-tight text-zinc-500 hover:bg-zinc-50 dark:text-zinc-400 dark:hover:bg-zinc-900/40"
-              onClick={() => setArtifactsExpanded((prev) => !prev)}
-            >
-              <ChevronRight
-                className={`h-3 w-3 flex-shrink-0 text-zinc-400 transition-transform dark:text-zinc-500 ${artifactsExpanded ? "rotate-90" : ""}`}
+              <NavTab
+                tile={<BorderTile icon={ChevronRight} hover={hov === "agents-viewall"} />}
+                label="View all"
+                muted
+                hovered={hov === "agents-viewall"}
+                collapsed={nc}
+                onClick={() => navigate({ view: "home" })}
+                onMouseEnter={() => setHov("agents-viewall")}
+                onMouseLeave={() => setHov(null)}
               />
-              <ScrollText className="h-3 w-3 shrink-0" />
-              <span className="truncate">Recent Artifacts</span>
-            </button>
+            </div>
+          </ExpandCollapse>
+        </div>
 
-            {artifactsExpanded && (
-              <div className="ml-1.5 mt-1 border-l border-zinc-200 pl-2.5 dark:border-zinc-700">
-                {artifacts.length === 0 ? (
-                  <p className="py-1.5 text-[11px] text-zinc-400 dark:text-zinc-500">
+        <SectionSeparator />
+
+        {/* Apps */}
+        <div className={`${nc ? "px-2xs" : "px-s"} transition-[padding] duration-300`}>
+          <SectionTab
+            category="apps"
+            icon={LayoutGrid}
+            label="Apps"
+            open={sectionsOpen.apps}
+            hovered={hov === "apps-head"}
+            collapsed={nc}
+            onClick={() => toggleSection("apps")}
+            onMouseEnter={() => setHov("apps-head")}
+            onMouseLeave={() => setHov(null)}
+          />
+          <ExpandCollapse open={sectionsOpen.apps} duration={0.3}>
+            <div className="pb-3xs">
+              {sortedApps.length === 0 ? (
+                nc ? null : (
+                  <p className="px-s py-xs text-xs text-text-neutral-tertiary">
+                    No apps yet
+                  </p>
+                )
+              ) : (
+                sortedApps.slice(0, 5).map((app) => {
+                  const id = `app-${app.id}`;
+                  const isActive = activeAppId === app.id;
+                  const isH = hov === id;
+                  return (
+                    <NavTab
+                      key={app.id}
+                      tile={<TextTile label={app.title} active={isActive} hover={isH} category={isActive ? "apps" : null} />}
+                      label={app.title}
+                      href={appHash(app.id)}
+                      active={isActive}
+                      hovered={isH}
+                      collapsed={nc}
+                      onClick={() => navigate({ view: "app", appId: app.id })}
+                      onMouseEnter={() => setHov(id)}
+                      onMouseLeave={() => setHov(null)}
+                    />
+                  );
+                })
+              )}
+              <NavTab
+                tile={<BorderTile icon={ChevronRight} hover={hov === "apps-viewall"} />}
+                label="View all"
+                muted
+                hovered={hov === "apps-viewall"}
+                collapsed={nc}
+                onClick={() => navigate({ view: "home" })}
+                onMouseEnter={() => setHov("apps-viewall")}
+                onMouseLeave={() => setHov(null)}
+              />
+            </div>
+          </ExpandCollapse>
+        </div>
+
+        <SectionSeparator />
+
+        {/* Artifacts */}
+        <div className={`${nc ? "px-2xs" : "px-s"} transition-[padding] duration-300`}>
+          <SectionTab
+            category="artifacts"
+            icon={FileText}
+            label="Artifacts"
+            open={sectionsOpen.artifacts}
+            hovered={hov === "artifacts-head"}
+            collapsed={nc}
+            onClick={() => toggleSection("artifacts")}
+            onMouseEnter={() => setHov("artifacts-head")}
+            onMouseLeave={() => setHov(null)}
+          />
+          <ExpandCollapse open={sectionsOpen.artifacts} duration={0.3}>
+            <div className="pb-3xs">
+              {artifacts.length === 0 ? (
+                nc ? null : (
+                  <p className="px-s py-xs text-xs text-text-neutral-tertiary">
                     No artifacts yet
                   </p>
-                ) : (
-                  <div className="space-y-0.5">
-                    {artifacts.slice(0, 8).map((artifact) => (
-                      <a
-                        key={artifact.id}
-                        href={artifactHash(artifact.id)}
-                        className={`openui-shell-thread-button${route?.view === "artifact" && route.artifactId === artifact.id ? " openui-shell-thread-button--selected" : ""}`}
-                        onClick={() => navigate({ view: "artifact", artifactId: artifact.id })}
-                      >
-                        <span className="openui-shell-thread-button-title">{artifact.title}</span>
-                        <span className="rounded px-1.5 py-0.5 text-[10px] text-zinc-400">
-                          {artifact.kind}
-                        </span>
-                      </a>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* ── Apps section ── */}
-          <div className="mb-3 px-1">
-            <button
-              type="button"
-              className="flex w-full min-w-0 items-center gap-1.5 px-2 py-1.5 text-left text-[11px] font-semibold leading-snug tracking-tight text-zinc-500 hover:bg-zinc-50 dark:text-zinc-400 dark:hover:bg-zinc-900/40"
-              onClick={() => setAppsExpanded((prev) => !prev)}
-            >
-              <ChevronRight
-                className={`h-3 w-3 flex-shrink-0 text-zinc-400 transition-transform dark:text-zinc-500 ${appsExpanded ? "rotate-90" : ""}`}
+                )
+              ) : (
+                sortedArtifacts.slice(0, 5).map((a) => {
+                  const id = `art-${a.id}`;
+                  const isActive = route?.view === "artifact" && route.artifactId === a.id;
+                  const isH = hov === id;
+                  return (
+                    <NavTab
+                      key={a.id}
+                      tile={<TextTile label={a.title} active={isActive} hover={isH} category={isActive ? "artifacts" : null} />}
+                      label={a.title}
+                      href={artifactHash(a.id)}
+                      active={isActive}
+                      hovered={isH}
+                      collapsed={nc}
+                      onClick={() => navigate({ view: "artifact", artifactId: a.id })}
+                      onMouseEnter={() => setHov(id)}
+                      onMouseLeave={() => setHov(null)}
+                      trailing={
+                        <Tag size="sm" variant="neutral" className="uppercase tracking-wide">
+                          {a.kind}
+                        </Tag>
+                      }
+                    />
+                  );
+                })
+              )}
+              <NavTab
+                tile={<BorderTile icon={ChevronRight} hover={hov === "artifacts-viewall"} />}
+                label="View all"
+                muted
+                active={route?.view === "artifacts"}
+                hovered={hov === "artifacts-viewall"}
+                collapsed={nc}
+                onClick={() => navigate({ view: "artifacts" })}
+                onMouseEnter={() => setHov("artifacts-viewall")}
+                onMouseLeave={() => setHov(null)}
+                href={artifactsHash()}
               />
-              <LayoutDashboard className="h-3 w-3 shrink-0" />
-              <span className="truncate">Apps</span>
-            </button>
-
-            {appsExpanded && (
-              <div className="ml-1.5 mt-1 border-l border-zinc-200 pl-2.5 dark:border-zinc-700">
-                {apps.length === 0 ? (
-                  <p className="py-1.5 text-[11px] text-zinc-400 dark:text-zinc-500">No apps yet</p>
-                ) : (
-                  <div className="space-y-0.5">
-                    {apps.map((app) => {
-                      const isActive = activeAppId === app.id;
-                      const isDeleting = deletingAppId === app.id;
-                      const isPinned = pinnedAppIds.has(app.id);
-                      return (
-                        <div
-                          key={app.id}
-                          className={`openui-shell-thread-button${isActive ? " openui-shell-thread-button--selected" : ""}`}
-                        >
-                          <a
-                            href={appHash(app.id)}
-                            className="openui-shell-thread-button-title"
-                            onClick={() => navigate({ view: "app", appId: app.id })}
-                          >
-                            {isDeleting ? "Deleting…" : app.title}
-                          </a>
-                          {!isDeleting && (
-                            <div className="flex items-center gap-1">
-                              <button
-                                type="button"
-                                className="openui-shell-thread-button-dropdown-trigger"
-                                title={isPinned ? "Unpin app" : "Pin app"}
-                                onClick={(event) => {
-                                  event.preventDefault();
-                                  onTogglePinned(app.id);
-                                }}
-                              >
-                                <Pin size={14} className={isPinned ? "text-sky-500" : undefined} />
-                              </button>
-                              <button
-                                type="button"
-                                className="openui-shell-thread-button-dropdown-trigger"
-                                title="Delete app"
-                                onClick={async (e) => {
-                                  e.preventDefault();
-                                  setDeletingAppId(app.id);
-                                  try {
-                                    await onDeleteApp(app.id);
-                                    if (isActive) navigate({ view: "home" });
-                                  } finally {
-                                    setDeletingAppId(null);
-                                  }
-                                }}
-                              >
-                                <Trash2 size={14} />
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
-          {isLoadingThreads && displayThreads.length === 0 && (
-            <p className="px-3 py-2 text-xs text-zinc-400">Loading agents…</p>
-          )}
-          {groups.map((g) => {
-            const expanded = expandedByAgent[g.agentId] !== false;
-            return (
-              <div key={g.agentId} className="mb-3 px-1">
-                <button
-                  type="button"
-                  className="flex w-full min-w-0 items-center gap-1.5 px-2 py-1.5 text-left text-[11px] font-semibold leading-snug tracking-tight text-zinc-500 hover:bg-zinc-50 dark:text-zinc-400 dark:hover:bg-zinc-900/40"
-                  onClick={() =>
-                    setExpandedByAgent((prev) => {
-                      const isOpen = prev[g.agentId] !== false;
-                      return { ...prev, [g.agentId]: !isOpen };
-                    })
-                  }
-                >
-                  <ChevronRight
-                    className={`h-3 w-3 flex-shrink-0 text-zinc-400 transition-transform dark:text-zinc-500 ${expanded ? "rotate-90" : ""}`}
-                  />
-                  <span className="truncate">{g.headerTitle}</span>
-                </button>
-
-                {expanded && (
-                  <div className="ml-1.5 mt-1 space-y-0.5 border-l border-zinc-200 pl-2.5 dark:border-zinc-700">
-                    {g.threads.map((t) => {
-                      const isEditing = editingThreadId === t.id;
-                      const isRenaming = renamingThreadId === t.id;
-                      const isDeleting = deletingThreadId === t.id;
-                      const isExtra = t.clawKind !== "main";
-                      const isBusy = isRenaming || isDeleting;
-                      const label = isDeleting
-                        ? "Deleting…"
-                        : isRenaming
-                          ? "Renaming…"
-                          : isExtra
-                            ? t.title
-                            : "Main";
-
-                      return (
-                        <div
-                          key={t.id}
-                          className={`openui-shell-thread-button${activeChatId === t.id ? " openui-shell-thread-button--selected" : ""}`}
-                        >
-                          {isEditing ? (
-                            <input
-                              ref={editInputRef}
-                              className="openui-shell-thread-button-title w-full bg-transparent outline-none"
-                              value={editValue}
-                              onChange={(e) => setEditValue(e.target.value)}
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter") {
-                                  e.preventDefault();
-                                  commitRename(t.id);
-                                } else if (e.key === "Escape") {
-                                  cancelEditing();
-                                }
-                              }}
-                              onBlur={() => commitRename(t.id)}
-                              maxLength={64}
-                            />
-                          ) : (
-                            <>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  selectThread(t.id);
-                                  navigate({ view: "chat", sessionId: t.id });
-                                }}
-                                onDoubleClick={
-                                  isExtra && !isBusy
-                                    ? (e) => {
-                                        e.preventDefault();
-                                        startEditing(t.id, t.title);
-                                      }
-                                    : undefined
-                                }
-                                className="openui-shell-thread-button-title"
-                              >
-                                {label}
-                              </button>
-
-                              {isExtra && !isBusy && (
-                                <DropdownMenu.Root>
-                                  <DropdownMenu.Trigger asChild>
-                                    <button className="openui-shell-thread-button-dropdown-trigger">
-                                      <EllipsisVertical size={14} />
-                                    </button>
-                                  </DropdownMenu.Trigger>
-                                  <DropdownMenu.Portal>
-                                    <DropdownMenu.Content
-                                      className="openui-shell-thread-button-dropdown-menu"
-                                      side="bottom"
-                                      align="start"
-                                      sideOffset={2}
-                                    >
-                                      <DropdownMenu.Item
-                                        className="openui-shell-thread-button-dropdown-menu-item"
-                                        onSelect={() => startEditing(t.id, t.title)}
-                                      >
-                                        <Pencil
-                                          size={14}
-                                          className="openui-shell-thread-button-dropdown-menu-item-icon"
-                                        />
-                                        Rename
-                                      </DropdownMenu.Item>
-                                      <DropdownMenu.Item
-                                        className="openui-shell-thread-button-dropdown-menu-item"
-                                        onSelect={() => handleDelete(t.id)}
-                                      >
-                                        <Trash2
-                                          size={14}
-                                          className="openui-shell-thread-button-dropdown-menu-item-icon"
-                                        />
-                                        Delete
-                                      </DropdownMenu.Item>
-                                    </DropdownMenu.Content>
-                                  </DropdownMenu.Portal>
-                                </DropdownMenu.Root>
-                              )}
-                            </>
-                          )}
-                        </div>
-                      );
-                    })}
-
-                    <Button
-                      type="button"
-                      variant="tertiary"
-                      size="extra-small"
-                      disabled={creatingForAgent === g.agentId}
-                      iconLeft={<Plus className="h-3.5 w-3.5 shrink-0 opacity-80" aria-hidden />}
-                      className="mt-1 w-full justify-start gap-1.5 px-1 font-normal"
-                      onClick={() => handleNewSession(g.agentId)}
-                    >
-                      {creatingForAgent === g.agentId ? "Creating…" : "New session"}
-                    </Button>
-                  </div>
-                )}
-              </div>
-            );
-          })}
+            </div>
+          </ExpandCollapse>
         </div>
-      </Shell.SidebarContent>
-
-      <div className="mt-auto flex items-center gap-2 border-t border-zinc-200 px-3 py-3 dark:border-zinc-800">
-        <span
-          className={`inline-block h-2 w-2 flex-shrink-0 rounded-full ${DOT_CLASS[connectionState]}`}
-        />
-        <span className="flex-1 truncate text-xs text-zinc-500 dark:text-zinc-400">
-          {STATUS_LABEL[connectionState]}
-        </span>
-        <button
-          onClick={onSettingsClick}
-          title="Open settings"
-          className="rounded p-1 transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-800"
-        >
-          <Settings className="h-3.5 w-3.5 text-zinc-400" />
-        </button>
       </div>
-    </Shell.SidebarContainer>
+
+      {/* ── Footer: connection + theme toggle + settings ── */}
+      <div
+        className={`flex items-center ${
+          nc ? "justify-center" : "justify-between"
+        } bg-sunk-light/60 px-m py-sm`}
+      >
+        {nc ? (
+          <IconButton
+            icon={Settings}
+            variant="tertiary"
+            size="md"
+            title="Open settings"
+            onClick={onSettingsClick}
+          />
+        ) : (
+          <>
+            <div className="flex min-w-0 items-center gap-s">
+              <span
+                className={`inline-block h-s w-s shrink-0 rounded-full ${DOT_CLASS[connectionState]}`}
+              />
+              <span className="truncate text-xs text-text-neutral-tertiary">
+                {STATUS_LABEL[connectionState]}
+              </span>
+            </div>
+            <div className="flex shrink-0 items-center gap-2xs">
+              <IconButton
+                icon={isDark ? Sun : Moon}
+                variant="tertiary"
+                size="md"
+                title={isDark ? "Switch to light mode" : "Switch to dark mode"}
+                onClick={toggleDark}
+              />
+              <IconButton
+                icon={Settings}
+                variant="tertiary"
+                size="md"
+                title="Open settings"
+                onClick={onSettingsClick}
+              />
+            </div>
+          </>
+        )}
+      </div>
+    </aside>
   );
 }
