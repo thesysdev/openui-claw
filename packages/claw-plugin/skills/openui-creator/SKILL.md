@@ -163,6 +163,10 @@ Notes:
 - Use the same `namespace` across setup, reads, and writes for one app.
 - Prefer SQL parameters over string interpolation for user input.
 
+### Scheduled Updates (cron-driven apps)
+
+A cron's prompt is its ONLY context at fire time — no session memory. Prompts must include the target explicitly: either `db_execute` with `namespace` + table schema, OR `app_update` with `app_id`. Example: "Run morning triage. Use `db_execute` with `namespace: 'briefing'`, DELETE then INSERT into `briefing_emails(id, sender, ...)`." Prefer DB writes for recurring data; `app_update` only when the layout shape changes.
+
 ### 1D Charts — Use Flat Arrays
 
 For PieChart, RadialChart, and SingleStackedBarChart, use flat arrays (NOT Slice sub-components):

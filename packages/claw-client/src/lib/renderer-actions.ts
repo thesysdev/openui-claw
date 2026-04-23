@@ -24,7 +24,18 @@ export function handleOpenUrlAction(event: ActionEvent): boolean {
   if (event.type !== BuiltinActionType.OpenUrl) return false;
   const url = event.params?.["url"] as string | undefined;
   if (typeof window !== "undefined" && url) {
-    window.open(url, "_blank", "noopener,noreferrer");
+    const win = window.open(url, "_blank", "noopener,noreferrer");
+    if (!win) {
+      // Popup blocker rejected — fall back to anchor click so the browser
+      // treats it as a first-party navigation from the same user gesture.
+      const a = document.createElement("a");
+      a.href = url;
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    }
   }
   return true;
 }
@@ -42,14 +53,64 @@ export function handleOpenUrlAction(event: ActionEvent): boolean {
  * action itself didn't carry `formState` — apps don't have that concept
  * and should omit it.
  */
+export interface AppActionContext {
+  appId: string;
+  appTitle: string;
+  currentState?: Record<string, unknown>;
+}
+
+// Strip reactive state whose name suggests sensitive material before it flows
+// into the user-visible context prefix. Errs on the side of caution — fields
+// matching common secret/credential names are replaced with a marker rather
+// than their values.
+const SECRET_KEY_PATTERN = /password|token|secret|apikey|api_key|auth/i;
+function redactState(state: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(state)) {
+    if (SECRET_KEY_PATTERN.test(key)) out[key] = "[redacted]";
+    else out[key] = value;
+  }
+  return out;
+}
+
+function truncateJson(value: unknown, maxChars: number): string {
+  try {
+    const json = JSON.stringify(value);
+    return json.length > maxChars ? json.slice(0, maxChars) + "…[truncated]" : json;
+  } catch {
+    return "\"[unserializable]\"";
+  }
+}
+
+// Includes appId so the assistant can call `get_app(id)` for full static code
+// context. Live reactive state goes here too because only the client knows it
+// — state is not recoverable server-side through get_app.
+function formatAppContextPrefix(ctx: AppActionContext): string {
+  const parts: string[] = [`App: "${ctx.appTitle}" (${ctx.appId})`];
+  if (ctx.currentState && Object.keys(ctx.currentState).length > 0) {
+    parts.push(`state: ${truncateJson(redactState(ctx.currentState), 800)}`);
+  }
+  return `[${parts.join(" · ")}]`;
+}
+
 export function buildContinueConversationPayload(
   event: ActionEvent,
   fallbackFormState?: Record<string, unknown>,
+  appContext?: AppActionContext,
 ): { role: "user"; content: string } | null {
   if (event.type !== BuiltinActionType.ContinueConversation) return null;
 
-  const contentPart = wrapContent(event.humanFriendlyMessage);
-  const ctx: unknown[] = [`User clicked: ${event.humanFriendlyMessage}`];
+  // Prepend app context so the assistant sees what the user was looking at
+  // when they clicked. Wrapped inside <content> so downstream chat UI displays
+  // it as part of the visible message — the context envelope is reserved for
+  // structured, typed entries consumed by session-workspace.
+  const humanMessage = event.humanFriendlyMessage;
+  const prefixed = appContext
+    ? `${formatAppContextPrefix(appContext)}\n${humanMessage}`
+    : humanMessage;
+
+  const contentPart = wrapContent(prefixed);
+  const ctx: unknown[] = [`User clicked: ${humanMessage}`];
 
   const formState =
     event.formState ??
