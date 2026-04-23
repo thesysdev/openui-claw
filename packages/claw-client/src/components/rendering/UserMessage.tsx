@@ -32,7 +32,7 @@ function FormDataAccordion({ contextString }: { contextString: string }) {
         />
       </button>
       {expanded && (
-        <pre className="openui-genui-user-message__form-state-content text-xs overflow-auto">
+        <pre className="openui-genui-user-message__form-state-content text-sm overflow-auto">
           {pretty}
         </pre>
       )}
@@ -76,7 +76,7 @@ function InlineUploadChip({ remoteId }: { remoteId: string }) {
     return (
       <button
         type="button"
-        className="group relative overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm transition-transform hover:scale-[1.02] dark:border-zinc-700 dark:bg-zinc-900"
+        className="group relative overflow-hidden rounded-xl border border-border-default bg-background shadow-sm transition-transform hover:scale-[1.02]"
         onClick={() => openArtifact(sessionUploadPreviewId(remoteId))}
         title={name}
       >
@@ -88,19 +88,19 @@ function InlineUploadChip({ remoteId }: { remoteId: string }) {
   return (
     <button
       type="button"
-      className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-left text-xs shadow-sm transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:bg-zinc-800"
+      className="inline-flex items-center gap-2 rounded-xl border border-border-default bg-background px-3 py-2 text-left text-sm shadow-sm transition-colors hover:bg-sunk-light"
       onClick={() => openArtifact(sessionUploadPreviewId(remoteId))}
       title={name}
     >
-      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-foreground text-text-neutral-secondary">
         <Icon className="h-4 w-4" />
       </span>
       <span className="flex max-w-[180px] flex-col">
-        <span className="truncate text-xs font-medium text-zinc-900 dark:text-zinc-100">
+        <span className="truncate text-sm font-medium text-text-neutral-primary">
           {name}
         </span>
         {meta?.mimeType ? (
-          <span className="truncate text-[10px] uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+          <span className="truncate text-sm uppercase tracking-wide text-text-neutral-tertiary">
             {meta.mimeType}
           </span>
         ) : null}
