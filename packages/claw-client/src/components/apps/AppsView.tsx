@@ -4,8 +4,8 @@ import { LayoutGrid } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { AppCard } from "@/components/cards/AppCard";
-import { Button } from "@/components/ui/Button";
 import { SectionHeader } from "@/components/home/SectionHeader";
+import { SortPills } from "@/components/ui/SortPills";
 import type { AppSummary } from "@/lib/engines/types";
 
 type Sort = "recent" | "a-z";
@@ -72,7 +72,16 @@ export function AppsView({ apps, pinnedAppIds, onOpenApp }: AppsViewProps) {
             <section className="mb-3xl">
               <SectionHeader
                 title="All apps"
-                right={<SortPills sort={sort} onChange={setSort} />}
+                right={
+                  <SortPills
+                    value={sort}
+                    options={[
+                      { key: "recent", label: "Recent" },
+                      { key: "a-z", label: "A–Z" },
+                    ]}
+                    onChange={setSort}
+                  />
+                }
               />
               <div className="grid grid-cols-1 gap-ml sm:grid-cols-2 lg:grid-cols-3">
                 {sortedOther.map((app) => (
@@ -98,25 +107,3 @@ export function AppsView({ apps, pinnedAppIds, onOpenApp }: AppsViewProps) {
   );
 }
 
-function SortPills({ sort, onChange }: { sort: Sort; onChange: (next: Sort) => void }) {
-  return (
-    <div className="flex items-center gap-3xs rounded-l bg-sunk-light p-3xs">
-      {(
-        [
-          { key: "recent", label: "Recent" },
-          { key: "a-z", label: "A–Z" },
-        ] as const
-      ).map((s) => (
-        <Button
-          key={s.key}
-          variant="pill"
-          size="sm"
-          active={sort === s.key}
-          onClick={() => onChange(s.key)}
-        >
-          {s.label}
-        </Button>
-      ))}
-    </div>
-  );
-}

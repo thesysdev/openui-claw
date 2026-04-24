@@ -7,15 +7,21 @@ import {
   FileText,
   Image as ImageIcon,
   LayoutGrid,
+  Pause,
+  Pencil,
+  Play,
   Plus,
   ScrollText,
   Table2,
+  Trash2,
 } from "lucide-react";
 import type { Thread } from "@openuidev/react-headless";
 import { useMemo } from "react";
 
 import { AgentCard, type AgentCardData } from "@/components/cards/AgentCard";
 import { Button } from "@/components/ui/Button";
+import { IconButton } from "@/components/layout/sidebar/IconButton";
+import { navigate } from "@/lib/hooks/useHashRoute";
 import type { AppSummary, ArtifactSummary } from "@/lib/engines/types";
 import type { CronJobRecord, CronRunEntry } from "@/lib/cron";
 import type { NotificationRecord } from "@/lib/notifications";
@@ -132,7 +138,7 @@ export interface HomeViewProps {
   cronJobs: CronJobRecord[];
   cronRuns: CronRunEntry[];
   userName?: string;
-  onNavigate: (view: "agents" | "apps" | "artifacts") => void;
+  onNavigate: (view: "agents" | "apps" | "artifacts" | "crons") => void;
   onOpenThread: (threadId: string) => void;
   onOpenApp: (appId: string) => void;
   onOpenArtifact: (artifactId: string) => void;
@@ -182,7 +188,14 @@ export function HomeView({
 
           {/* Top agents */}
           <section className="mb-ml">
-            <SectionHeader title="Top agents" />
+            <SectionHeader
+              title="Top agents"
+              right={
+                agents.length > 0 ? (
+                  <ViewAllButton count={agents.length} onClick={() => onNavigate("agents")} />
+                ) : null
+              }
+            />
             {agents.length === 0 ? (
               <div className="flex min-h-[130px] flex-col items-center justify-center gap-m rounded-2xl border border-dashed border-border-default px-ml text-sm text-text-neutral-tertiary">
                 <p>Get work done with your first agent.</p>
@@ -197,26 +210,20 @@ export function HomeView({
                 ))}
               </div>
             )}
-            {agents.length > 4 ? (
-              <div className="mt-m">
-                <Button
-                  variant="borderless"
-                  size="sm"
-                  icon={ChevronRight}
-                  iconTrailing
-                  onClick={() => onNavigate("agents")}
-                >
-                  View all {agents.length}
-                </Button>
-              </div>
-            ) : null}
           </section>
 
           {/* Top apps + Recent artifacts */}
           <section className="mb-ml grid grid-cols-1 gap-ml lg:grid-cols-[2fr_1fr]">
             {/* Top apps */}
             <div className="rounded-2xl border border-border-default/50 bg-popover-background p-ml shadow-xl dark:border-transparent dark:bg-foreground">
-              <SectionHeader title="Top apps" />
+              <SectionHeader
+                title="Top apps"
+                right={
+                  recentApps.length > 0 ? (
+                    <ViewAllButton count={recentApps.length} onClick={() => onNavigate("apps")} />
+                  ) : null
+                }
+              />
               {recentApps.length === 0 ? (
                 <div className="flex min-h-[150px] flex-col items-center justify-center gap-m rounded-m border border-dashed border-border-default/70 px-ml text-center font-body text-sm text-text-neutral-tertiary dark:border-border-default">
                   <p>
@@ -242,24 +249,21 @@ export function HomeView({
                   ))}
                 </div>
               )}
-              {recentApps.length > 6 ? (
-                <div className="mt-m">
-                  <Button
-                    variant="borderless"
-                    size="sm"
-                    icon={ChevronRight}
-                    iconTrailing
-                    onClick={() => onNavigate("apps")}
-                  >
-                    View all {recentApps.length}
-                  </Button>
-                </div>
-              ) : null}
             </div>
 
             {/* Recent artifacts */}
             <div className="rounded-2xl border border-border-default/50 bg-popover-background p-ml shadow-xl dark:border-transparent dark:bg-foreground">
-              <SectionHeader title="Recent artifacts" />
+              <SectionHeader
+                title="Recent artifacts"
+                right={
+                  recentArtifacts.length > 0 ? (
+                    <ViewAllButton
+                      count={recentArtifacts.length}
+                      onClick={() => onNavigate("artifacts")}
+                    />
+                  ) : null
+                }
+              />
               {recentArtifacts.length === 0 ? (
                 <div className="flex min-h-[150px] flex-col items-center justify-center gap-m rounded-m border border-dashed border-border-default/70 px-ml text-center font-body text-sm text-text-neutral-tertiary dark:border-border-default">
                   <p>
@@ -286,25 +290,19 @@ export function HomeView({
                   );
                 })
               )}
-              {recentArtifacts.length > 3 ? (
-                <div className="mt-m">
-                  <Button
-                    variant="borderless"
-                    size="sm"
-                    icon={ChevronRight}
-                    iconTrailing
-                    onClick={() => onNavigate("artifacts")}
-                  >
-                    View all {recentArtifacts.length}
-                  </Button>
-                </div>
-              ) : null}
             </div>
           </section>
 
-          {/* Scheduled activity */}
+          {/* Cron Jobs */}
           <section className="mt-2xl mb-3xl">
-            <SectionHeader title="Scheduled activity" />
+            <SectionHeader
+              title="Cron Jobs"
+              right={
+                cronJobs.length > 0 ? (
+                  <ViewAllButton count={cronJobs.length} onClick={() => onNavigate("crons")} />
+                ) : null
+              }
+            />
             {visibleCrons.length === 0 ? (
               <div className="flex min-h-[150px] items-center justify-center rounded-2xl border border-dashed border-border-default px-ml text-center text-sm text-text-neutral-tertiary">
                 <p>
@@ -319,25 +317,11 @@ export function HomeView({
                   const ownerLabel = cronOwnerLabel(job, threads);
                   const freq = humanFrequency(job);
                   return (
-                    <HomeRow
+                    <CronHomeRow
                       key={job.id}
-                      icon={Clock3}
-                      title={job.name}
-                      subtitle={
-                        <>
-                          <span className="text-cat-activity">{freq}</span>
-                          {ownerLabel ? (
-                            <>
-                              <span className="mx-2xs inline-block h-[3px] w-[3px] shrink-0 rounded-full bg-text-neutral-tertiary/50 align-middle" />
-                              <span>by {ownerLabel}</span>
-                            </>
-                          ) : null}
-                        </>
-                      }
-                      category="activity"
-                      onClick={() => {
-                        if (job.threadId) onOpenThread(job.threadId);
-                      }}
+                      job={job}
+                      ownerLabel={ownerLabel}
+                      frequency={freq}
                     />
                   );
                 })}
@@ -355,5 +339,98 @@ export function HomeView({
         onAction={(n) => onOpenNotif?.(n.id)}
       />
     </div>
+  );
+}
+
+function ViewAllButton({ count, onClick }: { count: number; onClick: () => void }) {
+  return (
+    <Button variant="borderless" size="sm" onClick={onClick}>
+      View all {count}
+    </Button>
+  );
+}
+
+/**
+ * Home-page cron row — same rhythm as `HomeRow` but with a 4-icon action
+ * group (Run / Pause / Edit / Delete) shown on hover. Click anywhere else
+ * deep-links to `/crons/:id` which opens the detail tray.
+ */
+function CronHomeRow({
+  job,
+  ownerLabel,
+  frequency,
+}: {
+  job: CronJobRecord;
+  ownerLabel: string;
+  frequency: string;
+}) {
+  const openTray = () => navigate({ view: "crons", selectedId: job.id });
+  const stopAnd = (fn: () => void) => (e: React.MouseEvent) => {
+    e.stopPropagation();
+    fn();
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={openTray}
+      className="group -mx-s flex w-full items-center gap-m rounded-lg px-s py-s text-left transition-colors duration-150 hover:bg-sunk-light dark:hover:bg-foreground"
+    >
+      <div className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-m bg-cat-activity/10">
+        <Clock3 size={14} className="text-cat-activity" />
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="truncate font-body text-sm font-medium text-text-neutral-primary">
+          {job.name}
+        </p>
+        <p className="truncate font-body text-2xs text-text-neutral-tertiary/70">
+          <span className="text-cat-activity">{frequency}</span>
+          {ownerLabel ? (
+            <>
+              <span className="mx-2xs inline-block h-[3px] w-[3px] shrink-0 rounded-full bg-text-neutral-tertiary/50 align-middle" />
+              <span>by {ownerLabel}</span>
+            </>
+          ) : null}
+        </p>
+      </div>
+      <div className="flex shrink-0 items-center gap-xs opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100">
+        <IconButton
+          icon={Play}
+          variant="tertiary"
+          size="sm"
+          title="Run now"
+          aria-label="Run now"
+          onClick={stopAnd(() => {
+            /* run stub — tray will reflect via /crons route */
+          })}
+        />
+        <IconButton
+          icon={job.enabled ? Pause : Play}
+          variant="tertiary"
+          size="sm"
+          title={job.enabled ? "Pause job" : "Resume job"}
+          aria-label={job.enabled ? "Pause job" : "Resume job"}
+          onClick={stopAnd(() => {
+            /* pause stub */
+          })}
+        />
+        <IconButton
+          icon={Pencil}
+          variant="tertiary"
+          size="sm"
+          title="Edit job"
+          aria-label="Edit job"
+          onClick={stopAnd(openTray)}
+        />
+        <IconButton
+          icon={Trash2}
+          variant="tertiary"
+          size="sm"
+          title="Delete job"
+          aria-label="Delete job"
+          onClick={stopAnd(openTray)}
+        />
+      </div>
+    </button>
   );
 }

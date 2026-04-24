@@ -9,6 +9,7 @@ import { ArtifactsView } from "@/components/artifacts/ArtifactsView";
 import { CommandPalette } from "@/components/CommandPalette";
 import { AgentsView } from "@/components/agents/AgentsView";
 import { AppsView } from "@/components/apps/AppsView";
+import { CronsView } from "@/components/crons/CronsView";
 import { HomeView } from "@/components/home/HomeView";
 import { AppSidebar } from "@/components/layout/AppSidebar";
 import {
@@ -297,23 +298,61 @@ function ThreadArea({
   const workspace =
     (selectedThreadId ? workspaceByThread[selectedThreadId] : undefined) ?? EMPTY_THREAD_WORKSPACE;
 
+  /**
+   * Agent id for the current thread. The workspace pane shows everything
+   * scoped to the agent (across all its sessions), not just the active
+   * thread, so we key off this.
+   */
+  const activeAgentId = useMemo(() => {
+    if (!selectedThreadId) return null;
+    const t = (allThreadsRaw as unknown as ClawThread[]).find(
+      (x) => x.id === selectedThreadId,
+    );
+    return t?.clawAgentId ?? t?.id ?? null;
+  }, [allThreadsRaw, selectedThreadId]);
+
   const sessionApps = useMemo(
-    () => (sessionKey ? appList.filter((app) => app.sessionKey === sessionKey) : []),
-    [appList, sessionKey],
+    () => (activeAgentId ? appList.filter((app) => app.agentId === activeAgentId) : []),
+    [appList, activeAgentId],
   );
 
   const sessionArtifacts = useMemo(
     () =>
-      sessionKey ? artifactList.filter((artifact) => artifact.source.sessionId === sessionKey) : [],
-    [artifactList, sessionKey],
+      activeAgentId
+        ? artifactList.filter((artifact) => artifact.source.agentId === activeAgentId)
+        : [],
+    [artifactList, activeAgentId],
   );
 
   const paneApps = sessionApps;
   const paneArtifacts = sessionArtifacts;
-  const paneUploads = workspace.uploads;
+  /**
+   * Context (uploads) aggregated across every thread belonging to the
+   * current agent, deduped by upload id. Mirrors the apps/artifacts
+   * behavior where the pane shows everything scoped to the agent, not
+   * just the active thread.
+   */
+  const paneUploads = useMemo(() => {
+    if (!activeAgentId) return workspace.uploads;
+    const agentThreadIds = (allThreadsRaw as unknown as ClawThread[])
+      .filter((t) => (t.clawAgentId ?? t.id) === activeAgentId)
+      .map((t) => t.id);
+    const seen = new Set<string>();
+    const all: typeof workspace.uploads = [];
+    for (const tid of agentThreadIds) {
+      const uploads = workspaceByThread[tid]?.uploads ?? [];
+      for (const u of uploads) {
+        if (seen.has(u.id)) continue;
+        seen.add(u.id);
+        all.push(u);
+      }
+    }
+    return all;
+  }, [activeAgentId, allThreadsRaw, workspace.uploads, workspaceByThread]);
   const paneLinkedApp = workspace.linkedApp;
 
   const workspaceCount = paneUploads.length + (paneLinkedApp ? 1 : 0);
+
 
   useEffect(() => {
     const wasRunning = previousRunningRef.current;
@@ -705,6 +744,18 @@ function ThreadArea({
                   }
                 : undefined
             }
+            {...(() => {
+              const currentModelId = meta?.model
+                ? qualifyModel(meta.model, meta.modelProvider ?? "")
+                : "";
+              const modelInfo = availableModels.find(
+                (m) => qualifyModel(m.id, m.provider) === currentModelId,
+              );
+              return {
+                contextTokens: meta?.contextTokens ?? meta?.totalTokens ?? undefined,
+                contextLimit: modelInfo?.contextWindow,
+              };
+            })()}
           />
           {commandToast && (
             <div className="pointer-events-none absolute left-1/2 top-4 z-40 -translate-x-1/2 transform">
@@ -1096,6 +1147,7 @@ function ChatAppInner({
   // by the in-chat modal, separate instance since the two views are mutually
   // exclusive.
   const routeRefineTray = useRefineTrayDrag();
+
 
   useEffect(() => {
     const listener = (event: KeyboardEvent) => {
@@ -1558,6 +1610,18 @@ function ChatAppInner({
         <ArtifactsView
           artifacts={artifacts}
           onOpenArtifact={(artifactId) => navigate({ view: "artifact", artifactId })}
+        />
+      </Shell.ThreadContainer>
+    );
+  } else if (route.view === "crons") {
+    mainContent = (
+      <Shell.ThreadContainer>
+        <CronsView
+          cronJobs={cronJobs}
+          runs={cronRuns}
+          threads={threads}
+          initialSelectedId={route.selectedId}
+          onOpenThread={(threadId) => navigate({ view: "chat", sessionId: threadId })}
         />
       </Shell.ThreadContainer>
     );

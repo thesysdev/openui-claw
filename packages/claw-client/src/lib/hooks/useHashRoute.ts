@@ -8,6 +8,7 @@ export type Route =
   | { view: "agents" }
   | { view: "apps" }
   | { view: "artifacts" }
+  | { view: "crons"; selectedId?: string }
   | { view: "artifact"; artifactId: string }
   | { view: "app"; appId: string };
 
@@ -21,6 +22,11 @@ function parseHash(hash: string): Route | null {
   if (path === "/agents") return { view: "agents" };
   if (path === "/apps") return { view: "apps" };
   if (path === "/artifacts") return { view: "artifacts" };
+  if (path === "/crons") return { view: "crons" };
+  if (path.startsWith("/crons/")) {
+    const selectedId = decodeURIComponent(path.slice("/crons/".length));
+    if (selectedId) return { view: "crons", selectedId };
+  }
   if (path.startsWith("/artifacts/")) {
     const artifactId = decodeURIComponent(path.slice("/artifacts/".length));
     if (artifactId) return { view: "artifact", artifactId };
@@ -48,6 +54,10 @@ export function appsHash(): string {
   return "#/apps";
 }
 
+export function cronsHash(): string {
+  return "#/crons";
+}
+
 export function artifactsHash(): string {
   return "#/artifacts";
 }
@@ -71,6 +81,10 @@ export function navigate(route: Route): void {
     window.location.hash = "/apps";
   } else if (route.view === "artifacts") {
     window.location.hash = "/artifacts";
+  } else if (route.view === "crons") {
+    window.location.hash = route.selectedId
+      ? `/crons/${encodeURIComponent(route.selectedId)}`
+      : "/crons";
   } else if (route.view === "app") {
     window.location.hash = `/apps/${encodeURIComponent(route.appId)}`;
   } else {

@@ -16,6 +16,7 @@ import { CornerDownLeft, Plus, RotateCw, Square, X } from "lucide-react";
 import { IconButton } from "@/components/layout/sidebar/IconButton";
 import type { ModelChoice } from "@/types/gateway-responses";
 import { qualifyModel } from "@/lib/models";
+import { ContextRing, type ContextBreakdownItem } from "@/components/ui/ContextRing";
 
 const THINKING_LEVELS = [
   { value: "", label: "Default" },
@@ -201,6 +202,9 @@ export function SessionComposer({
   currentEffort = "",
   onModelChange,
   onEffortChange,
+  contextTokens,
+  contextLimit,
+  contextBreakdown,
 }: {
   uploads: ThreadUpload[];
   linkedApp: LinkedAppContext | null;
@@ -216,6 +220,10 @@ export function SessionComposer({
   currentEffort?: string;
   onModelChange?: (value: string) => void;
   onEffortChange?: (value: string) => void;
+  /** Tokens used / total context-window for the active model. */
+  contextTokens?: number;
+  contextLimit?: number;
+  contextBreakdown?: ContextBreakdownItem[];
   /**
    * Called when the user submits a slash command that matches a gateway
    * command we know how to intercept locally (e.g. `/reset` → `sessions.reset`
@@ -511,6 +519,18 @@ export function SessionComposer({
           />
         </div>
         <div className="flex items-center gap-3xs font-body text-sm text-text-neutral-tertiary">
+          {contextTokens != null && contextLimit && contextLimit > 0 ? (
+            <>
+              <ContextRing
+                used={contextTokens}
+                limit={contextLimit}
+                breakdown={contextBreakdown}
+              />
+              <span aria-hidden="true" className="ml-2xs text-text-neutral-tertiary/60">
+                ·
+              </span>
+            </>
+          ) : null}
           {onModelChange ? (
             <TextButtonSelect
               value={currentModel}

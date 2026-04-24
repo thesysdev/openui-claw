@@ -8,6 +8,7 @@ import {
   appsHash,
   artifactHash,
   artifactsHash,
+  cronsHash,
   homeHash,
   navigate,
   useHashRoute,
@@ -16,6 +17,7 @@ import type { ClawThread } from "@/types/claw-thread";
 import { useThreadList } from "@openuidev/react-headless";
 import {
   ChevronRight,
+  Clock3,
   Cpu,
   FileText,
   Home,
@@ -23,6 +25,7 @@ import {
   Moon,
   PanelLeft,
   PanelLeftClose,
+  Plus,
   Search,
   Settings,
   Sun,
@@ -432,6 +435,18 @@ export function AppSidebar({
             open={sectionsOpen.agents}
             hovered={hov === "agents-head"}
             collapsed={nc}
+            trailing={
+              <IconButton
+                icon={Plus}
+                variant="tertiary"
+                size="sm"
+                title="Create agent"
+                aria-label="Create agent"
+                onClick={() => {
+                  // TODO: wire up create-agent flow
+                }}
+              />
+            }
             onClick={() => toggleSection("agents")}
             onMouseEnter={() => setHov("agents-head")}
             onMouseLeave={() => setHov(null)}
@@ -673,6 +688,24 @@ export function AppSidebar({
               ) : null}
             </div>
           </ExpandCollapse>
+        </div>
+
+        <SectionSeparator />
+
+        {/* Cron Jobs (top-level nav tab sitting with the scrollable list) */}
+        <div className={`${nc ? "px-2xs" : "px-s"} transition-[padding] duration-300`}>
+          <NavTab
+            tile={<IconTile icon={Clock3} />}
+            label="Cron Jobs"
+            href={cronsHash()}
+            active={route?.view === "crons"}
+            hovered={hov === "crons"}
+            collapsed={nc}
+            onClick={() => navigate({ view: "crons" })}
+            onMouseEnter={() => setHov("crons")}
+            onMouseLeave={() => setHov(null)}
+            title="Cron Jobs"
+          />
         </div>
       </div>
 
