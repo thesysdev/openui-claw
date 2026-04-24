@@ -7,6 +7,8 @@ import {
 import { ArtifactDetail } from "@/components/artifacts/ArtifactDetail";
 import { ArtifactsView } from "@/components/artifacts/ArtifactsView";
 import { CommandPalette } from "@/components/CommandPalette";
+import { AgentsView } from "@/components/agents/AgentsView";
+import { AppsView } from "@/components/apps/AppsView";
 import { HomeView } from "@/components/home/HomeView";
 import { AppSidebar } from "@/components/layout/AppSidebar";
 import { DetailTopBar } from "@/components/layout/DetailTopBar";
@@ -1522,9 +1524,7 @@ function ChatAppInner({
           notifications={notifications}
           cronJobs={cronJobs}
           cronRuns={cronRuns}
-          onNavigate={(view) =>
-            navigate({ view: view === "artifacts" ? "artifacts" : "home" })
-          }
+          onNavigate={(view) => navigate({ view })}
           onOpenThread={(threadId) => navigate({ view: "chat", sessionId: threadId })}
           onOpenApp={(appId) => navigate({ view: "app", appId })}
           onOpenArtifact={(artifactId) => navigate({ view: "artifact", artifactId })}
@@ -1550,10 +1550,32 @@ function ChatAppInner({
         />
       </div>
     );
+  } else if (route.view === "agents") {
+    mainContent = (
+      <Shell.ThreadContainer>
+        <AgentsView
+          threads={threads}
+          onOpenThread={(threadId) => navigate({ view: "chat", sessionId: threadId })}
+        />
+      </Shell.ThreadContainer>
+    );
+  } else if (route.view === "apps") {
+    mainContent = (
+      <Shell.ThreadContainer>
+        <AppsView
+          apps={appList}
+          pinnedAppIds={pinnedAppIds}
+          onOpenApp={(appId) => navigate({ view: "app", appId })}
+        />
+      </Shell.ThreadContainer>
+    );
   } else if (route.view === "artifacts" && artifacts) {
     mainContent = (
       <Shell.ThreadContainer>
-        <ArtifactsView artifacts={artifacts} />
+        <ArtifactsView
+          artifacts={artifacts}
+          onOpenArtifact={(artifactId) => navigate({ view: "artifact", artifactId })}
+        />
       </Shell.ThreadContainer>
     );
   } else if ((route.view === "artifact" && artifacts) || (route.view === "app" && apps)) {

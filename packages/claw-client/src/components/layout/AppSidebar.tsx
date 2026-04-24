@@ -3,7 +3,9 @@
 import type { AppSummary, ArtifactSummary } from "@/lib/engines/types";
 import { ConnectionState } from "@/lib/gateway/types";
 import {
+  agentsHash,
   appHash,
+  appsHash,
   artifactHash,
   artifactsHash,
   homeHash,
@@ -440,6 +442,12 @@ export function AppSidebar({
                 <p className="px-s py-xs text-xs text-text-neutral-tertiary">
                   Loading agents…
                 </p>
+              ) : recentGroups.length === 0 ? (
+                nc ? null : (
+                  <div className="mx-s my-xs rounded-m border border-dashed border-border-default/70 px-s py-xl text-center text-sm text-text-neutral-tertiary dark:border-border-default">
+                    No agents yet
+                  </div>
+                )
               ) : (
                 recentGroups.slice(0, 5).map((g) => {
                   const isActiveAgent = g.threads.some((t) => t.id === activeChatId);
@@ -520,16 +528,20 @@ export function AppSidebar({
                   );
                 })
               )}
-              <NavTab
-                tile={<BorderTile icon={ChevronRight} hover={hov === "agents-viewall"} />}
-                label="View all"
-                muted
-                hovered={hov === "agents-viewall"}
-                collapsed={nc}
-                onClick={() => navigate({ view: "home" })}
-                onMouseEnter={() => setHov("agents-viewall")}
-                onMouseLeave={() => setHov(null)}
-              />
+              {recentGroups.length > 5 ? (
+                <NavTab
+                  tile={<BorderTile icon={ChevronRight} hover={hov === "agents-viewall"} />}
+                  label="View all"
+                  muted
+                  active={route?.view === "agents"}
+                  hovered={hov === "agents-viewall"}
+                  collapsed={nc}
+                  onClick={() => navigate({ view: "agents" })}
+                  onMouseEnter={() => setHov("agents-viewall")}
+                  onMouseLeave={() => setHov(null)}
+                  href={agentsHash()}
+                />
+              ) : null}
             </div>
           </ExpandCollapse>
         </div>
@@ -553,9 +565,9 @@ export function AppSidebar({
             <div className="pb-3xs">
               {sortedApps.length === 0 ? (
                 nc ? null : (
-                  <p className="px-s py-xs text-xs text-text-neutral-tertiary">
-                    No apps yet
-                  </p>
+                  <div className="mx-s my-xs rounded-m border border-dashed border-border-default/70 px-s py-xl text-center text-sm text-text-neutral-tertiary dark:border-border-default">
+                    No apps built yet
+                  </div>
                 )
               ) : (
                 sortedApps.slice(0, 5).map((app) => {
@@ -578,16 +590,20 @@ export function AppSidebar({
                   );
                 })
               )}
-              <NavTab
-                tile={<BorderTile icon={ChevronRight} hover={hov === "apps-viewall"} />}
-                label="View all"
-                muted
-                hovered={hov === "apps-viewall"}
-                collapsed={nc}
-                onClick={() => navigate({ view: "home" })}
-                onMouseEnter={() => setHov("apps-viewall")}
-                onMouseLeave={() => setHov(null)}
-              />
+              {sortedApps.length > 5 ? (
+                <NavTab
+                  tile={<BorderTile icon={ChevronRight} hover={hov === "apps-viewall"} />}
+                  label="View all"
+                  muted
+                  active={route?.view === "apps"}
+                  hovered={hov === "apps-viewall"}
+                  collapsed={nc}
+                  onClick={() => navigate({ view: "apps" })}
+                  onMouseEnter={() => setHov("apps-viewall")}
+                  onMouseLeave={() => setHov(null)}
+                  href={appsHash()}
+                />
+              ) : null}
             </div>
           </ExpandCollapse>
         </div>
@@ -611,9 +627,9 @@ export function AppSidebar({
             <div className="pb-3xs">
               {artifacts.length === 0 ? (
                 nc ? null : (
-                  <p className="px-s py-xs text-xs text-text-neutral-tertiary">
-                    No artifacts yet
-                  </p>
+                  <div className="mx-s my-xs rounded-m border border-dashed border-border-default/70 px-s py-xl text-center text-sm text-text-neutral-tertiary dark:border-border-default">
+                    No artifacts created yet
+                  </div>
                 )
               ) : (
                 sortedArtifacts.slice(0, 5).map((a) => {
@@ -641,18 +657,20 @@ export function AppSidebar({
                   );
                 })
               )}
-              <NavTab
-                tile={<BorderTile icon={ChevronRight} hover={hov === "artifacts-viewall"} />}
-                label="View all"
-                muted
-                active={route?.view === "artifacts"}
-                hovered={hov === "artifacts-viewall"}
-                collapsed={nc}
-                onClick={() => navigate({ view: "artifacts" })}
-                onMouseEnter={() => setHov("artifacts-viewall")}
-                onMouseLeave={() => setHov(null)}
-                href={artifactsHash()}
-              />
+              {sortedArtifacts.length > 5 ? (
+                <NavTab
+                  tile={<BorderTile icon={ChevronRight} hover={hov === "artifacts-viewall"} />}
+                  label="View all"
+                  muted
+                  active={route?.view === "artifacts"}
+                  hovered={hov === "artifacts-viewall"}
+                  collapsed={nc}
+                  onClick={() => navigate({ view: "artifacts" })}
+                  onMouseEnter={() => setHov("artifacts-viewall")}
+                  onMouseLeave={() => setHov(null)}
+                  href={artifactsHash()}
+                />
+              ) : null}
             </div>
           </ExpandCollapse>
         </div>

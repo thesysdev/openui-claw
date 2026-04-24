@@ -23,7 +23,7 @@ const VARIANT_STYLES: Record<ButtonVariant, string> = {
   primary:
     "bg-interactive-accent text-background border border-transparent shadow-md hover:bg-interactive-accent-hover disabled:bg-interactive-accent-disabled disabled:shadow-none",
   secondary:
-    "bg-background text-text-neutral-secondary border border-border-default shadow-sm hover:bg-sunk-light hover:text-text-neutral-primary dark:bg-foreground dark:border-transparent dark:hover:bg-sunk-light",
+    "bg-background text-text-neutral-secondary border border-border-default shadow-sm hover:bg-sunk-light hover:text-text-neutral-primary dark:bg-foreground dark:border-border-default dark:hover:bg-sunk-light",
   tertiary:
     "bg-transparent text-text-neutral-tertiary border border-transparent hover:bg-sunk dark:hover:bg-sunk-light hover:text-text-neutral-primary",
   borderless:

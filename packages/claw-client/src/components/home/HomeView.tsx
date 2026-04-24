@@ -7,6 +7,7 @@ import {
   FileText,
   Image as ImageIcon,
   LayoutGrid,
+  Plus,
   ScrollText,
   Table2,
 } from "lucide-react";
@@ -183,9 +184,12 @@ export function HomeView({
           <section className="mb-ml">
             <SectionHeader title="Top agents" />
             {agents.length === 0 ? (
-              <p className="rounded-2xl border border-dashed border-border-default px-ml py-xl text-sm text-text-neutral-tertiary">
-                No agents yet. Start a conversation to see them here.
-              </p>
+              <div className="flex min-h-[130px] flex-col items-center justify-center gap-m rounded-2xl border border-dashed border-border-default px-ml text-sm text-text-neutral-tertiary">
+                <p>Get work done with your first agent.</p>
+                <Button variant="primary" size="md" icon={Plus}>
+                  Create agent
+                </Button>
+              </div>
             ) : (
               <div className="grid grid-cols-2 gap-ml sm:grid-cols-3 lg:grid-cols-4">
                 {agents.slice(0, 4).map((a) => (
@@ -214,9 +218,16 @@ export function HomeView({
             <div className="rounded-2xl border border-border-default/50 bg-popover-background p-ml shadow-xl dark:border-transparent dark:bg-foreground">
               <SectionHeader title="Top apps" />
               {recentApps.length === 0 ? (
-                <p className="font-body text-sm text-text-neutral-tertiary">
-                  Agents will create apps here as you chat.
-                </p>
+                <div className="flex min-h-[150px] flex-col items-center justify-center gap-m rounded-m border border-dashed border-border-default/70 px-ml text-center font-body text-sm text-text-neutral-tertiary dark:border-border-default">
+                  <p>
+                    Ask your agent to create dashboards,
+                    <br />
+                    work trackers, marketing calendars, etc.
+                  </p>
+                  <Button variant="secondary" size="md">
+                    See an example
+                  </Button>
+                </div>
               ) : (
                 <div className="grid grid-cols-1 gap-x-xl sm:grid-cols-2">
                   {recentApps.slice(0, 6).map((app) => (
@@ -250,9 +261,16 @@ export function HomeView({
             <div className="rounded-2xl border border-border-default/50 bg-popover-background p-ml shadow-xl dark:border-transparent dark:bg-foreground">
               <SectionHeader title="Recent artifacts" />
               {recentArtifacts.length === 0 ? (
-                <p className="font-body text-sm text-text-neutral-tertiary">
-                  Saved documents and files will appear here.
-                </p>
+                <div className="flex min-h-[150px] flex-col items-center justify-center gap-m rounded-m border border-dashed border-border-default/70 px-ml text-center font-body text-sm text-text-neutral-tertiary dark:border-border-default">
+                  <p>
+                    Ask your agent to create
+                    <br />
+                    slides and reports.
+                  </p>
+                  <Button variant="secondary" size="md">
+                    See an example
+                  </Button>
+                </div>
               ) : (
                 recentArtifacts.slice(0, 3).map((art) => {
                   const Icon = ARTIFACT_ICON[art.kind] ?? ScrollText;
@@ -288,9 +306,13 @@ export function HomeView({
           <section className="mt-2xl mb-3xl">
             <SectionHeader title="Scheduled activity" />
             {visibleCrons.length === 0 ? (
-              <p className="rounded-2xl border border-dashed border-border-default px-ml py-xl text-sm text-text-neutral-tertiary">
-                Scheduled jobs will appear here once cron is active.
-              </p>
+              <div className="flex min-h-[150px] items-center justify-center rounded-2xl border border-dashed border-border-default px-ml text-center text-sm text-text-neutral-tertiary">
+                <p>
+                  Ask your agent to schedule recurring jobs
+                  <br />
+                  like daily digests or weekly reports.
+                </p>
+              </div>
             ) : (
               <div className="space-y-xs">
                 {visibleCrons.map((job) => {
