@@ -5,6 +5,8 @@ import { useEffect, useState } from "react";
 export type Route =
   | { view: "home" }
   | { view: "chat"; sessionId: string }
+  | { view: "agents" }
+  | { view: "apps" }
   | { view: "artifacts" }
   | { view: "artifact"; artifactId: string }
   | { view: "app"; appId: string };
@@ -16,6 +18,8 @@ function parseHash(hash: string): Route | null {
     const sessionId = decodeURIComponent(path.slice("/chat/".length));
     if (sessionId) return { view: "chat", sessionId };
   }
+  if (path === "/agents") return { view: "agents" };
+  if (path === "/apps") return { view: "apps" };
   if (path === "/artifacts") return { view: "artifacts" };
   if (path.startsWith("/artifacts/")) {
     const artifactId = decodeURIComponent(path.slice("/artifacts/".length));
@@ -36,6 +40,14 @@ export function chatHash(sessionId: string): string {
   return `#/chat/${encodeURIComponent(sessionId)}`;
 }
 
+export function agentsHash(): string {
+  return "#/agents";
+}
+
+export function appsHash(): string {
+  return "#/apps";
+}
+
 export function artifactsHash(): string {
   return "#/artifacts";
 }
@@ -53,6 +65,10 @@ export function navigate(route: Route): void {
     window.location.hash = "/home";
   } else if (route.view === "chat") {
     window.location.hash = `/chat/${encodeURIComponent(route.sessionId)}`;
+  } else if (route.view === "agents") {
+    window.location.hash = "/agents";
+  } else if (route.view === "apps") {
+    window.location.hash = "/apps";
   } else if (route.view === "artifacts") {
     window.location.hash = "/artifacts";
   } else if (route.view === "app") {

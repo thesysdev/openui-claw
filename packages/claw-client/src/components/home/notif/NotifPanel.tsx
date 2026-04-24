@@ -1,5 +1,6 @@
 "use client";
 
+import { BellOff } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { Counter } from "@/components/ui/Counter";
@@ -129,11 +130,14 @@ export function NotifPanel({
         ) : null}
 
         {rows.length === 0 ? (
-          <p className="px-ml py-xl text-center font-body text-sm text-text-neutral-tertiary">
-            {filtered.length === 0
-              ? "No notifications"
-              : "Only needs-input items — see above"}
-          </p>
+          <div className="flex h-full flex-col items-center justify-center gap-s px-ml text-center">
+            <BellOff size={16} className="text-text-neutral-tertiary/60" />
+            <p className="font-body text-sm text-text-neutral-tertiary">
+              {filtered.length === 0
+                ? "It's quiet here"
+                : "Only needs-input items — see above"}
+            </p>
+          </div>
         ) : (
           rows.map((n, i) => (
             <NotifRow

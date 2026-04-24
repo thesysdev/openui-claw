@@ -112,32 +112,26 @@ export const SessionRow = forwardRef<HTMLInputElement, SessionRowProps>(
                 </DropdownMenu.Trigger>
                 <DropdownMenu.Portal>
                   <DropdownMenu.Content
-                    className="openui-shell-thread-button-dropdown-menu"
+                    className="z-50 min-w-[140px] rounded-lg border border-border-default/50 bg-popover-background p-3xs shadow-xl dark:border-transparent dark:bg-elevated"
                     side="bottom"
                     align="start"
                     sideOffset={2}
                   >
                     {onRename && (
                       <DropdownMenu.Item
-                        className="openui-shell-thread-button-dropdown-menu-item"
+                        className="flex cursor-pointer items-center gap-xs rounded-m px-s py-xs text-sm text-text-neutral-secondary outline-none transition-colors hover:bg-sunk-light hover:text-text-neutral-primary focus:bg-sunk-light focus:text-text-neutral-primary dark:hover:bg-foreground dark:focus:bg-foreground"
                         onSelect={onRename}
                       >
-                        <Pencil
-                          size={14}
-                          className="openui-shell-thread-button-dropdown-menu-item-icon"
-                        />
+                        <Pencil size={13} className="text-text-neutral-tertiary" />
                         Rename
                       </DropdownMenu.Item>
                     )}
                     {onDelete && (
                       <DropdownMenu.Item
-                        className="openui-shell-thread-button-dropdown-menu-item"
+                        className="flex cursor-pointer items-center gap-xs rounded-m px-s py-xs text-sm text-text-neutral-secondary outline-none transition-colors hover:bg-sunk-light hover:text-text-neutral-primary focus:bg-sunk-light focus:text-text-neutral-primary dark:hover:bg-foreground dark:focus:bg-foreground"
                         onSelect={onDelete}
                       >
-                        <Trash2
-                          size={14}
-                          className="openui-shell-thread-button-dropdown-menu-item-icon"
-                        />
+                        <Trash2 size={13} className="text-text-neutral-tertiary" />
                         Delete
                       </DropdownMenu.Item>
                     )}
