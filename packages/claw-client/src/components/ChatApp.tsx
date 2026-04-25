@@ -812,7 +812,7 @@ function ThreadArea({
               "agent"
             : "agent";
           return (
-            <div className="fixed inset-0 z-[60] flex bg-background dark:bg-sunk">
+            <div className="absolute inset-0 z-[60] flex bg-background dark:bg-sunk">
               <RefineTray
                 threadId={refineTray.threadId}
                 agentName={agentNameFor(trayAgentId)}
@@ -1645,7 +1645,7 @@ function ChatAppInner({
         "agent"
       : "agent";
     mainContent = (
-      <div className="fixed inset-0 z-[60] flex bg-background dark:bg-sunk">
+      <div className="relative flex h-full min-w-0 flex-1 bg-background dark:bg-sunk">
         <RefineTray
           threadId={routeRefineTray.threadId}
           agentName={agentNameFor(trayAgentId)}
@@ -1756,6 +1756,7 @@ function ChatAppInner({
           unreadNotificationCount={unreadNotificationCount}
           hiddenThreadIds={hiddenRefinementThreadIds}
           pinnedAppIds={pinnedAppIds}
+          forceCollapsed={route.view === "app" || route.view === "artifact"}
           onOpenCommandPalette={() => setPaletteOpen(true)}
         />
       )}
