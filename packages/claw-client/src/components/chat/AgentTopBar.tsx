@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, Cpu, Plus } from "lucide-react";
+import { ArrowLeft, Cpu, PanelRightOpen, Plus } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { IconButton } from "@/components/layout/sidebar/IconButton";
@@ -30,6 +30,10 @@ export interface AgentTopBarProps {
   onSwitchAgent: (agent: AgentTopBarAgent) => void;
   onSelectSession: (threadId: string) => void;
   onNewSession: () => void;
+  /** Optional — renders a workspace toggle icon in the actions slot when provided. */
+  onOpenWorkspace?: () => void;
+  /** Compact icon-only "New session" trigger (used on mobile). */
+  compactNewSession?: boolean;
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -211,7 +215,7 @@ function SessionSwitcher({
         onMouseEnter={() => setHover(true)}
         onMouseLeave={() => setHover(false)}
       >
-        <span className="max-w-[260px] truncate font-body text-md font-regular text-text-neutral-secondary">
+        <span className="max-w-[120px] truncate font-body text-md font-regular text-text-neutral-secondary sm:max-w-[260px]">
           {activeSession.title}
         </span>
       </PillButton>
@@ -278,6 +282,8 @@ export function AgentTopBar({
   onSwitchAgent,
   onSelectSession,
   onNewSession,
+  onOpenWorkspace,
+  compactNewSession,
 }: AgentTopBarProps) {
   return (
     <TopBar
@@ -285,7 +291,7 @@ export function AgentTopBar({
         onBack ? (
           <IconButton
             icon={ArrowLeft}
-            variant="secondary"
+            variant={compactNewSession ? "tertiary" : "secondary"}
             size="md"
             title="Back"
             onClick={onBack}
@@ -293,9 +299,32 @@ export function AgentTopBar({
         ) : undefined
       }
       actions={
-        <Button variant="tertiary" size="md" icon={Plus} onClick={onNewSession}>
-          New session
-        </Button>
+        <>
+          {compactNewSession ? (
+            <IconButton
+              icon={Plus}
+              variant="tertiary"
+              size="md"
+              title="New session"
+              aria-label="New session"
+              onClick={onNewSession}
+            />
+          ) : (
+            <Button variant="tertiary" size="md" icon={Plus} onClick={onNewSession}>
+              New session
+            </Button>
+          )}
+          {onOpenWorkspace ? (
+            <IconButton
+              icon={PanelRightOpen}
+              variant="tertiary"
+              size="md"
+              title="Open workspace"
+              aria-label="Open workspace"
+              onClick={onOpenWorkspace}
+            />
+          ) : null}
+        </>
       }
     >
       <div className="flex min-w-0 items-center gap-xs">

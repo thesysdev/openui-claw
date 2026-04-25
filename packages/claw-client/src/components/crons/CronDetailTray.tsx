@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  ArrowLeft,
   Check,
   ExternalLink,
   Pause,
@@ -44,6 +45,8 @@ export interface CronDetailTrayProps {
   onDelete?: (job: CronJobRecord) => void;
   onDuplicate?: (job: CronJobRecord) => void;
   onOpenThread?: (threadId: string) => void;
+  /** Mobile full-screen takeover — covers the bottom nav, swaps close X for back arrow. */
+  fullScreen?: boolean;
 }
 
 export function CronDetailTray({
@@ -59,6 +62,7 @@ export function CronDetailTray({
   onDelete,
   onDuplicate,
   onOpenThread,
+  fullScreen = false,
 }: CronDetailTrayProps) {
   const [tab, setTab] = useState<DetailTab>("details");
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -76,19 +80,44 @@ export function CronDetailTray({
 
   return (
     <div
-      className="relative flex h-full shrink-0 flex-col border-l border-border-default/50 bg-background dark:border-border-default/16"
-      style={{ width }}
+      className={`flex h-full flex-col bg-background ${
+        fullScreen
+          ? "fixed inset-0 z-[70] w-full overflow-y-auto"
+          : "relative shrink-0 border-l border-border-default/50 dark:border-border-default/16"
+      }`}
+      style={
+        fullScreen
+          ? {
+              paddingTop: "env(safe-area-inset-top)",
+              paddingBottom: "env(safe-area-inset-bottom)",
+            }
+          : { width }
+      }
     >
       <TopBar
+        leading={
+          fullScreen ? (
+            <IconButton
+              icon={ArrowLeft}
+              variant="tertiary"
+              size="md"
+              title="Back"
+              aria-label="Back"
+              onClick={onClose}
+            />
+          ) : undefined
+        }
         actions={
-          <IconButton
-            icon={X}
-            variant="tertiary"
-            size="md"
-            title="Close"
-            aria-label="Close cron job"
-            onClick={onClose}
-          />
+          fullScreen ? null : (
+            <IconButton
+              icon={X}
+              variant="tertiary"
+              size="md"
+              title="Close"
+              aria-label="Close cron job"
+              onClick={onClose}
+            />
+          )
         }
       >
         <InlineText
@@ -145,13 +174,15 @@ export function CronDetailTray({
         )}
       </div>
 
-      {/* Left-edge resize handle */}
-      <div
-        role="separator"
-        aria-orientation="vertical"
-        onMouseDown={onDragStart}
-        className="absolute left-0 top-0 h-full w-1 cursor-col-resize hover:bg-border-default/70"
-      />
+      {/* Left-edge resize handle (desktop side panel only) */}
+      {fullScreen ? null : (
+        <div
+          role="separator"
+          aria-orientation="vertical"
+          onMouseDown={onDragStart}
+          className="absolute left-0 top-0 h-full w-1 cursor-col-resize hover:bg-border-default/70"
+        />
+      )}
     </div>
   );
 }

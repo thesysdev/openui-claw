@@ -5,7 +5,7 @@ import { useMemo, useState } from "react";
 
 import { AppCard } from "@/components/cards/AppCard";
 import { SectionHeader } from "@/components/home/SectionHeader";
-import { SortPills } from "@/components/ui/SortPills";
+import { Sort } from "@/components/ui/Sort";
 import type { AppSummary } from "@/lib/engines/types";
 
 type Sort = "recent" | "a-z";
@@ -37,9 +37,11 @@ export function AppsView({ apps, pinnedAppIds, onOpenApp }: AppsViewProps) {
   }, [otherApps, sort]);
 
   return (
-    <div className="h-full flex-1 overflow-y-auto bg-background p-3xl">
+    <div className="h-full flex-1 overflow-y-auto bg-background p-ml sm:p-3xl">
       <div className="mx-auto max-w-[1080px]">
-        <h2 className="mb-3xl font-heading text-lg font-bold text-text-neutral-primary">Apps</h2>
+        <h2 className="mb-ml hidden font-heading text-lg font-bold text-text-neutral-primary sm:mb-3xl sm:block">
+          Apps
+        </h2>
 
         {apps.length === 0 ? (
           <p className="rounded-2xl border border-dashed border-border-default px-ml py-xl text-sm text-text-neutral-tertiary">
@@ -73,14 +75,7 @@ export function AppsView({ apps, pinnedAppIds, onOpenApp }: AppsViewProps) {
               <SectionHeader
                 title="All apps"
                 right={
-                  <SortPills
-                    value={sort}
-                    options={[
-                      { key: "recent", label: "Recent" },
-                      { key: "a-z", label: "A–Z" },
-                    ]}
-                    onChange={setSort}
-                  />
+                  <Sort value={sort} onChange={setSort} />
                 }
               />
               <div className="grid grid-cols-1 gap-ml sm:grid-cols-2 lg:grid-cols-3">

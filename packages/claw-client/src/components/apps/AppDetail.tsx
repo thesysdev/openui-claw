@@ -9,8 +9,9 @@ import type { ActionEvent } from "@openuidev/react-lang";
 import { Renderer } from "@openuidev/react-lang";
 import { Callout } from "@openuidev/react-ui";
 import { openuiLibrary } from "@openuidev/react-ui/genui-lib";
-import { Code2, Eye, Sparkles, Trash2, X } from "lucide-react";
+import { ArrowLeft, Code2, Eye, Sparkles, Trash2, X } from "lucide-react";
 import { TopBar } from "@/components/chat/TopBar";
+import { useIsMobile } from "@/lib/hooks/useIsMobile";
 import {
   TitleSwitcher,
   type TitleSwitcherItem,
@@ -94,6 +95,7 @@ export function AppDetail({
   siblings,
   onSwitch,
 }: Props) {
+  const isMobile = useIsMobile();
   const [record, setRecord] = useState<AppRecord | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
@@ -206,6 +208,18 @@ export function AppDetail({
       )}
 
       <TopBar
+        leading={
+          isMobile && mode === "panel" && onClose ? (
+            <IconButton
+              icon={ArrowLeft}
+              variant="tertiary"
+              size="md"
+              title="Back"
+              aria-label="Back"
+              onClick={onClose}
+            />
+          ) : undefined
+        }
         actions={
           <>
             {onRefine && (
@@ -245,7 +259,7 @@ export function AppDetail({
                 onClick={handleDelete}
               />
             )}
-            {mode === "panel" && onClose ? (
+            {mode === "panel" && onClose && !isMobile ? (
               <IconButton
                 icon={X}
                 variant="tertiary"

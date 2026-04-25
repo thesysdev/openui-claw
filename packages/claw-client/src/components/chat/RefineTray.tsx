@@ -3,7 +3,7 @@
 import { TopBar } from "@/components/chat/TopBar";
 import { IconButton } from "@/components/layout/sidebar/IconButton";
 import { TextTile } from "@/components/layout/sidebar/Tile";
-import { Menu, X } from "lucide-react";
+import { ArrowLeft, Menu, X } from "lucide-react";
 import type { MouseEvent as ReactMouseEvent } from "react";
 
 export interface RefineTrayProps {
@@ -16,6 +16,8 @@ export interface RefineTrayProps {
   /** Drag handler from `useRefineTrayDrag`. */
   onDragStart: (e: ReactMouseEvent) => void;
   onClose: () => void;
+  /** Mobile full-screen takeover — ignores `width`, hides drag handle, swaps close icon for back arrow. */
+  fullScreen?: boolean;
 }
 
 /**
@@ -29,6 +31,7 @@ export function RefineTray({
   width,
   onDragStart,
   onClose,
+  fullScreen = false,
 }: RefineTrayProps) {
   if (!threadId) return null;
 
@@ -41,10 +44,26 @@ export function RefineTray({
 
   return (
     <div
-      className="relative flex h-full shrink-0 flex-col overflow-hidden border-r border-border-default/50 bg-foreground transition-[width] duration-300 ease-out dark:border-border-default/16 dark:bg-sunk-deep"
-      style={{ width }}
+      className={`flex h-full flex-col overflow-hidden bg-foreground dark:bg-sunk-deep ${
+        fullScreen
+          ? "absolute inset-0 z-[70] w-full"
+          : "relative shrink-0 border-r border-border-default/50 transition-[width] duration-300 ease-out dark:border-border-default/16"
+      }`}
+      style={fullScreen ? undefined : { width }}
     >
       <TopBar
+        leading={
+          fullScreen ? (
+            <IconButton
+              icon={ArrowLeft}
+              variant="tertiary"
+              size="md"
+              title="Back"
+              aria-label="Back"
+              onClick={onClose}
+            />
+          ) : undefined
+        }
         actions={
           <>
             <IconButton
@@ -55,14 +74,16 @@ export function RefineTray({
               aria-label="Open thread workspace"
               onClick={toggleWorkspace}
             />
-            <IconButton
-              icon={X}
-              variant="tertiary"
-              size="md"
-              title="Close"
-              aria-label="Close tray"
-              onClick={onClose}
-            />
+            {fullScreen ? null : (
+              <IconButton
+                icon={X}
+                variant="tertiary"
+                size="md"
+                title="Close"
+                aria-label="Close tray"
+                onClick={onClose}
+              />
+            )}
           </>
         }
       >
@@ -76,12 +97,14 @@ export function RefineTray({
         src={`${typeof window !== "undefined" ? window.location.pathname : "/"}?embed=1#/chat/${threadId}`}
         className="h-full w-full flex-1 border-0"
       />
-      <div
-        role="separator"
-        aria-orientation="vertical"
-        onMouseDown={onDragStart}
-        className="absolute right-0 top-0 h-full w-1 cursor-col-resize hover:bg-border-default/70"
-      />
+      {fullScreen ? null : (
+        <div
+          role="separator"
+          aria-orientation="vertical"
+          onMouseDown={onDragStart}
+          className="absolute right-0 top-0 h-full w-1 cursor-col-resize hover:bg-border-default/70"
+        />
+      )}
     </div>
   );
 }

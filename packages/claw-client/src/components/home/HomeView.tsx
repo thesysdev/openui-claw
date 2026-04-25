@@ -183,7 +183,7 @@ export function HomeView({
     <div className="flex h-full flex-1 overflow-hidden bg-background">
       {/* ── Main scroll area ── */}
       <div className="flex-1 overflow-y-auto">
-        <div className="mx-auto max-w-[1080px] px-3xl py-3xl">
+        <div className="mx-auto max-w-[1080px] px-ml py-ml sm:px-3xl sm:py-3xl">
           <Greeting name={userName} />
 
           {/* Top agents */}
@@ -331,13 +331,15 @@ export function HomeView({
         </div>
       </div>
 
-      {/* ── Notifications panel ── */}
-      <NotifPanel
-        notifications={homeNotifs}
-        onOpenNotif={(n) => onOpenNotif?.(n.id)}
-        onMarkRead={(id) => onMarkNotifRead?.(id)}
-        onAction={(n) => onOpenNotif?.(n.id)}
-      />
+      {/* ── Notifications panel — desktop only; mobile uses bell icon → drawer ── */}
+      <div className="hidden sm:flex">
+        <NotifPanel
+          notifications={homeNotifs}
+          onOpenNotif={(n) => onOpenNotif?.(n.id)}
+          onMarkRead={(id) => onMarkNotifRead?.(id)}
+          onAction={(n) => onOpenNotif?.(n.id)}
+        />
+      </div>
     </div>
   );
 }

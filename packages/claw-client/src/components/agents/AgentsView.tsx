@@ -6,7 +6,7 @@ import { useMemo, useState } from "react";
 
 import { AgentCard, type AgentCardData } from "@/components/cards/AgentCard";
 import { SectionHeader } from "@/components/home/SectionHeader";
-import { SortPills } from "@/components/ui/SortPills";
+import { Sort } from "@/components/ui/Sort";
 import type { ClawThread } from "@/types/claw-thread";
 
 type Sort = "recent" | "a-z";
@@ -67,9 +67,9 @@ export function AgentsView({ threads, onOpenThread }: AgentsViewProps) {
   }, [agents, sort]);
 
   return (
-    <div className="h-full flex-1 overflow-y-auto bg-background p-3xl">
+    <div className="h-full flex-1 overflow-y-auto bg-background p-ml sm:p-3xl">
       <div className="mx-auto max-w-[1080px]">
-        <div className="mb-3xl flex items-center justify-between">
+        <div className="mb-ml hidden items-center justify-between sm:mb-3xl sm:flex">
           <h2 className="font-heading text-lg font-bold text-text-neutral-primary">Agents</h2>
         </div>
 
@@ -82,14 +82,7 @@ export function AgentsView({ threads, onOpenThread }: AgentsViewProps) {
             <SectionHeader
               title="All agents"
               right={
-                <SortPills
-                  value={sort}
-                  options={[
-                    { key: "recent", label: "Recent" },
-                    { key: "a-z", label: "A–Z" },
-                  ]}
-                  onChange={setSort}
-                />
+                <Sort value={sort} onChange={setSort} />
               }
             />
             <div className="grid grid-cols-2 gap-ml sm:grid-cols-3 lg:grid-cols-4">

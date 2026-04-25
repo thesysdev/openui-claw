@@ -13,10 +13,12 @@ import { Pause, Pencil, Play, Trash2 } from "lucide-react";
 
 import { IconButton } from "@/components/layout/sidebar/IconButton";
 import { SectionHeader } from "@/components/home/SectionHeader";
-import { SortPills } from "@/components/ui/SortPills";
+import { Sort } from "@/components/ui/Sort";
 import { Tag } from "@/components/layout/sidebar/Tag";
 import type { CronJobRecord, CronRunEntry } from "@/lib/cron";
 import { relTime } from "@/lib/time";
+
+import { useIsMobile } from "@/lib/hooks/useIsMobile";
 
 import { CronDetailTray, type CronJobEdits } from "./CronDetailTray";
 import { cronOwnerLabel, humanFrequency } from "./format";
@@ -42,6 +44,7 @@ export function CronsView({
   initialSelectedId,
   onOpenThread,
 }: CronsViewProps) {
+  const isMobile = useIsMobile();
   const [sort, setSort] = useState<Sort>("recent");
   /** Local overlay — keyed by job id. Surfaces optimistic edits before a backend round-trip. */
   const [overlay, setOverlay] = useState<Record<string, Partial<CronJobRecord>>>({});
@@ -143,9 +146,9 @@ export function CronsView({
   return (
     <div className="flex h-full flex-1 overflow-hidden bg-background">
       {/* ── Main list ── */}
-      <div className="min-w-0 flex-1 overflow-y-auto p-3xl">
+      <div className="min-w-0 flex-1 overflow-y-auto p-ml sm:p-3xl">
         <div className="mx-auto max-w-[1080px]">
-          <h2 className="mb-3xl font-heading text-lg font-bold text-text-neutral-primary">
+          <h2 className="mb-ml hidden font-heading text-lg font-bold text-text-neutral-primary sm:mb-3xl sm:block">
             Cron Jobs
           </h2>
 
@@ -162,17 +165,50 @@ export function CronsView({
               <SectionHeader
                 title="All cron jobs"
                 right={
-                  <SortPills
-                    value={sort}
-                    options={[
-                      { key: "recent", label: "Recent" },
-                      { key: "a-z", label: "A–Z" },
-                    ]}
-                    onChange={setSort}
-                  />
+                  <Sort value={sort} onChange={setSort} />
                 }
               />
-              <div className="overflow-hidden rounded-2xl border border-border-default/50 dark:border-border-default/16">
+              {/* Mobile card list — table is unusable < sm. */}
+              <ul className="space-y-s sm:hidden">
+                {sorted.map((job) => {
+                  const isActive = selectedId === job.id;
+                  const lastRun = runs
+                    .filter((r) => r.jobId === job.id)
+                    .sort((a, b) => b.ts - a.ts)[0];
+                  return (
+                    <li key={job.id}>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedId(job.id)}
+                        aria-selected={isActive}
+                        className={`flex w-full flex-col gap-xs rounded-2xl border border-border-default/50 px-ml py-m text-left transition-colors dark:border-border-default/16 ${
+                          isActive
+                            ? "bg-sunk-light dark:bg-foreground"
+                            : "bg-background active:bg-sunk-light/50 dark:bg-transparent dark:active:bg-foreground/60"
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-s">
+                          <span className="truncate font-body text-sm font-medium text-text-neutral-primary">
+                            {job.name}
+                          </span>
+                          <Tag size="lg" variant={job.enabled ? "success" : "neutral"}>
+                            {job.enabled ? "Active" : "Paused"}
+                          </Tag>
+                        </div>
+                        <p className="truncate font-body text-sm text-text-neutral-tertiary">
+                          {humanFrequency(job)}
+                        </p>
+                        <span className="font-body text-sm text-text-neutral-tertiary">
+                          {lastRun ? `Last run ${relTime(lastRun.ts)}` : "Never run"}
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+
+              {/* Desktop table */}
+              <div className="hidden overflow-hidden rounded-2xl border border-border-default/50 dark:border-border-default/16 sm:block">
                 <table className="w-full table-fixed">
                   <thead className="bg-sunk-light/60 dark:bg-foreground/60">
                     <tr className="text-left">
@@ -301,6 +337,7 @@ export function CronsView({
           onDelete={handleDelete}
           onDuplicate={handleDuplicate}
           onOpenThread={onOpenThread}
+          fullScreen={isMobile}
         />
       ) : null}
     </div>

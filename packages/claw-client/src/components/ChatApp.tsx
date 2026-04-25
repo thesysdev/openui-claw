@@ -12,6 +12,7 @@ import { AppsView } from "@/components/apps/AppsView";
 import { CronsView } from "@/components/crons/CronsView";
 import { HomeView } from "@/components/home/HomeView";
 import { AppSidebar } from "@/components/layout/AppSidebar";
+import { MobileShell } from "@/components/layout/MobileShell";
 import {
   NotificationInboxDrawer,
   NotificationInboxPane,
@@ -37,6 +38,7 @@ import {
   SessionWorkspacePane,
 } from "@/components/session/SessionWorkspacePane";
 import { SettingsDialog } from "@/components/settings/SettingsDialog";
+import { bootstrapThemeFromStorage } from "@/lib/hooks/useTheme";
 import { loadPinnedAppIds, savePinnedAppIds } from "@/lib/app-pins";
 import { openClawAdapter } from "@/lib/chat/openClawAdapter";
 import { serializeAssistantTimelineContent } from "@/lib/chat/timeline";
@@ -59,6 +61,7 @@ import type {
 } from "@/lib/engines/types";
 import { ConnectionState } from "@/lib/gateway/types";
 import { navigate, useHashRoute } from "@/lib/hooks/useHashRoute";
+import { useIsMobile } from "@/lib/hooks/useIsMobile";
 import type { NotificationRecord } from "@/lib/notifications";
 import {
   EMPTY_THREAD_WORKSPACE,
@@ -231,6 +234,7 @@ function ThreadArea({
   const { activeArtifactId } = useActiveArtifact();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const previousRunningRef = useRef(false);
+  const isMobile = useIsMobile();
   // Embed mode — rendered inside the refine tray iframe. URL carries `?embed=1`.
   const isEmbed =
     typeof window !== "undefined" &&
@@ -679,7 +683,7 @@ function ThreadArea({
                   title: currentThread.title,
                 }}
                 sessions={sessions}
-                onBack={() => navigate({ view: "home" })}
+                onBack={() => navigate({ view: isMobile ? "agents" : "home" })}
                 onSwitchAgent={(a) => {
                   // Open that agent's main thread if present, else any thread.
                   const target =
@@ -696,6 +700,8 @@ function ThreadArea({
                   const newId = await createSession(currentAgentId);
                   if (newId) navigate({ view: "chat", sessionId: newId });
                 }}
+                compactNewSession={isMobile}
+                onOpenWorkspace={isMobile ? () => setMobileWorkspaceOpen(true) : undefined}
               />
             );
           })()}
@@ -819,6 +825,7 @@ function ThreadArea({
                 width={refineTray.width}
                 onDragStart={refineTray.onDragStart}
                 onClose={refineTray.close}
+                fullScreen={isMobile}
               />
 
               <div className="flex min-w-0 flex-1 flex-col">
@@ -1136,6 +1143,7 @@ function ChatAppInner({
   // Extra (non-destructured-above) props that flow through ChatAppInner.
   // Using `arguments` would be noisy; re-grab via a local re-assignment.
   const route = useHashRoute() ?? { view: "home" as const };
+  const isMobile = useIsMobile();
   const { threads, selectedThreadId, selectThread, loadThreads } = useThreadList();
   const selectedThreadIsRunning = useThread((state) => state.isRunning);
   const dispatchChatProcessMessage = useThread((state) => state.processMessage);
@@ -1571,18 +1579,6 @@ function ChatAppInner({
             void onMarkNotificationsRead([notifId]);
           }}
         />
-        <NotificationInboxDrawer
-          open={mobileNotificationInboxOpen}
-          onClose={() => setMobileNotificationInboxOpen(false)}
-          notifications={notifications}
-          onMarkAllRead={async () => {
-            await onMarkNotificationsRead();
-          }}
-          onOpenNotification={async (notification) => {
-            setMobileNotificationInboxOpen(false);
-            await openNotification(notification);
-          }}
-        />
       </div>
     );
   } else if (route.view === "agents") {
@@ -1652,6 +1648,7 @@ function ChatAppInner({
           width={routeRefineTray.width}
           onDragStart={routeRefineTray.onDragStart}
           onClose={routeRefineTray.close}
+          fullScreen={isMobile}
         />
 
         <div className="flex min-w-0 flex-1 flex-col">
@@ -1742,6 +1739,69 @@ function ChatAppInner({
     typeof window !== "undefined" &&
     new URLSearchParams(window.location.search).get("embed") === "1";
 
+  if (isMobile && !isEmbed) {
+    const chromelessRoute = route.view === "app" || route.view === "artifact";
+    return (
+      <Shell.Container agentName="Claw" logoUrl={LOGO_URL}>
+        <MobileShell
+          route={route}
+          unreadNotificationCount={unreadNotificationCount}
+          connectionState={connectionState}
+          onOpenSearch={() => setPaletteOpen(true)}
+          onOpenNotifications={() => setMobileNotificationInboxOpen(true)}
+          onOpenSettings={onSettingsClick}
+          chromeless={chromelessRoute}
+        >
+          {mainContent}
+        </MobileShell>
+        <NotificationInboxDrawer
+          open={mobileNotificationInboxOpen}
+          onClose={() => setMobileNotificationInboxOpen(false)}
+          notifications={notifications}
+          onMarkAllRead={async () => {
+            await onMarkNotificationsRead();
+          }}
+          onOpenNotification={async (notification) => {
+            setMobileNotificationInboxOpen(false);
+            await openNotification(notification);
+          }}
+        />
+        <NotificationToastViewport
+          toasts={toastNotices}
+          onDismiss={(toastId) => {
+            setToastNotices((current) => current.filter((toast) => toast.id !== toastId));
+          }}
+          onOpen={(notification, toastId) => {
+            setToastNotices((current) => current.filter((toast) => toast.id !== toastId));
+            void openNotification(notification);
+          }}
+        />
+        <CommandPalette
+          open={paletteOpen}
+          onClose={() => setPaletteOpen(false)}
+          threads={threads as unknown as ClawThreadListItem[]}
+          apps={appList}
+          artifacts={artifactList}
+          onTarget={(target) => {
+            if (target.kind === "thread") {
+              navigate({ view: "chat", sessionId: target.threadId });
+            } else if (target.kind === "app") {
+              navigate({ view: "app", appId: target.appId });
+            } else if (target.kind === "artifact") {
+              navigate({ view: "artifact", artifactId: target.artifactId });
+            } else if (target.kind === "command") {
+              if (route.view !== "chat") navigate({ view: "home" });
+              const evt = new CustomEvent("openui-claw:prime-composer", {
+                detail: { text: `/${target.command.name} ` },
+              });
+              window.dispatchEvent(evt);
+            }
+          }}
+        />
+      </Shell.Container>
+    );
+  }
+
   return (
     <Shell.Container agentName="Claw" logoUrl={LOGO_URL}>
       {isEmbed ? null : (
@@ -1802,6 +1862,9 @@ function ChatAppInner({
 
 export default function ChatApp() {
   const [settingsOpen, setSettingsOpen] = useState(false);
+  useEffect(() => {
+    bootstrapThemeFromStorage();
+  }, []);
   const [appList, setAppList] = useState<AppSummary[]>([]);
   const [artifactList, setArtifactList] = useState<ArtifactSummary[]>([]);
   const [pinnedAppIds, setPinnedAppIds] = useState<Set<string>>(new Set());

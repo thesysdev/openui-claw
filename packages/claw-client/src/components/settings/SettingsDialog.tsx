@@ -49,8 +49,12 @@ export function SettingsDialog({ open, currentSettings, onClose, onSave }: Props
   return (
     <dialog
       ref={dialogRef}
-      className="backdrop:bg-overlay bg-background text-text-neutral-primary rounded-xl shadow-xl p-ml w-full max-w-md outline-none"
+      className="backdrop:bg-overlay bg-background text-text-neutral-primary outline-none m-0 h-full max-h-none w-full max-w-none overflow-y-auto p-ml sm:m-auto sm:h-auto sm:max-h-[85vh] sm:w-full sm:max-w-md sm:rounded-xl sm:shadow-xl"
       onClose={onClose}
+      style={{
+        paddingTop: "max(16px, env(safe-area-inset-top))",
+        paddingBottom: "max(16px, env(safe-area-inset-bottom))",
+      }}
     >
       <h2 className="text-lg font-semibold mb-3">Gateway Settings</h2>
 

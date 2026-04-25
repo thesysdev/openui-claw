@@ -2,6 +2,18 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Hide scrollbars on every scroll container while < 640px (mobile breakpoint).
+   Keeps the visible width symmetric so left/right padding matches. Desktop is
+   untouched. */
+@media (max-width: 639px) {
+  *::-webkit-scrollbar {
+    display: none;
+  }
+  * {
+    scrollbar-width: none;
+  }
+}
+
 /* ────────────────────────────────────────────────────────────────────────── */
 /* Design tokens — bloom palette (light + dark)                               */
 /* ────────────────────────────────────────────────────────────────────────── */
