@@ -12,8 +12,7 @@ import { IconButton } from "@/components/layout/sidebar/IconButton";
 import { TextTile } from "@/components/layout/sidebar/Tile";
 import type { ArtifactRecord, ArtifactStore } from "@/lib/engines/types";
 import { artifactsHash } from "@/lib/hooks/useHashRoute";
-import { useIsMobile } from "@/lib/hooks/useIsMobile";
-import { ArrowLeft, Sparkles, Trash2, X } from "lucide-react";
+import { Sparkles, Trash2, X } from "lucide-react";
 import { useEffect, useState } from "react";
 
 interface Props {
@@ -45,7 +44,6 @@ export function ArtifactDetail({
   siblings,
   onSwitch,
 }: Props) {
-  const isMobile = useIsMobile();
   const [record, setRecord] = useState<ArtifactRecord | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
@@ -123,18 +121,6 @@ export function ArtifactDetail({
 
       {mode === "panel" ? (
         <TopBar
-          leading={
-            isMobile && onClose ? (
-              <IconButton
-                icon={ArrowLeft}
-                variant="tertiary"
-                size="md"
-                title="Back"
-                aria-label="Back"
-                onClick={onClose}
-              />
-            ) : undefined
-          }
           actions={
             <>
               {onRefine ? (
@@ -154,7 +140,7 @@ export function ArtifactDetail({
                 title="Delete artifact"
                 onClick={() => void handleDelete()}
               />
-              {onClose && !isMobile ? (
+              {onClose ? (
                 <IconButton
                   icon={X}
                   variant="tertiary"

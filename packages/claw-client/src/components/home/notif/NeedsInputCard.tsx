@@ -62,7 +62,7 @@ export function NeedsInputCard({ notif, onAction, onClick }: NeedsInputCardProps
             onAction?.();
           }
         }}
-        className="mt-s inline-flex cursor-pointer items-center rounded-m border border-border-default bg-background px-m py-xs font-label text-sm font-medium text-text-neutral-primary shadow-sm transition-colors duration-150 hover:bg-sunk-light dark:border-transparent dark:bg-sunk-light dark:hover:bg-sunk"
+        className="mt-s inline-flex cursor-pointer items-center rounded-m border border-border-default bg-background px-m py-xs font-label text-sm font-medium text-text-neutral-primary shadow-sm transition-colors duration-150 hover:bg-sunk-light dark:border-border-default/16 dark:bg-elevated-light dark:hover:bg-elevated"
       >
         {notif.cta ?? "Take action"}
       </span>

@@ -2,6 +2,20 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Cron detail tray slide-in (desktop) */
+@keyframes claw-slide-in-right {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+.claw-slide-in-right {
+  animation: claw-slide-in-right 220ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
 /* Hide scrollbars on every scroll container while < 640px (mobile breakpoint).
    Keeps the visible width symmetric so left/right padding matches. Desktop is
    untouched. */
@@ -11,6 +25,12 @@
   }
   * {
     scrollbar-width: none;
+  }
+  /* The library's `Shell.ThreadContainer` panel reserves ~15px for a vertical
+     scrollbar that we've hidden — reclaim that space on mobile so left/right
+     padding ends up symmetric. */
+  .openui-shell-thread-chat-panel {
+    width: 100% !important;
   }
 }
 

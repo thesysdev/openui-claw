@@ -62,6 +62,14 @@ import type {
 import { ConnectionState } from "@/lib/gateway/types";
 import { navigate, useHashRoute } from "@/lib/hooks/useHashRoute";
 import { useIsMobile } from "@/lib/hooks/useIsMobile";
+import { MobileAgentsView } from "@/components/mobile/MobileAgentsView";
+import { MobileAppsView } from "@/components/mobile/MobileAppsView";
+import { MobileArtifactsView } from "@/components/mobile/MobileArtifactsView";
+import { MobileCommandPalette } from "@/components/mobile/MobileCommandPalette";
+import { MobileCronsView } from "@/components/mobile/MobileCronsView";
+import { MobileHomeView } from "@/components/mobile/MobileHomeView";
+import { MobileNotificationInboxDrawer } from "@/components/mobile/MobileNotificationInboxDrawer";
+import { MobileSettingsDialog } from "@/components/mobile/MobileSettingsDialog";
 import type { NotificationRecord } from "@/lib/notifications";
 import {
   EMPTY_THREAD_WORKSPACE,
@@ -700,8 +708,6 @@ function ThreadArea({
                   const newId = await createSession(currentAgentId);
                   if (newId) navigate({ view: "chat", sessionId: newId });
                 }}
-                compactNewSession={isMobile}
-                onOpenWorkspace={isMobile ? () => setMobileWorkspaceOpen(true) : undefined}
               />
             );
           })()}
@@ -825,7 +831,6 @@ function ThreadArea({
                 width={refineTray.width}
                 onDragStart={refineTray.onDragStart}
                 onClose={refineTray.close}
-                fullScreen={isMobile}
               />
 
               <div className="flex min-w-0 flex-1 flex-col">
@@ -1558,67 +1563,76 @@ function ChatAppInner({
 
   let mainContent: React.ReactNode;
   if (route.view === "home") {
+    const homeProps = {
+      threads,
+      apps: appList,
+      artifacts: artifactList,
+      notifications,
+      cronJobs,
+      cronRuns,
+      onNavigate: (view: "agents" | "apps" | "artifacts" | "crons") => navigate({ view }),
+      onOpenThread: (threadId: string) => navigate({ view: "chat", sessionId: threadId }),
+      onOpenApp: (appId: string) => navigate({ view: "app", appId }),
+      onOpenArtifact: (artifactId: string) => navigate({ view: "artifact", artifactId }),
+      onOpenNotif: async (notifId: string) => {
+        const target = notifications.find((n) => n.id === notifId);
+        if (target) await openNotification(target);
+      },
+      onMarkNotifRead: (notifId: string) => {
+        void onMarkNotificationsRead([notifId]);
+      },
+    };
     mainContent = (
       <div className="flex h-full min-w-0 flex-1 overflow-hidden">
-        <HomeView
-          threads={threads}
-          apps={appList}
-          artifacts={artifactList}
-          notifications={notifications}
-          cronJobs={cronJobs}
-          cronRuns={cronRuns}
-          onNavigate={(view) => navigate({ view })}
-          onOpenThread={(threadId) => navigate({ view: "chat", sessionId: threadId })}
-          onOpenApp={(appId) => navigate({ view: "app", appId })}
-          onOpenArtifact={(artifactId) => navigate({ view: "artifact", artifactId })}
-          onOpenNotif={async (notifId) => {
-            const target = notifications.find((n) => n.id === notifId);
-            if (target) await openNotification(target);
-          }}
-          onMarkNotifRead={(notifId) => {
-            void onMarkNotificationsRead([notifId]);
-          }}
-        />
+        {isMobile ? <MobileHomeView {...homeProps} /> : <HomeView {...homeProps} />}
       </div>
     );
   } else if (route.view === "agents") {
+    const agentsProps = {
+      threads,
+      onOpenThread: (threadId: string) => navigate({ view: "chat", sessionId: threadId }),
+    };
     mainContent = (
       <Shell.ThreadContainer>
-        <AgentsView
-          threads={threads}
-          onOpenThread={(threadId) => navigate({ view: "chat", sessionId: threadId })}
-        />
+        {isMobile ? <MobileAgentsView {...agentsProps} /> : <AgentsView {...agentsProps} />}
       </Shell.ThreadContainer>
     );
   } else if (route.view === "apps") {
+    const appsProps = {
+      apps: appList,
+      pinnedAppIds,
+      onOpenApp: (appId: string) => navigate({ view: "app", appId }),
+    };
     mainContent = (
       <Shell.ThreadContainer>
-        <AppsView
-          apps={appList}
-          pinnedAppIds={pinnedAppIds}
-          onOpenApp={(appId) => navigate({ view: "app", appId })}
-        />
+        {isMobile ? <MobileAppsView {...appsProps} /> : <AppsView {...appsProps} />}
       </Shell.ThreadContainer>
     );
   } else if (route.view === "artifacts" && artifacts) {
+    const artifactsProps = {
+      artifacts,
+      onOpenArtifact: (artifactId: string) => navigate({ view: "artifact", artifactId }),
+    };
     mainContent = (
       <Shell.ThreadContainer>
-        <ArtifactsView
-          artifacts={artifacts}
-          onOpenArtifact={(artifactId) => navigate({ view: "artifact", artifactId })}
-        />
+        {isMobile ? (
+          <MobileArtifactsView {...artifactsProps} />
+        ) : (
+          <ArtifactsView {...artifactsProps} />
+        )}
       </Shell.ThreadContainer>
     );
   } else if (route.view === "crons") {
+    const cronsProps = {
+      cronJobs,
+      runs: cronRuns,
+      threads,
+      initialSelectedId: route.selectedId,
+      onOpenThread: (threadId: string) => navigate({ view: "chat", sessionId: threadId }),
+    };
     mainContent = (
       <Shell.ThreadContainer>
-        <CronsView
-          cronJobs={cronJobs}
-          runs={cronRuns}
-          threads={threads}
-          initialSelectedId={route.selectedId}
-          onOpenThread={(threadId) => navigate({ view: "chat", sessionId: threadId })}
-        />
+        {isMobile ? <MobileCronsView {...cronsProps} /> : <CronsView {...cronsProps} />}
       </Shell.ThreadContainer>
     );
   } else if ((route.view === "artifact" && artifacts) || (route.view === "app" && apps)) {
@@ -1648,7 +1662,6 @@ function ChatAppInner({
           width={routeRefineTray.width}
           onDragStart={routeRefineTray.onDragStart}
           onClose={routeRefineTray.close}
-          fullScreen={isMobile}
         />
 
         <div className="flex min-w-0 flex-1 flex-col">
@@ -1740,7 +1753,6 @@ function ChatAppInner({
     new URLSearchParams(window.location.search).get("embed") === "1";
 
   if (isMobile && !isEmbed) {
-    const chromelessRoute = route.view === "app" || route.view === "artifact";
     return (
       <Shell.Container agentName="Claw" logoUrl={LOGO_URL}>
         <MobileShell
@@ -1750,11 +1762,10 @@ function ChatAppInner({
           onOpenSearch={() => setPaletteOpen(true)}
           onOpenNotifications={() => setMobileNotificationInboxOpen(true)}
           onOpenSettings={onSettingsClick}
-          chromeless={chromelessRoute}
         >
           {mainContent}
         </MobileShell>
-        <NotificationInboxDrawer
+        <MobileNotificationInboxDrawer
           open={mobileNotificationInboxOpen}
           onClose={() => setMobileNotificationInboxOpen(false)}
           notifications={notifications}
@@ -1776,7 +1787,7 @@ function ChatAppInner({
             void openNotification(notification);
           }}
         />
-        <CommandPalette
+        <MobileCommandPalette
           open={paletteOpen}
           onClose={() => setPaletteOpen(false)}
           threads={threads as unknown as ClawThreadListItem[]}
@@ -1816,7 +1827,6 @@ function ChatAppInner({
           unreadNotificationCount={unreadNotificationCount}
           hiddenThreadIds={hiddenRefinementThreadIds}
           pinnedAppIds={pinnedAppIds}
-          forceCollapsed={route.view === "app" || route.view === "artifact"}
           onOpenCommandPalette={() => setPaletteOpen(true)}
         />
       )}
@@ -1861,6 +1871,7 @@ function ChatAppInner({
 }
 
 export default function ChatApp() {
+  const isMobile = useIsMobile();
   const [settingsOpen, setSettingsOpen] = useState(false);
   useEffect(() => {
     bootstrapThemeFromStorage();
@@ -2153,17 +2164,31 @@ export default function ChatApp() {
           gatewayCommands={gatewayCommands}
         />
 
-        <SettingsDialog
-          open={settingsOpen}
-          currentSettings={settings}
-          onClose={() => {
-            if (getSettings()?.gatewayUrl) setSettingsOpen(false);
-          }}
-          onSave={(newSettings) => {
-            reconnect(newSettings);
-            setSettingsOpen(false);
-          }}
-        />
+        {isMobile ? (
+          <MobileSettingsDialog
+            open={settingsOpen}
+            currentSettings={settings}
+            onClose={() => {
+              if (getSettings()?.gatewayUrl) setSettingsOpen(false);
+            }}
+            onSave={(newSettings) => {
+              reconnect(newSettings);
+              setSettingsOpen(false);
+            }}
+          />
+        ) : (
+          <SettingsDialog
+            open={settingsOpen}
+            currentSettings={settings}
+            onClose={() => {
+              if (getSettings()?.gatewayUrl) setSettingsOpen(false);
+            }}
+            onSave={(newSettings) => {
+              reconnect(newSettings);
+              setSettingsOpen(false);
+            }}
+          />
+        )}
 
         {connectionState === ConnectionState.PAIRING && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-overlay backdrop-blur-sm">

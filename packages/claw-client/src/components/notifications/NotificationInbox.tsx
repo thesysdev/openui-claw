@@ -158,7 +158,7 @@ function NotificationCard({
         </div>
         <button
           type="button"
-          className="shrink-0 rounded-xl border border-border-default px-m py-s text-xs font-medium text-text-neutral-secondary transition-colors hover:bg-sunk-light"
+          className="shrink-0 rounded-xl border border-border-default bg-background px-m py-s text-xs font-medium text-text-neutral-secondary shadow-sm transition-colors hover:bg-sunk-light dark:border-border-default/16 dark:bg-foreground dark:hover:bg-elevated"
           onClick={() => {
             void onOpenNotification(notification);
           }}
@@ -243,7 +243,7 @@ function NotificationInboxContent({
             {onMarkAllRead ? (
               <button
                 type="button"
-                className="rounded-xl border border-border-default px-m py-s text-xs font-medium text-text-neutral-secondary transition-colors hover:bg-sunk-light disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-xl border border-border-default bg-background px-m py-s text-xs font-medium text-text-neutral-secondary shadow-sm transition-colors hover:bg-sunk-light dark:border-border-default/16 dark:bg-foreground dark:hover:bg-elevated disabled:cursor-not-allowed disabled:opacity-50"
                 onClick={() => {
                   void onMarkAllRead();
                 }}
@@ -340,17 +340,11 @@ export function NotificationInboxDrawer({
     <div className="fixed inset-0 z-50 flex xl:hidden">
       <button
         type="button"
-        className="hidden flex-1 bg-overlay sm:block"
+        className="flex-1 bg-overlay"
         onClick={onClose}
         aria-label="Close notifications"
       />
-      <div
-        className="flex h-full w-full flex-col border-l border-border-default bg-background shadow-float sm:w-[min(92vw,380px)]"
-        style={{
-          paddingTop: "env(safe-area-inset-top)",
-          paddingBottom: "env(safe-area-inset-bottom)",
-        }}
-      >
+      <div className="flex h-full w-[min(92vw,380px)] flex-col border-l border-border-default bg-background shadow-float">
         <div className="flex items-center justify-between border-b border-border-default px-ml py-m">
           <div className="flex items-center gap-s">
             <div className="flex h-2xl w-2xl items-center justify-center rounded-xl bg-sunk-light text-text-neutral-secondary">

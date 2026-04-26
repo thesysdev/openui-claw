@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  ChevronRight,
   Clock3,
   Cpu,
   FileText,
@@ -183,11 +182,11 @@ export function HomeView({
     <div className="flex h-full flex-1 overflow-hidden bg-background">
       {/* ── Main scroll area ── */}
       <div className="flex-1 overflow-y-auto">
-        <div className="mx-auto max-w-[1080px] px-ml py-ml sm:px-3xl sm:py-3xl">
+        <div className="mx-auto max-w-[1080px] px-3xl py-3xl">
           <Greeting name={userName} />
 
           {/* Top agents */}
-          <section className="mb-ml">
+          <section className="mb-2xl">
             <SectionHeader
               title="Top agents"
               right={
@@ -213,7 +212,7 @@ export function HomeView({
           </section>
 
           {/* Top apps + Recent artifacts */}
-          <section className="mb-ml grid grid-cols-1 gap-ml lg:grid-cols-[2fr_1fr]">
+          <section className="mb-2xl grid grid-cols-1 gap-2xl lg:grid-cols-[2fr_1fr] lg:gap-ml">
             {/* Top apps */}
             <div className="rounded-2xl border border-border-default/50 bg-popover-background p-ml shadow-xl dark:border-transparent dark:bg-foreground">
               <SectionHeader
@@ -294,7 +293,7 @@ export function HomeView({
           </section>
 
           {/* Cron Jobs */}
-          <section className="mt-2xl mb-3xl">
+          <section className="mb-2xl">
             <SectionHeader
               title="Cron Jobs"
               right={
@@ -331,15 +330,13 @@ export function HomeView({
         </div>
       </div>
 
-      {/* ── Notifications panel — desktop only; mobile uses bell icon → drawer ── */}
-      <div className="hidden sm:flex">
-        <NotifPanel
-          notifications={homeNotifs}
-          onOpenNotif={(n) => onOpenNotif?.(n.id)}
-          onMarkRead={(id) => onMarkNotifRead?.(id)}
-          onAction={(n) => onOpenNotif?.(n.id)}
-        />
-      </div>
+      {/* ── Notifications panel ── */}
+      <NotifPanel
+        notifications={homeNotifs}
+        onOpenNotif={(n) => onOpenNotif?.(n.id)}
+        onMarkRead={(id) => onMarkNotifRead?.(id)}
+        onAction={(n) => onOpenNotif?.(n.id)}
+      />
     </div>
   );
 }
@@ -367,6 +364,7 @@ function CronHomeRow({
   frequency: string;
 }) {
   const openTray = () => navigate({ view: "crons", selectedId: job.id });
+
   const stopAnd = (fn: () => void) => (e: React.MouseEvent) => {
     e.stopPropagation();
     fn();

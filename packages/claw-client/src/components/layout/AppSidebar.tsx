@@ -97,12 +97,6 @@ interface Props {
   unreadNotificationCount: number;
   hiddenThreadIds?: Set<string>;
   pinnedAppIds: Set<string>;
-  /**
-   * When true, the sidebar stays in its 48px collapsed state and the
-   * expand/collapse toggle is disabled. Used when an app/artifact preview
-   * takes over the main area.
-   */
-  forceCollapsed?: boolean;
   onOpenCommandPalette?: () => void;
 }
 
@@ -119,7 +113,6 @@ export function AppSidebar({
   unreadNotificationCount,
   hiddenThreadIds = new Set(),
   pinnedAppIds,
-  forceCollapsed = false,
   onOpenCommandPalette,
 }: Props) {
   // ── Data hooks ──
@@ -367,7 +360,7 @@ export function AppSidebar({
     );
   }, [onOpenCommandPalette]);
 
-  const nc = forceCollapsed || navCollapsed;
+  const nc = navCollapsed;
 
   // ─── Render ────────────────────────────────────────────────────────────────
 
@@ -386,15 +379,13 @@ export function AppSidebar({
         } pt-ml pb-m transition-[padding] duration-300`}
       >
         <Logo name="OpenClaw" suffix="UI" collapsed={nc} />
-        {forceCollapsed ? null : (
-          <IconButton
-            icon={nc ? PanelLeft : PanelLeftClose}
-            variant="tertiary"
-            size="md"
-            title={nc ? "Expand sidebar" : "Collapse sidebar"}
-            onClick={() => setNavCollapsed(!nc)}
-          />
-        )}
+        <IconButton
+          icon={nc ? PanelLeft : PanelLeftClose}
+          variant="tertiary"
+          size="md"
+          title={nc ? "Expand sidebar" : "Collapse sidebar"}
+          onClick={() => setNavCollapsed(!nc)}
+        />
       </div>
 
       <SectionSeparator />

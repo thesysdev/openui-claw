@@ -11,8 +11,6 @@ import {
   X,
 } from "lucide-react";
 import { useState, type ReactNode } from "react";
-import { HeaderIconButton } from "@/components/layout/HeaderIconButton";
-import { useBodyScrollLock } from "@/lib/hooks/useBodyScrollLock";
 import type { AppSummary, ArtifactSummary } from "@/lib/engines/types";
 import type { ThreadUpload, LinkedAppContext } from "@/lib/session-workspace";
 
@@ -426,7 +424,6 @@ export function SessionWorkspaceDrawer({
   open: boolean;
   onClose: () => void;
 }) {
-  useBodyScrollLock(open);
   return (
     <div
       className={`fixed inset-0 z-50 flex lg:hidden ${
@@ -436,29 +433,34 @@ export function SessionWorkspaceDrawer({
     >
       <button
         type="button"
-        className={`hidden flex-1 bg-overlay backdrop-blur-[2px] transition-opacity duration-300 sm:block ${
+        className={`flex-1 bg-overlay backdrop-blur-[2px] transition-opacity duration-300 ${
           open ? "opacity-100" : "pointer-events-none opacity-0"
         }`}
         onClick={onClose}
         aria-label="Close thread workspace"
       />
       <div
-        className={`flex h-full w-full flex-col overflow-y-auto bg-background shadow-xl transition-transform duration-300 ease-out dark:bg-foreground sm:w-[min(92vw,260px)] sm:border-l sm:border-border-default/50 dark:sm:border-border-default/16 ${
+        className={`flex h-full w-[min(92vw,260px)] flex-col overflow-y-auto border-l border-border-default/50 bg-background shadow-xl transition-transform duration-300 ease-out dark:border-border-default/16 dark:bg-foreground ${
           open ? "translate-x-0" : "translate-x-full"
         }`}
-        style={{
-          paddingTop: "env(safe-area-inset-top)",
-          paddingBottom: "env(safe-area-inset-bottom)",
-        }}
       >
-        <header className="sticky top-0 z-10 flex shrink-0 items-center justify-between bg-background px-ml py-m dark:bg-foreground">
-          <h2 className="font-heading text-lg font-bold text-text-neutral-primary">
-            Workspace
-          </h2>
-          <HeaderIconButton onClick={onClose} label="Close thread workspace">
-            <X size={18} />
-          </HeaderIconButton>
-        </header>
+        <div className="flex min-h-[52px] items-center justify-between px-s pt-ml pb-m">
+          <div className="flex items-center gap-2 pl-xs">
+            <div className="flex h-l w-l items-center justify-center rounded-m border border-border-default/70 bg-background shadow-sm dark:border-border-default/16 dark:bg-elevated-light">
+              <PanelRightOpen size={11} className="text-text-neutral-tertiary" />
+            </div>
+            <span className="font-label text-xs font-medium text-text-neutral-tertiary">
+              Workspace
+            </span>
+          </div>
+          <IconButton
+            icon={X}
+            variant="tertiary"
+            size="md"
+            title="Close thread workspace"
+            onClick={onClose}
+          />
+        </div>
         <WorkspaceSections {...props} />
       </div>
     </div>

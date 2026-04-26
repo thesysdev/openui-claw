@@ -13,12 +13,10 @@ import { Pause, Pencil, Play, Trash2 } from "lucide-react";
 
 import { IconButton } from "@/components/layout/sidebar/IconButton";
 import { SectionHeader } from "@/components/home/SectionHeader";
-import { Sort } from "@/components/ui/Sort";
+import { SortPills } from "@/components/ui/SortPills";
 import { Tag } from "@/components/layout/sidebar/Tag";
 import type { CronJobRecord, CronRunEntry } from "@/lib/cron";
 import { relTime } from "@/lib/time";
-
-import { useIsMobile } from "@/lib/hooks/useIsMobile";
 
 import { CronDetailTray, type CronJobEdits } from "./CronDetailTray";
 import { cronOwnerLabel, humanFrequency } from "./format";
@@ -44,7 +42,6 @@ export function CronsView({
   initialSelectedId,
   onOpenThread,
 }: CronsViewProps) {
-  const isMobile = useIsMobile();
   const [sort, setSort] = useState<Sort>("recent");
   /** Local overlay — keyed by job id. Surfaces optimistic edits before a backend round-trip. */
   const [overlay, setOverlay] = useState<Record<string, Partial<CronJobRecord>>>({});
@@ -144,11 +141,11 @@ export function CronsView({
   };
 
   return (
-    <div className="flex h-full flex-1 overflow-hidden bg-background">
+    <div className="relative flex h-full flex-1 overflow-hidden bg-background">
       {/* ── Main list ── */}
-      <div className="min-w-0 flex-1 overflow-y-auto p-ml sm:p-3xl">
+      <div className="min-w-0 flex-1 overflow-y-auto p-3xl">
         <div className="mx-auto max-w-[1080px]">
-          <h2 className="mb-ml hidden font-heading text-lg font-bold text-text-neutral-primary sm:mb-3xl sm:block">
+          <h2 className="mb-3xl font-heading text-lg font-bold text-text-neutral-primary">
             Cron Jobs
           </h2>
 
@@ -165,59 +162,25 @@ export function CronsView({
               <SectionHeader
                 title="All cron jobs"
                 right={
-                  <Sort value={sort} onChange={setSort} />
+                  <SortPills
+                    value={sort}
+                    options={[{ key: "recent", label: "Recent" }, { key: "a-z", label: "A–Z" }]}
+                    onChange={setSort}
+                  />
                 }
               />
-              {/* Mobile card list — table is unusable < sm. */}
-              <ul className="space-y-s sm:hidden">
-                {sorted.map((job) => {
-                  const isActive = selectedId === job.id;
-                  const lastRun = runs
-                    .filter((r) => r.jobId === job.id)
-                    .sort((a, b) => b.ts - a.ts)[0];
-                  return (
-                    <li key={job.id}>
-                      <button
-                        type="button"
-                        onClick={() => setSelectedId(job.id)}
-                        aria-selected={isActive}
-                        className={`flex w-full flex-col gap-xs rounded-2xl border border-border-default/50 px-ml py-m text-left transition-colors dark:border-border-default/16 ${
-                          isActive
-                            ? "bg-sunk-light dark:bg-foreground"
-                            : "bg-background active:bg-sunk-light/50 dark:bg-transparent dark:active:bg-foreground/60"
-                        }`}
-                      >
-                        <div className="flex items-start justify-between gap-s">
-                          <span className="truncate font-body text-sm font-medium text-text-neutral-primary">
-                            {job.name}
-                          </span>
-                          <Tag size="lg" variant={job.enabled ? "success" : "neutral"}>
-                            {job.enabled ? "Active" : "Paused"}
-                          </Tag>
-                        </div>
-                        <p className="truncate font-body text-sm text-text-neutral-tertiary">
-                          {humanFrequency(job)}
-                        </p>
-                        <span className="font-body text-sm text-text-neutral-tertiary">
-                          {lastRun ? `Last run ${relTime(lastRun.ts)}` : "Never run"}
-                        </span>
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
 
               {/* Desktop table */}
-              <div className="hidden overflow-hidden rounded-2xl border border-border-default/50 dark:border-border-default/16 sm:block">
+              <div className="overflow-hidden rounded-2xl border border-border-default/50 dark:border-border-default/16">
                 <table className="w-full table-fixed">
-                  <thead className="bg-sunk-light/60 dark:bg-foreground/60">
+                  <thead className="bg-foreground dark:bg-sunk-deep">
                     <tr className="text-left">
                       <Th className="w-[30%]">Name</Th>
                       <Th className="w-[90px]">Status</Th>
                       <Th className="w-[22%]">Schedule</Th>
                       <Th className="w-[22%]">Owner</Th>
                       <Th className="w-[110px]">Last run</Th>
-                      <Th className="w-[120px] text-right">Actions</Th>
+                      <Th className="w-[150px] text-right">Actions</Th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border-default/50 dark:divide-border-default/16">
@@ -234,27 +197,13 @@ export function CronsView({
                           className={`group cursor-pointer transition-colors ${
                             isActive
                               ? "bg-sunk-light dark:bg-foreground"
-                              : "hover:bg-sunk-light/50 dark:hover:bg-foreground/60"
+                              : "hover:bg-sunk-light dark:hover:bg-foreground"
                           }`}
                         >
                           <Td>
-                            <div className="flex min-w-0 flex-1 items-center justify-between gap-xs">
-                              <span className="truncate font-body text-sm font-medium text-text-neutral-primary">
-                                {job.name}
-                              </span>
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setSelectedId(job.id);
-                                }}
-                                className="shrink-0 rounded-m p-2xs text-text-neutral-tertiary opacity-0 transition-opacity hover:bg-sunk-light hover:text-text-neutral-primary group-hover:opacity-100 dark:hover:bg-foreground"
-                                title="Edit name"
-                                aria-label="Edit name"
-                              >
-                                <Pencil size={13} />
-                              </button>
-                            </div>
+                            <span className="truncate font-body text-sm font-medium text-text-neutral-primary">
+                              {job.name}
+                            </span>
                           </Td>
                           <Td>
                             <Tag
@@ -302,6 +251,14 @@ export function CronsView({
                                 onClick={() => handleToggleEnabled(job, !job.enabled)}
                               />
                               <IconButton
+                                icon={Pencil}
+                                variant="tertiary"
+                                size="sm"
+                                title="Edit job"
+                                aria-label="Edit job"
+                                onClick={() => setSelectedId(job.id)}
+                              />
+                              <IconButton
                                 icon={Trash2}
                                 variant="tertiary"
                                 size="sm"
@@ -322,23 +279,30 @@ export function CronsView({
         </div>
       </div>
 
-      {/* ── Detail tray ── */}
+      {/* ── Detail tray (overlay) ── */}
       {selected ? (
-        <CronDetailTray
-          job={selected}
-          runs={runs}
-          threads={threads}
-          width={trayWidth}
-          onDragStart={onDragStart}
-          onClose={() => setSelectedId(null)}
-          onRunNow={handleRunNow}
-          onToggleEnabled={handleToggleEnabled}
-          onSaveEdits={handleSaveEdits}
-          onDelete={handleDelete}
-          onDuplicate={handleDuplicate}
-          onOpenThread={onOpenThread}
-          fullScreen={isMobile}
-        />
+        <div className="absolute inset-0 z-40 flex">
+          <button
+            type="button"
+            aria-label="Close cron details"
+            className="flex-1 bg-overlay"
+            onClick={() => setSelectedId(null)}
+          />
+          <CronDetailTray
+            job={selected}
+            runs={runs}
+            threads={threads}
+            width={trayWidth}
+            onDragStart={onDragStart}
+            onClose={() => setSelectedId(null)}
+            onRunNow={handleRunNow}
+            onToggleEnabled={handleToggleEnabled}
+            onSaveEdits={handleSaveEdits}
+            onDelete={handleDelete}
+            onDuplicate={handleDuplicate}
+            onOpenThread={onOpenThread}
+          />
+        </div>
       ) : null}
     </div>
   );
@@ -375,4 +339,3 @@ function Td({
     </td>
   );
 }
-

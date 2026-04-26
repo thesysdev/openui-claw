@@ -92,13 +92,15 @@ function SortTray({
                   role="menuitemradio"
                   aria-checked={active}
                   onClick={() => onSelect(opt.value)}
-                  className={`flex w-full items-center gap-m rounded-lg px-m py-m text-left transition-colors active:bg-sunk-light dark:active:bg-elevated sm:hover:bg-sunk-light dark:sm:hover:bg-elevated ${
-                    active ? "text-text-neutral-primary" : "text-text-neutral-secondary"
+                  className={`flex w-full items-center gap-m rounded-lg px-m py-s text-left transition-colors ${
+                    active
+                      ? "bg-sunk-light text-text-neutral-primary dark:bg-elevated"
+                      : "text-text-neutral-secondary active:bg-sunk-light dark:active:bg-elevated sm:hover:bg-sunk-light dark:sm:hover:bg-elevated"
                   }`}
                 >
                   <div className="min-w-0 flex-1">
                     <p className="font-body text-sm font-medium">{opt.label}</p>
-                    <p className="mt-2xs font-body text-sm text-text-neutral-tertiary">
+                    <p className="font-body text-sm text-text-neutral-tertiary">
                       {opt.description}
                     </p>
                   </div>
