@@ -158,7 +158,7 @@ function NotificationCard({
         </div>
         <button
           type="button"
-          className="shrink-0 rounded-xl border border-border-default px-m py-s text-xs font-medium text-text-neutral-secondary transition-colors hover:bg-sunk-light"
+          className="shrink-0 rounded-xl border border-border-default bg-background px-m py-s text-xs font-medium text-text-neutral-secondary shadow-sm transition-colors hover:bg-sunk-light dark:border-border-default/16 dark:bg-foreground dark:hover:bg-elevated"
           onClick={() => {
             void onOpenNotification(notification);
           }}
@@ -243,7 +243,7 @@ function NotificationInboxContent({
             {onMarkAllRead ? (
               <button
                 type="button"
-                className="rounded-xl border border-border-default px-m py-s text-xs font-medium text-text-neutral-secondary transition-colors hover:bg-sunk-light disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-xl border border-border-default bg-background px-m py-s text-xs font-medium text-text-neutral-secondary shadow-sm transition-colors hover:bg-sunk-light dark:border-border-default/16 dark:bg-foreground dark:hover:bg-elevated disabled:cursor-not-allowed disabled:opacity-50"
                 onClick={() => {
                   void onMarkAllRead();
                 }}

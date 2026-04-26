@@ -97,7 +97,24 @@ export function AgentTab({
       </button>
 
       {!collapsed && expanded && (
-        <div className="px-s pb-s">{children}</div>
+        <div className="px-s pb-s">
+          {children}
+          {onNewSession ? (
+            <button
+              type="button"
+              onClick={onNewSession}
+              disabled={creating}
+              className="group flex h-8 w-full items-center gap-s rounded-lg px-xs text-left text-sm text-text-neutral-tertiary transition-colors hover:bg-sunk-light hover:text-text-neutral-primary disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-foreground"
+            >
+              <div className="flex h-l w-l shrink-0 items-center justify-center">
+                <Plus size={13} />
+              </div>
+              <span className="truncate font-body">
+                {creating ? "Creating…" : "New session"}
+              </span>
+            </button>
+          ) : null}
+        </div>
       )}
     </div>
   );

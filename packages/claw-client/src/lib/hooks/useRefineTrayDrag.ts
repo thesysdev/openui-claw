@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
+import { useCallback, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 
 const MIN_WIDTH = 280;
 const MAX_WIDTH = 900;
@@ -24,7 +24,7 @@ export function useRefineTrayDrag(initialWidth = DEFAULT_WIDTH): RefineTrayDrag 
   const [width, setWidth] = useState(initialWidth);
   const dragRef = useRef<{ startX: number; startWidth: number } | null>(null);
 
-  const onDragStart = (e: ReactMouseEvent) => {
+  const onDragStart = useCallback((e: ReactMouseEvent) => {
     dragRef.current = { startX: e.clientX, startWidth: width };
     const onMove = (ev: MouseEvent) => {
       if (!dragRef.current) return;
@@ -40,13 +40,10 @@ export function useRefineTrayDrag(initialWidth = DEFAULT_WIDTH): RefineTrayDrag 
     };
     document.addEventListener("mousemove", onMove);
     document.addEventListener("mouseup", onUp);
-  };
+  }, [width]);
 
-  return {
-    threadId,
-    width,
-    openFor: (id) => setThreadId(id),
-    close: () => setThreadId(null),
-    onDragStart,
-  };
+  const openFor = useCallback((id: string) => setThreadId(id), []);
+  const close = useCallback(() => setThreadId(null), []);
+
+  return { threadId, width, openFor, close, onDragStart };
 }

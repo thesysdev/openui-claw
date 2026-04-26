@@ -12,7 +12,7 @@ import type { ComponentType } from "react";
  *   - border: outlined tile used for "View all"
  */
 
-export type TileCategory = "home" | "agents" | "apps" | "artifacts" | null;
+export type TileCategory = "home" | "agents" | "apps" | "artifacts" | "crons" | null;
 
 export const CATEGORY_STYLES: Record<
   Exclude<TileCategory, null>,
@@ -37,6 +37,11 @@ export const CATEGORY_STYLES: Record<
     bg: "bg-cat-artifact/10",
     icon: "text-cat-artifact",
     border: "border-cat-artifact/15",
+  },
+  crons: {
+    bg: "bg-cat-activity/10",
+    icon: "text-cat-activity",
+    border: "border-cat-activity/15",
   },
 };
 

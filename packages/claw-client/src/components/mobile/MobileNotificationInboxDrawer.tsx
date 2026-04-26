@@ -1,0 +1,276 @@
+"use client";
+
+import { Inbox, X } from "lucide-react";
+import { useMemo, useState } from "react";
+
+import { HeaderIconButton } from "@/components/layout/HeaderIconButton";
+import { MobileButton } from "@/components/mobile/MobileButton";
+import { useBodyScrollLock } from "@/lib/hooks/useBodyScrollLock";
+import type { NotificationRecord } from "@/lib/notifications";
+
+type InboxTab = "all" | "tasks" | "needs_input" | "alerts";
+
+const TAB_ORDER: Array<{ id: InboxTab; label: string }> = [
+  { id: "all", label: "All" },
+  { id: "tasks", label: "Tasks" },
+  { id: "needs_input", label: "Needs input" },
+  { id: "alerts", label: "Alerts" },
+];
+
+function notificationCategory(notification: NotificationRecord): Exclude<InboxTab, "all"> {
+  const kind = notification.kind.toLowerCase();
+  if (kind.includes("needs_input") || kind.includes("approval")) return "needs_input";
+  if (
+    kind.includes("attention") ||
+    kind.includes("alert") ||
+    kind.includes("error") ||
+    kind.includes("failed")
+  )
+    return "alerts";
+  return "tasks";
+}
+
+function formatRelativeTime(value: string): string {
+  const timestamp = new Date(value).getTime();
+  if (!Number.isFinite(timestamp)) return "Just now";
+  const diffMs = Date.now() - timestamp;
+  const minutes = Math.max(1, Math.round(diffMs / 60_000));
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.round(hours / 24);
+  if (days < 7) return `${days}d ago`;
+  return new Date(timestamp).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
+function tagClasses(tab: Exclude<InboxTab, "all">): string {
+  switch (tab) {
+    case "needs_input":
+      return "border-border-alert bg-alert-background text-text-alert-primary";
+    case "alerts":
+      return "border-border-danger bg-danger-background text-text-danger-primary";
+    default:
+      return "border-border-info bg-info-background text-text-info-primary";
+  }
+}
+
+function tagLabel(tab: Exclude<InboxTab, "all">): string {
+  switch (tab) {
+    case "needs_input":
+      return "Needs input";
+    case "alerts":
+      return "Alert";
+    default:
+      return "Task";
+  }
+}
+
+function actionLabel(notification: NotificationRecord): string {
+  switch (notification.target.view) {
+    case "app":
+      return "Open app";
+    case "artifact":
+      return "Open artifact";
+    case "chat":
+      return notificationCategory(notification) === "needs_input" ? "Review thread" : "Open thread";
+    default:
+      return "Open";
+  }
+}
+
+function sourceLabel(notification: NotificationRecord): string {
+  if (notification.kind === "thread_reply") return "Conversation reply";
+  if (notification.source?.agentId) return notification.source.agentId;
+  switch (notification.target.view) {
+    case "app":
+      return "Workspace app";
+    case "artifact":
+      return "Workspace artifact";
+    case "chat":
+      return "Conversation";
+    default:
+      return "Workspace";
+  }
+}
+
+function NotificationCard({
+  notification,
+  onOpenNotification,
+}: {
+  notification: NotificationRecord;
+  onOpenNotification: (notification: NotificationRecord) => void | Promise<void>;
+}) {
+  const category = notificationCategory(notification);
+  return (
+    <article className="flex flex-col gap-m rounded-2xl border border-border-default/70 bg-background p-ml shadow-card">
+      <div className="flex items-start gap-s">
+        <h3 className="min-w-0 flex-1 truncate text-sm font-bold text-text-neutral-primary">
+          {notification.title}
+        </h3>
+        {notification.unread ? (
+          <span className="mt-3xs inline-flex h-s w-s shrink-0 rounded-full bg-text-neutral-primary" />
+        ) : null}
+      </div>
+
+      <p className="text-sm leading-5 text-text-neutral-secondary">{notification.message}</p>
+
+      <div className="flex flex-wrap items-center gap-s">
+        <span
+          className={`rounded-m border px-xs py-0 text-2xs font-medium ${tagClasses(category)}`}
+        >
+          {tagLabel(category)}
+        </span>
+        <span className="truncate text-sm text-text-neutral-tertiary">
+          {sourceLabel(notification)}
+        </span>
+        <span className="text-text-neutral-tertiary">·</span>
+        <span className="text-sm text-text-neutral-tertiary">
+          {formatRelativeTime(notification.updatedAt)}
+        </span>
+      </div>
+
+      <MobileButton
+        variant="secondary"
+        fullWidth
+        onClick={() => {
+          void onOpenNotification(notification);
+        }}
+      >
+        {actionLabel(notification)}
+      </MobileButton>
+    </article>
+  );
+}
+
+export function MobileNotificationInboxDrawer({
+  open,
+  onClose,
+  notifications,
+  onOpenNotification,
+  onMarkAllRead,
+}: {
+  open: boolean;
+  onClose: () => void;
+  notifications: NotificationRecord[];
+  onOpenNotification: (notification: NotificationRecord) => void | Promise<void>;
+  onMarkAllRead?: () => void | Promise<void>;
+}) {
+  useBodyScrollLock(open);
+  const [activeTab, setActiveTab] = useState<InboxTab>("all");
+
+  const unreadCount = useMemo(
+    () => notifications.filter((n) => n.unread).length,
+    [notifications],
+  );
+
+  const counts = useMemo(
+    () =>
+      TAB_ORDER.reduce<Record<InboxTab, number>>(
+        (result, tab) => {
+          result[tab.id] =
+            tab.id === "all"
+              ? notifications.length
+              : notifications.filter((n) => notificationCategory(n) === tab.id).length;
+          return result;
+        },
+        { all: 0, tasks: 0, needs_input: 0, alerts: 0 },
+      ),
+    [notifications],
+  );
+
+  const visibleNotifications = useMemo(() => {
+    const items =
+      activeTab === "all"
+        ? notifications
+        : notifications.filter((n) => notificationCategory(n) === activeTab);
+    return [...items].sort((left, right) => {
+      if (left.unread !== right.unread) return left.unread ? -1 : 1;
+      return right.updatedAt.localeCompare(left.updatedAt);
+    });
+  }, [activeTab, notifications]);
+
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-[80] flex flex-col bg-background">
+      <header
+        className="flex shrink-0 items-center justify-between gap-s bg-background px-ml py-m"
+        style={{ paddingTop: "max(12px, env(safe-area-inset-top))" }}
+      >
+        <h2 className="font-heading text-md font-bold text-text-neutral-primary">Notifications</h2>
+        <div className="flex shrink-0 items-center gap-s">
+          {onMarkAllRead ? (
+            <MobileButton
+              variant="secondary"
+              onClick={() => {
+                void onMarkAllRead();
+              }}
+              disabled={unreadCount === 0}
+            >
+              Mark all read
+            </MobileButton>
+          ) : null}
+          <HeaderIconButton onClick={onClose} label="Close notifications">
+            <X size={18} />
+          </HeaderIconButton>
+        </div>
+      </header>
+
+      <div className="flex shrink-0 gap-xs overflow-x-auto px-ml pb-ml pt-m">
+        {TAB_ORDER.map((tab) => {
+          const isActive = activeTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveTab(tab.id)}
+              className={`inline-flex shrink-0 items-center gap-xs rounded-full px-m py-xs font-label text-sm font-medium transition-colors ${
+                isActive
+                  ? "bg-text-neutral-primary text-background"
+                  : "bg-sunk-light text-text-neutral-secondary active:bg-sunk dark:bg-foreground"
+              }`}
+            >
+              <span>{tab.label}</span>
+              <span
+                className={`inline-flex h-[14px] min-w-[14px] shrink-0 items-center justify-center rounded-full px-3xs font-label text-[8px] font-bold leading-none ${
+                  isActive
+                    ? "bg-background text-text-neutral-primary"
+                    : "bg-sunk text-text-neutral-tertiary dark:bg-highlight-subtle"
+                }`}
+              >
+                {counts[tab.id]}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      <div
+        className="flex-1 overflow-y-auto px-ml pb-2xl"
+        style={{ paddingBottom: "max(32px, env(safe-area-inset-bottom))" }}
+      >
+        {visibleNotifications.length === 0 ? (
+          <div className="flex h-full flex-col items-center justify-center rounded-3xl border border-dashed border-border-default/80 bg-background px-l py-2xl text-center">
+            <Inbox className="mb-m h-2xl w-2xl text-text-neutral-tertiary" />
+            <p className="text-sm font-medium text-text-neutral-secondary">
+              No notifications here yet
+            </p>
+            <p className="mt-2xs text-sm text-text-neutral-tertiary">
+              Cron runs and other background attention items will show up here.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-m">
+            {visibleNotifications.map((notification) => (
+              <NotificationCard
+                key={notification.id}
+                notification={notification}
+                onOpenNotification={onOpenNotification}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

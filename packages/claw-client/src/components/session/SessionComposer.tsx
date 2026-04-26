@@ -16,6 +16,7 @@ import { CornerDownLeft, Plus, RotateCw, Square, X } from "lucide-react";
 import { IconButton } from "@/components/layout/sidebar/IconButton";
 import type { ModelChoice } from "@/types/gateway-responses";
 import { qualifyModel } from "@/lib/models";
+import { ContextRing, type ContextBreakdownItem } from "@/components/ui/ContextRing";
 
 const THINKING_LEVELS = [
   { value: "", label: "Default" },
@@ -201,6 +202,9 @@ export function SessionComposer({
   currentEffort = "",
   onModelChange,
   onEffortChange,
+  contextTokens,
+  contextLimit,
+  contextBreakdown,
 }: {
   uploads: ThreadUpload[];
   linkedApp: LinkedAppContext | null;
@@ -216,6 +220,10 @@ export function SessionComposer({
   currentEffort?: string;
   onModelChange?: (value: string) => void;
   onEffortChange?: (value: string) => void;
+  /** Tokens used / total context-window for the active model. */
+  contextTokens?: number;
+  contextLimit?: number;
+  contextBreakdown?: ContextBreakdownItem[];
   /**
    * Called when the user submits a slash command that matches a gateway
    * command we know how to intercept locally (e.g. `/reset` → `sessions.reset`
@@ -411,7 +419,7 @@ export function SessionComposer({
   };
 
   return (
-    <div className="openui-claw-session-composer mb-3 w-full rounded-xl bg-sunk-light p-[2px] dark:bg-foreground">
+    <div className="openui-claw-session-composer mb-1 w-full rounded-xl bg-sunk-light p-[2px] dark:bg-foreground sm:mb-3">
       {slashMatches.length > 0 && (
         <SlashMenu
           entries={slashMatches}
@@ -489,7 +497,7 @@ export function SessionComposer({
           <IconButton
             icon={isRunning ? Square : CornerDownLeft}
             variant="primary"
-            size="md"
+            size="lg"
             title={
               isRunning ? "Stop" : parsedCommand ? `Run /${parsedCommand.command.name}` : "Send"
             }
@@ -500,7 +508,7 @@ export function SessionComposer({
       </div>
 
       {/* Controls row — lives OUTSIDE the bordered card, no fill. */}
-      <div className="flex items-center justify-between gap-3 px-1">
+      <div className="flex flex-wrap items-center justify-between gap-y-1 gap-x-3 px-1">
         <div className="flex items-center gap-xs">
           <IconButton
             icon={Plus}
@@ -510,7 +518,19 @@ export function SessionComposer({
             onClick={onPickFiles}
           />
         </div>
-        <div className="flex items-center gap-3xs font-body text-sm text-text-neutral-tertiary">
+        <div className="flex flex-wrap items-center gap-3xs font-body text-sm text-text-neutral-tertiary">
+          {contextTokens != null && contextLimit && contextLimit > 0 ? (
+            <>
+              <ContextRing
+                used={contextTokens}
+                limit={contextLimit}
+                breakdown={contextBreakdown}
+              />
+              <span aria-hidden="true" className="ml-2xs text-text-neutral-tertiary/60">
+                ·
+              </span>
+            </>
+          ) : null}
           {onModelChange ? (
             <TextButtonSelect
               value={currentModel}

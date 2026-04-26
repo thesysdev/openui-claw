@@ -3,9 +3,9 @@
 import { LayoutGrid } from "lucide-react";
 import { useMemo, useState } from "react";
 
-import { AppCard } from "@/components/cards/AppCard";
 import { SectionHeader } from "@/components/home/SectionHeader";
-import { SortPills } from "@/components/ui/SortPills";
+import { MobileListCard, MobileListRow } from "@/components/mobile/MobileListRow";
+import { SortButton } from "@/components/ui/SortButton";
 import type { AppSummary } from "@/lib/engines/types";
 
 type Sort = "recent" | "a-z";
@@ -16,7 +16,11 @@ export interface AppsViewProps {
   onOpenApp: (appId: string) => void;
 }
 
-export function AppsView({ apps, pinnedAppIds, onOpenApp }: AppsViewProps) {
+function truncate(value: string, max = 48): string {
+  return value.length > max ? `${value.slice(0, max - 1)}…` : value;
+}
+
+export function MobileAppsView({ apps, pinnedAppIds, onOpenApp }: AppsViewProps) {
   const [sort, setSort] = useState<Sort>("recent");
 
   const { topApps, otherApps } = useMemo(() => {
@@ -37,12 +41,8 @@ export function AppsView({ apps, pinnedAppIds, onOpenApp }: AppsViewProps) {
   }, [otherApps, sort]);
 
   return (
-    <div className="h-full flex-1 overflow-y-auto bg-background p-3xl">
+    <div className="h-full flex-1 overflow-y-auto bg-background p-ml">
       <div className="mx-auto max-w-[1080px]">
-        <h2 className="mb-3xl font-heading text-lg font-bold text-text-neutral-primary">
-          Apps
-        </h2>
-
         {apps.length === 0 ? (
           <p className="rounded-2xl border border-dashed border-border-default px-ml py-xl text-sm text-text-neutral-tertiary">
             Agents will create apps here as you chat.
@@ -50,54 +50,40 @@ export function AppsView({ apps, pinnedAppIds, onOpenApp }: AppsViewProps) {
         ) : (
           <>
             {topApps.length > 0 && (
-              <section className="mb-3xl">
+              <section className="mb-ml">
                 <SectionHeader title="Top apps" />
-                <div className="grid grid-cols-1 gap-ml sm:grid-cols-2 lg:grid-cols-3">
+                <MobileListCard>
                   {topApps.map((app) => (
-                    <AppCard
+                    <MobileListRow
                       key={app.id}
-                      app={{
-                        id: app.id,
-                        name: app.title,
-                        icon: LayoutGrid,
-                        agent: app.agentId,
-                        lastUsed: app.updatedAt,
-                      }}
+                      icon={LayoutGrid}
+                      title={app.title}
+                      subtitle={`by ${truncate(app.agentId)}`}
                       category="app"
                       onClick={() => onOpenApp(app.id)}
                     />
                   ))}
-                </div>
+                </MobileListCard>
               </section>
             )}
 
             <section className="mb-3xl">
               <SectionHeader
                 title="All apps"
-                right={
-                  <SortPills
-                    value={sort}
-                    options={[{ key: "recent", label: "Recent" }, { key: "a-z", label: "A–Z" }]}
-                    onChange={setSort}
-                  />
-                }
+                right={<SortButton value={sort} onChange={setSort} />}
               />
-              <div className="grid grid-cols-1 gap-ml sm:grid-cols-2 lg:grid-cols-3">
+              <MobileListCard>
                 {sortedOther.map((app) => (
-                  <AppCard
+                  <MobileListRow
                     key={app.id}
-                    app={{
-                      id: app.id,
-                      name: app.title,
-                      icon: LayoutGrid,
-                      agent: app.agentId,
-                      lastUsed: app.updatedAt,
-                    }}
+                    icon={LayoutGrid}
+                    title={app.title}
+                    subtitle={`by ${truncate(app.agentId)}`}
                     category="app"
                     onClick={() => onOpenApp(app.id)}
                   />
                 ))}
-              </div>
+              </MobileListCard>
             </section>
           </>
         )}
