@@ -13,6 +13,7 @@ import { CronsView } from "@/components/crons/CronsView";
 import { HomeView } from "@/components/home/HomeView";
 import { AppSidebar } from "@/components/layout/AppSidebar";
 import { MobileShell } from "@/components/layout/MobileShell";
+import { DetailTopBar } from "@/components/layout/DetailTopBar";
 import {
   NotificationInboxDrawer,
   NotificationInboxPane,
@@ -32,7 +33,7 @@ import { AssistantMessage } from "@/components/rendering/AssistantMessage";
 import { UserMessage } from "@/components/rendering/UserMessage";
 import { SessionComposer } from "@/components/session/SessionComposer";
 import { qualifyModel } from "@/lib/models";
-import { SessionPreviewPanels } from "@/components/session/SessionPreviewPanels";
+import { UploadPreviewPanel } from "@/components/session/SessionPreviewPanels";
 import {
   SessionWorkspaceDrawer,
   SessionWorkspacePane,
@@ -793,13 +794,29 @@ function ThreadArea({
           const artifactMatch = activeArtifactId.startsWith("session-artifact:")
             ? activeArtifactId.slice("session-artifact:".length)
             : null;
+          const uploadMatch = activeArtifactId.startsWith("session-upload:")
+            ? activeArtifactId.slice("session-upload:".length)
+            : null;
           const app = appMatch ? paneApps.find((a) => a.id === appMatch) : null;
           const artifact = artifactMatch
             ? paneArtifacts.find((a) => a.id === artifactMatch)
             : null;
+          const upload = uploadMatch
+            ? paneUploads.find((u) => u.id === uploadMatch)
+            : null;
           const handleClose = () =>
             artifactStore.getState().closeArtifact(activeArtifactId);
-          if (!app && !artifact) return null;
+          if (!app && !artifact && !upload) return null;
+          if (upload) {
+            return (
+              <div className="fixed inset-0 z-[60] flex flex-col bg-background dark:bg-sunk">
+                <DetailTopBar title={upload.name} onClose={handleClose} />
+                <div className="min-h-0 flex-1 overflow-auto bg-sunk-light dark:bg-sunk-deep">
+                  <UploadPreviewPanel upload={upload} uploadStore={uploads} />
+                </div>
+              </div>
+            );
+          }
           const threadsAll = allThreadsRaw as unknown as ClawThread[];
           const agentNameFor = makeAgentNameResolver(threadsAll);
           const resolveRefineThreadId = (sessionKey: string | undefined) =>
