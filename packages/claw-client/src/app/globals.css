@@ -59,6 +59,15 @@
   animation: claw-slide-in-left 220ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+/* The library defaults the chat panel to `visibility: hidden` until a thread
+   is loaded. When a stale URL points at a non-existent thread (or while the
+   thread list is still loading), the panel stays hidden and the chat area
+   reads as broken. Force it visible everywhere — our placeholder TopBar +
+   EmptyChatWelcome handle the empty state. */
+.openui-shell-thread-chat-panel {
+  visibility: visible !important;
+}
+
 /* Hide scrollbars on every scroll container while < 640px (mobile breakpoint).
    Keeps the visible width symmetric so left/right padding matches. Desktop is
    untouched. */
@@ -75,7 +84,6 @@
   .openui-shell-thread-chat-panel {
     min-width: 0 !important;
     width: 100% !important;
-    visibility: visible !important;
   }
 }
 
