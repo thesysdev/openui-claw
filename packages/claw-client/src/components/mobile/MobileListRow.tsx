@@ -1,7 +1,12 @@
 "use client";
 
-import { ChevronRight } from "lucide-react";
-import type { ComponentType, ReactNode } from "react";
+import { ChevronRight, MoreVertical } from "lucide-react";
+import { useState, type ComponentType, type ReactNode } from "react";
+
+import {
+  MobileMenuDrawer,
+  type MobileMenuDrawerItem,
+} from "@/components/mobile/MobileMenuDrawer";
 
 export type MobileRowCategory = "agent" | "app" | "artifact" | "activity";
 
@@ -26,6 +31,10 @@ interface MobileListRowProps {
   right?: ReactNode;
   category: MobileRowCategory;
   onClick?: () => void;
+  /** When provided, a kebab button replaces the chevron and opens a bottom-tray menu. */
+  menu?: MobileMenuDrawerItem[];
+  /** Title shown at the top of the bottom tray. Defaults to the row title (when string). */
+  menuTitle?: string;
 }
 
 export function MobileListRow({
@@ -35,27 +44,58 @@ export function MobileListRow({
   right,
   category,
   onClick,
+  menu,
+  menuTitle,
 }: MobileListRowProps) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const hasMenu = (menu?.length ?? 0) > 0;
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="flex min-h-[64px] w-full items-center gap-m bg-transparent px-ml py-m text-left transition-colors duration-150 first:rounded-t-2xl last:rounded-b-2xl active:bg-sunk-light dark:active:bg-elevated-light"
-    >
-      <div
-        className={`flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-m ${CATEGORY_BG[category]}`}
+    <div className="relative flex min-h-[64px] w-full items-stretch first:rounded-t-2xl last:rounded-b-2xl">
+      <button
+        type="button"
+        onClick={onClick}
+        className="flex flex-1 items-center gap-m bg-transparent px-ml py-m text-left transition-colors duration-150 first:rounded-t-2xl last:rounded-b-2xl active:bg-sunk-light dark:active:bg-elevated-light"
       >
-        <Icon size={14} className={CATEGORY_ICON[category]} />
-      </div>
-      <div className="min-w-0 flex-1">
-        <p className="truncate font-body text-sm font-medium text-text-neutral-primary">{title}</p>
-        {subtitle ? (
-          <p className="truncate font-body text-2xs text-text-neutral-tertiary/70">{subtitle}</p>
-        ) : null}
-      </div>
-      {right}
-      <ChevronRight size={14} className="shrink-0 text-text-neutral-tertiary" />
-    </button>
+        <div
+          className={`flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-m ${CATEGORY_BG[category]}`}
+        >
+          <Icon size={14} className={CATEGORY_ICON[category]} />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="truncate font-body text-sm font-medium text-text-neutral-primary">
+            {title}
+          </p>
+          {subtitle ? (
+            <p className="truncate font-body text-2xs text-text-neutral-tertiary/70">{subtitle}</p>
+          ) : null}
+        </div>
+        {right}
+        {hasMenu ? null : (
+          <ChevronRight size={14} className="shrink-0 text-text-neutral-tertiary" />
+        )}
+      </button>
+      {hasMenu ? (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            setMenuOpen(true);
+          }}
+          aria-label="Open row menu"
+          className="flex w-9 shrink-0 items-center justify-center text-text-neutral-tertiary transition-colors active:text-text-neutral-primary"
+        >
+          <MoreVertical size={16} />
+        </button>
+      ) : null}
+      {hasMenu ? (
+        <MobileMenuDrawer
+          open={menuOpen}
+          onClose={() => setMenuOpen(false)}
+          title={menuTitle ?? (typeof title === "string" ? title : undefined)}
+          items={menu ?? []}
+        />
+      ) : null}
+    </div>
   );
 }
 

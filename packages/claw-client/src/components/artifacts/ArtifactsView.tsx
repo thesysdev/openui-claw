@@ -6,26 +6,32 @@ import { ArtifactCard } from "@/components/cards/ArtifactCard";
 import { SectionHeader } from "@/components/home/SectionHeader";
 import { SortPills } from "@/components/ui/SortPills";
 import type { ArtifactStore, ArtifactSummary } from "@/lib/engines/types";
+import { ConnectionState } from "@/lib/gateway/types";
 
 type Sort = "recent" | "a-z";
 
 interface Props {
   artifacts: ArtifactStore;
   onOpenArtifact: (artifactId: string) => void;
+  connectionState: ConnectionState;
 }
 
-export function ArtifactsView({ artifacts, onOpenArtifact }: Props) {
+export function ArtifactsView({ artifacts, onOpenArtifact, connectionState }: Props) {
   const [items, setItems] = useState<ArtifactSummary[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(connectionState === ConnectionState.CONNECTED);
   const [sort, setSort] = useState<Sort>("recent");
 
   useEffect(() => {
+    if (connectionState !== ConnectionState.CONNECTED) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     artifacts
       .listArtifacts()
       .then(setItems)
       .finally(() => setLoading(false));
-  }, [artifacts]);
+  }, [artifacts, connectionState]);
 
   const sorted = useMemo(() => {
     const arr = [...items];

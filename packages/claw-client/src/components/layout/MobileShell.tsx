@@ -321,14 +321,14 @@ function MobileNavSheet({
   return (
     <div className="fixed inset-0 z-[60] flex">
       <div
-        className="flex h-full w-[min(80vw,280px)] flex-col bg-background"
+        className="claw-slide-in-left flex h-full w-[min(80vw,280px)] flex-col bg-background"
         style={{
           paddingTop: "env(safe-area-inset-top)",
           paddingBottom: "env(safe-area-inset-bottom)",
         }}
       >
         <header className="sticky top-0 z-10 flex items-center justify-between bg-background px-ml py-m">
-          <h2 className="font-heading text-lg font-bold text-text-neutral-primary">Openclaw UI</h2>
+          <h2 className="font-heading text-lg font-bold text-text-neutral-primary">OpenUI shell</h2>
           <HeaderIconButton onClick={onClose} label="Close navigation">
             <X size={18} />
           </HeaderIconButton>
@@ -414,7 +414,7 @@ function MobileNavSheet({
         type="button"
         onClick={onClose}
         aria-label="Close navigation"
-        className="flex-1 bg-overlay"
+        className="claw-fade-in flex-1 bg-overlay"
       />
     </div>
   );

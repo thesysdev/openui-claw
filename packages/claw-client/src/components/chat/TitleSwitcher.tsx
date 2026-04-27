@@ -2,6 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 
+import { MobileSwitcherSheet } from "@/components/mobile/MobileSwitcherSheet";
+import { useIsMobile } from "@/lib/hooks/useIsMobile";
+
 export interface TitleSwitcherItem {
   id: string;
   label: string;
@@ -37,10 +40,11 @@ export function TitleSwitcher({
   onSelect,
 }: TitleSwitcherProps) {
   const [open, setOpen] = useState(false);
+  const isMobile = useIsMobile();
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || isMobile) return;
     const onDown = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
     };
@@ -53,7 +57,7 @@ export function TitleSwitcher({
       document.removeEventListener("mousedown", onDown);
       document.removeEventListener("keydown", onKey);
     };
-  }, [open]);
+  }, [open, isMobile]);
 
   return (
     <div ref={ref} className="relative">
@@ -70,7 +74,20 @@ export function TitleSwitcher({
           {currentLabel}
         </span>
       </button>
-      {open ? (
+      {isMobile ? (
+        <MobileSwitcherSheet
+          open={open}
+          onClose={() => setOpen(false)}
+          title="Switch"
+          activeId={activeId}
+          options={items.map((it) => ({
+            id: it.id,
+            label: it.label,
+            description: it.trailingText,
+          }))}
+          onSelect={(id) => onSelect(id)}
+        />
+      ) : open ? (
         <div className="absolute left-0 top-[calc(100%+4px)] z-50 max-h-80 w-[320px] overflow-y-auto rounded-lg border border-border-default bg-popover-background p-3xs shadow-xl dark:bg-elevated">
           {items.map((it) => {
             const isActive = it.id === activeId;

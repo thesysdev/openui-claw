@@ -26,10 +26,14 @@ export function humanFrequency(job: CronJobRecord): string {
 export function cronOwnerLabel(job: CronJobRecord, threads: Thread[]): string {
   const sessionKey = job.sessionKey ?? "";
   const agentPart = sessionKey.split(":")[0] ?? "";
-  const thread = job.threadId ? threads.find((t) => t.id === job.threadId) : undefined;
-  const sessionName = thread?.title ?? "";
-  const agent = agentPart ? truncate(agentPart) : "";
-  const session = sessionName ? truncate(sessionName) : "";
-  if (agent && session) return `${agent} / ${session}`;
-  return agent || session;
+  // Resolve to the agent's display name via its main thread; fall back to the ID.
+  const mainThread = agentPart
+    ? threads.find(
+        (t) =>
+          // @ts-expect-error claw-augmented thread fields
+          (t.clawAgentId ?? t.id) === agentPart && t.clawKind === "main",
+      )
+    : undefined;
+  const agentName = mainThread?.title ?? agentPart;
+  return agentName ? truncate(agentName) : "";
 }

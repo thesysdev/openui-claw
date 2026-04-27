@@ -1,23 +1,24 @@
 "use client";
 
-import { Inbox, X } from "lucide-react";
+import { X } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { HeaderIconButton } from "@/components/layout/HeaderIconButton";
 import { MobileButton } from "@/components/mobile/MobileButton";
+import { FilterChips } from "@/components/ui/FilterChips";
 import { useBodyScrollLock } from "@/lib/hooks/useBodyScrollLock";
 import type { NotificationRecord } from "@/lib/notifications";
 
-type InboxTab = "all" | "tasks" | "needs_input" | "alerts";
+type InboxTab = "all" | "needs_input" | "alerts";
+type NotifCategory = "needs_input" | "alerts" | "tasks";
 
 const TAB_ORDER: Array<{ id: InboxTab; label: string }> = [
   { id: "all", label: "All" },
-  { id: "tasks", label: "Tasks" },
   { id: "needs_input", label: "Needs input" },
   { id: "alerts", label: "Alerts" },
 ];
 
-function notificationCategory(notification: NotificationRecord): Exclude<InboxTab, "all"> {
+function notificationCategory(notification: NotificationRecord): NotifCategory {
   const kind = notification.kind.toLowerCase();
   if (kind.includes("needs_input") || kind.includes("approval")) return "needs_input";
   if (
@@ -43,7 +44,7 @@ function formatRelativeTime(value: string): string {
   return new Date(timestamp).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
-function tagClasses(tab: Exclude<InboxTab, "all">): string {
+function tagClasses(tab: NotifCategory): string {
   switch (tab) {
     case "needs_input":
       return "border-border-alert bg-alert-background text-text-alert-primary";
@@ -54,7 +55,7 @@ function tagClasses(tab: Exclude<InboxTab, "all">): string {
   }
 }
 
-function tagLabel(tab: Exclude<InboxTab, "all">): string {
+function tagLabel(tab: NotifCategory): string {
   switch (tab) {
     case "needs_input":
       return "Needs input";
@@ -173,7 +174,7 @@ export function MobileNotificationInboxDrawer({
               : notifications.filter((n) => notificationCategory(n) === tab.id).length;
           return result;
         },
-        { all: 0, tasks: 0, needs_input: 0, alerts: 0 },
+        { all: 0, needs_input: 0, alerts: 0 },
       ),
     [notifications],
   );
@@ -192,7 +193,7 @@ export function MobileNotificationInboxDrawer({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[80] flex flex-col bg-background">
+    <div className="claw-fade-in fixed inset-0 z-[80] flex flex-col bg-background">
       <header
         className="flex shrink-0 items-center justify-between gap-s bg-background px-ml py-m"
         style={{ paddingTop: "max(12px, env(safe-area-inset-top))" }}
@@ -216,33 +217,17 @@ export function MobileNotificationInboxDrawer({
         </div>
       </header>
 
-      <div className="flex shrink-0 gap-xs overflow-x-auto px-ml pb-ml pt-m">
-        {TAB_ORDER.map((tab) => {
-          const isActive = activeTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => setActiveTab(tab.id)}
-              className={`inline-flex shrink-0 items-center gap-xs rounded-full px-m py-xs font-label text-sm font-medium transition-colors ${
-                isActive
-                  ? "bg-text-neutral-primary text-background"
-                  : "bg-sunk-light text-text-neutral-secondary active:bg-sunk dark:bg-foreground"
-              }`}
-            >
-              <span>{tab.label}</span>
-              <span
-                className={`inline-flex h-[14px] min-w-[14px] shrink-0 items-center justify-center rounded-full px-3xs font-label text-[8px] font-bold leading-none ${
-                  isActive
-                    ? "bg-background text-text-neutral-primary"
-                    : "bg-sunk text-text-neutral-tertiary dark:bg-highlight-subtle"
-                }`}
-              >
-                {counts[tab.id]}
-              </span>
-            </button>
-          );
-        })}
+      <div className="px-ml pb-ml pt-m">
+        <FilterChips<InboxTab>
+          value={activeTab}
+          onChange={setActiveTab}
+          options={TAB_ORDER.map((tab) => ({
+            value: tab.id,
+            label: tab.label,
+            count: counts[tab.id],
+          }))}
+          ariaLabel="Notification filter"
+        />
       </div>
 
       <div
@@ -250,13 +235,10 @@ export function MobileNotificationInboxDrawer({
         style={{ paddingBottom: "max(32px, env(safe-area-inset-bottom))" }}
       >
         {visibleNotifications.length === 0 ? (
-          <div className="flex h-full flex-col items-center justify-center rounded-3xl border border-dashed border-border-default/80 bg-background px-l py-2xl text-center">
-            <Inbox className="mb-m h-2xl w-2xl text-text-neutral-tertiary" />
-            <p className="text-sm font-medium text-text-neutral-secondary">
-              No notifications here yet
-            </p>
-            <p className="mt-2xs text-sm text-text-neutral-tertiary">
-              Cron runs and other background attention items will show up here.
+          <div className="flex h-full flex-col items-center justify-center px-ml text-center">
+            <p className="text-sm text-text-neutral-tertiary">
+              No notifications here yet. Cron runs and other background attention items will show
+              up here.
             </p>
           </div>
         ) : (

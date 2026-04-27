@@ -19,6 +19,9 @@ import type { ModelChoice } from "@/types/gateway-responses";
 import { useThread } from "@openuidev/react-headless";
 import { CornerDownLeft, Mic, Plus, RotateCw, Square, X } from "lucide-react";
 
+import { MobileSwitcherSheet } from "@/components/mobile/MobileSwitcherSheet";
+import { useIsMobile } from "@/lib/hooks/useIsMobile";
+
 import { Button } from "@/components/ui/Button";
 import { effectiveSendKey, usePreferences } from "@/lib/preferences";
 import { THINKING_LEVELS } from "@/lib/thinking-levels";
@@ -40,11 +43,12 @@ function TextButtonSelect({
   title,
 }: {
   value: string;
-  options: ReadonlyArray<{ value: string; label: string; group?: string }>;
+  options: ReadonlyArray<{ value: string; label: string; description?: string; group?: string }>;
   onChange: (value: string) => void;
   title?: string;
 }) {
   const [open, setOpen] = useState(false);
+  const isMobile = useIsMobile();
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
   const ref = useRef<HTMLDivElement>(null);
@@ -75,7 +79,7 @@ function TextButtonSelect({
   }, [open, showSearch]);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || isMobile) return;
     const onDown = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
     };
@@ -83,7 +87,7 @@ function TextButtonSelect({
     return () => {
       document.removeEventListener("mousedown", onDown);
     };
-  }, [open]);
+  }, [open, isMobile]);
 
   // Clamp activeIndex when filtered shrinks below the current index.
   useEffect(() => {
@@ -140,7 +144,20 @@ function TextButtonSelect({
       >
         {current?.label ?? "Default"}
       </Button>
-      {open ? (
+      {isMobile ? (
+        <MobileSwitcherSheet
+          open={open}
+          onClose={() => setOpen(false)}
+          title={title ?? "Select"}
+          activeId={value}
+          options={options.map((o) => ({
+            id: o.value,
+            label: o.label,
+            description: o.description ?? o.group,
+          }))}
+          onSelect={(id) => onChange(id)}
+        />
+      ) : open ? (
         <div
           className="absolute bottom-full right-0 z-50 mb-2xs flex w-[280px] flex-col rounded-lg border border-border-default bg-popover-background shadow-xl dark:bg-elevated"
           onKeyDown={onPanelKeyDown}

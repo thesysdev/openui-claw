@@ -1,14 +1,29 @@
 "use client";
 
 import { BellOff, BellRing, PanelRightClose, PanelRightOpen } from "lucide-react";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 
 import { Counter } from "@/components/ui/Counter";
+import { FilterChips } from "@/components/ui/FilterChips";
 import { IconButton } from "@/components/layout/sidebar/IconButton";
 
 import { NeedsInputCard } from "./NeedsInputCard";
 import { NotifRow } from "./NotifRow";
-import type { HomeNotif } from "./types";
+import type { HomeNotif, NotifType } from "./types";
+
+type Filter = "all" | "needs_input" | "alerts";
+
+const FILTER_LABELS: Record<Filter, string> = {
+  all: "All",
+  needs_input: "Needs input",
+  alerts: "Alerts",
+};
+const FILTER_KEYS: Filter[] = ["all", "needs_input", "alerts"];
+const FILTER_TYPE: Record<Filter, NotifType | null> = {
+  all: null,
+  needs_input: "needs_input",
+  alerts: "alert",
+};
 
 export interface NotifPanelProps {
   notifications: HomeNotif[];
@@ -21,10 +36,10 @@ export interface NotifPanelProps {
 }
 
 /**
- * Home-screen notifications panel. Single flat list — no tab filtering. Unread
- * needs-input items still get their richer card treatment at the top of the
- * list because they require a user action. When `collapsed` is true the panel
- * shrinks to a thin rail with the unread badge.
+ * Home-screen notifications panel. Filter chips at the top (All / Needs input /
+ * Alerts). Unread needs-input items still get their richer card treatment at
+ * the top of the list because they require a user action. When `collapsed` is
+ * true the panel shrinks to a thin rail with the unread badge.
  */
 export function NotifPanel({
   notifications,
@@ -35,19 +50,35 @@ export function NotifPanel({
   collapsed = false,
   onToggleCollapsed,
 }: NotifPanelProps) {
+  const [filter, setFilter] = useState<Filter>("all");
+
   const unread = useMemo(
     () => notifications.filter((n) => !n.read).length,
     [notifications],
   );
 
-  const needsInputCards = useMemo(
-    () => notifications.filter((n) => n.type === "needs_input" && !n.read),
+  const counts = useMemo<Record<Filter, number>>(
+    () => ({
+      all: notifications.length,
+      needs_input: notifications.filter((n) => n.type === "needs_input").length,
+      alerts: notifications.filter((n) => n.type === "alert").length,
+    }),
     [notifications],
   );
 
+  const filtered = useMemo(() => {
+    const type = FILTER_TYPE[filter];
+    return type == null ? notifications : notifications.filter((n) => n.type === type);
+  }, [filter, notifications]);
+
+  const needsInputCards = useMemo(
+    () => filtered.filter((n) => n.type === "needs_input" && !n.read),
+    [filtered],
+  );
+
   const rows = useMemo(
-    () => notifications.filter((n) => !(n.type === "needs_input" && !n.read)),
-    [notifications],
+    () => filtered.filter((n) => !(n.type === "needs_input" && !n.read)),
+    [filtered],
   );
 
   if (collapsed) {
@@ -82,7 +113,7 @@ export function NotifPanel({
   return (
     <div className="flex h-full w-[360px] shrink-0 flex-col overflow-hidden border-l border-border-default/50 dark:border-border-default/16">
       <div className="border-b border-border-default/50 px-ml py-ml dark:border-border-default/16">
-        <div className="flex items-center gap-s">
+        <div className="mb-m flex items-center gap-s">
           <span className="font-heading text-md font-bold text-text-neutral-primary">
             Notifications
           </span>
@@ -116,6 +147,16 @@ export function NotifPanel({
             ) : null}
           </div>
         </div>
+        <FilterChips<Filter>
+          value={filter}
+          onChange={setFilter}
+          options={FILTER_KEYS.map((f) => ({
+            value: f,
+            label: FILTER_LABELS[f],
+            count: counts[f],
+          }))}
+          ariaLabel="Notification filter"
+        />
       </div>
 
       <div className="flex-1 overflow-y-auto px-s py-s">
@@ -136,7 +177,7 @@ export function NotifPanel({
           <div className="flex h-full flex-col items-center justify-center gap-s px-ml text-center">
             <BellOff size={16} className="text-text-neutral-tertiary/60" />
             <p className="font-body text-sm text-text-neutral-tertiary">
-              It's quiet here
+              It&apos;s quiet here
             </p>
           </div>
         ) : (

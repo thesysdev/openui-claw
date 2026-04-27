@@ -20,6 +20,7 @@ import { NavTab } from "@/components/layout/sidebar/NavTab";
 import { Tag } from "@/components/layout/sidebar/Tag";
 import { SectionTab } from "@/components/layout/sidebar/SectionTab";
 import { BorderTile, TextTile } from "@/components/layout/sidebar/Tile";
+import { FilterChips } from "@/components/ui/FilterChips";
 
 // Edge-to-edge separator: stretches past the pane's `px-s` padding so the
 // 1px rule hits both side walls of the rail.
@@ -57,7 +58,7 @@ function kindLabel(kind: string): string {
 // style used in the navigation sidebar agent rows.
 function TypeTag({ label }: { label: string }) {
   return (
-    <Tag size="sm" variant="neutral">
+    <Tag size="sm" variant="neutral" className="uppercase tracking-wide">
       {label}
     </Tag>
   );
@@ -124,7 +125,7 @@ function Section({
 // Shared props
 // ────────────────────────────────────────────────────────────────────────────
 
-type WorkspacePaneProps = {
+export type WorkspacePaneProps = {
   apps: AppSummary[];
   artifacts: ArtifactSummary[];
   uploads: ThreadUpload[];
@@ -145,7 +146,7 @@ type WorkspacePaneProps = {
 // Workspace body — shared between the permanent sidepane and mobile drawer.
 // ────────────────────────────────────────────────────────────────────────────
 
-function WorkspaceSections({
+export function WorkspaceSections({
   apps,
   artifacts,
   uploads,
@@ -165,6 +166,7 @@ function WorkspaceSections({
     Partial<Record<"apps" | "artifacts", boolean>>
   >({});
   const [hoveredId, setHoveredId] = useState<string | null>(null);
+  const [scope, setScope] = useState<"session" | "agent">("session");
 
   const toggle = (k: keyof typeof openMap) =>
     setOpenMap((p) => ({ ...p, [k]: !p[k] }));
@@ -177,7 +179,19 @@ function WorkspaceSections({
   const contextCount = uploads.length + (linkedApp ? 1 : 0);
 
   return (
-    <div className="px-s">
+    <div className="px-s pt-m">
+      <div className="mb-m">
+        <FilterChips<"session" | "agent">
+          value={scope}
+          onChange={setScope}
+          options={[
+            { value: "session", label: "This session" },
+            { value: "agent", label: "All sessions" },
+          ]}
+          ariaLabel="Workspace scope"
+        />
+      </div>
+
       {/* Apps */}
       <Section
         id="apps"
@@ -191,7 +205,7 @@ function WorkspaceSections({
         setHoveredId={setHoveredId}
       >
         {apps.length === 0 ? (
-          <EmptyText label="None yet" />
+          <EmptyBox label="No apps yet" />
         ) : (
           <>
             {visibleApps.map((app) => {
@@ -246,7 +260,7 @@ function WorkspaceSections({
         setHoveredId={setHoveredId}
       >
         {artifacts.length === 0 ? (
-          <EmptyText label="None yet" />
+          <EmptyBox label="No artifacts yet" />
         ) : (
           <>
             {visibleArts.map((artifact) => {
@@ -307,7 +321,18 @@ function WorkspaceSections({
         setHoveredId={setHoveredId}
       >
         {contextCount === 0 ? (
-          <EmptyText label="None yet" />
+          <EmptyBox
+            label="No context yet"
+            action={
+              <button
+                type="button"
+                onClick={onPickFiles}
+                className="inline-flex items-center gap-2xs rounded-m border border-border-default/70 bg-background px-s py-2xs font-label text-sm text-text-neutral-secondary shadow-sm transition-colors hover:bg-sunk-light hover:text-text-neutral-primary dark:border-border-default/16 dark:bg-foreground dark:hover:bg-elevated"
+              >
+                <Plus size={12} /> Add context
+              </button>
+            }
+          />
         ) : (
           <>
             {linkedApp ? (() => {
@@ -356,27 +381,34 @@ function WorkspaceSections({
                 />
               );
             })}
+            {/* Add-context affordance — mirrors the "View all" border-tile style. */}
+            <NavTab
+              tile={<BorderTile icon={Plus} />}
+              label="Add context"
+              muted
+              hovered={hoveredId === "ctx-add"}
+              onClick={onPickFiles}
+              onMouseEnter={() => setHoveredId("ctx-add")}
+              onMouseLeave={() => setHoveredId(null)}
+            />
           </>
         )}
-        {/* Add-context affordance — mirrors the "View all" border-tile style. */}
-        <NavTab
-          tile={<BorderTile icon={Plus} />}
-          label="Add context"
-          muted
-          hovered={hoveredId === "ctx-add"}
-          onClick={onPickFiles}
-          onMouseEnter={() => setHoveredId("ctx-add")}
-          onMouseLeave={() => setHoveredId(null)}
-        />
       </Section>
     </div>
   );
 }
 
-function EmptyText({ label }: { label: string }) {
+function EmptyBox({
+  label,
+  action,
+}: {
+  label: string;
+  action?: ReactNode;
+}) {
   return (
-    <div className="px-xs py-xs pl-l font-body text-sm text-text-neutral-tertiary">
-      {label}
+    <div className="my-xs rounded-m border border-dashed border-border-default/70 px-s py-l text-center text-sm text-text-neutral-tertiary dark:border-border-default">
+      <p>{label}</p>
+      {action ? <div className="mt-s flex justify-center">{action}</div> : null}
     </div>
   );
 }

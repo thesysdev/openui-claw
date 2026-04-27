@@ -65,32 +65,39 @@ export function MobileAgentsView({ threads, onOpenThread }: AgentsViewProps) {
     return arr;
   }, [agents, sort]);
 
+  if (agents.length === 0) {
+    return (
+      <div
+        className="flex h-full flex-1 items-center justify-center bg-background p-ml"
+        style={{ minHeight: "calc(100dvh - 120px)" }}
+      >
+        <p className="text-center text-sm text-text-neutral-tertiary">
+          No agents yet. Start a conversation to see them here.
+        </p>
+      </div>
+    );
+  }
+
   return (
-    <div className="h-full flex-1 overflow-y-auto bg-background p-ml">
+    <div className="claw-fade-in h-full flex-1 overflow-y-auto bg-background p-ml">
       <div className="mx-auto max-w-[1080px]">
-        {agents.length === 0 ? (
-          <p className="rounded-2xl border border-dashed border-border-default px-ml py-xl text-sm text-text-neutral-tertiary">
-            No agents yet. Start a conversation to see them here.
-          </p>
-        ) : (
-          <section className="mb-3xl">
-            <SectionHeader
-              title="All agents"
-              right={<SortButton value={sort} onChange={setSort} />}
-            />
-            <div className="grid grid-cols-2 gap-s">
-              {sorted.map((a) => (
-                <AgentCard
-                  key={a.id}
-                  agent={a}
-                  onClick={() => {
-                    if (a.latestThreadId) onOpenThread(a.latestThreadId);
-                  }}
-                />
-              ))}
-            </div>
-          </section>
-        )}
+        <section className="mb-3xl">
+          <SectionHeader
+            title="All agents"
+            right={<SortButton value={sort} onChange={setSort} />}
+          />
+          <div className="grid grid-cols-2 gap-s">
+            {sorted.map((a) => (
+              <AgentCard
+                key={a.id}
+                agent={a}
+                onClick={() => {
+                  if (a.latestThreadId) onOpenThread(a.latestThreadId);
+                }}
+              />
+            ))}
+          </div>
+        </section>
       </div>
     </div>
   );

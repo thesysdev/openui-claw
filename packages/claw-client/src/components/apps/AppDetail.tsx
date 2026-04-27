@@ -10,6 +10,7 @@ import { Renderer } from "@openuidev/react-lang";
 import { Callout } from "@openuidev/react-ui";
 import { openuiLibrary } from "@openuidev/react-ui/genui-lib";
 import { Bug, Code2, Eye, Pin, Sparkles, Trash2, X } from "lucide-react";
+import { SegmentedTabs } from "@/components/ui/SegmentedTabs";
 import { TopBar } from "@/components/chat/TopBar";
 import {
   TitleSwitcher,
@@ -334,24 +335,15 @@ export function AppDetail({
             )}
           </>
         ) : null}
-        <div className="flex items-center gap-1">
-          <IconButton
-            icon={Eye}
-            variant="pill"
-            size="md"
-            title="Preview"
-            aria-label="Preview"
-            active={viewMode === "preview"}
-            onClick={() => setViewMode("preview")}
-          />
-          <IconButton
-            icon={Code2}
-            variant="pill"
-            size="md"
-            title="Code"
-            aria-label="Code"
-            active={viewMode === "code"}
-            onClick={() => setViewMode("code")}
+        <div className="w-[88px]">
+          <SegmentedTabs<"preview" | "code">
+            value={viewMode}
+            onChange={setViewMode}
+            options={[
+              { value: "preview", label: "Preview", icon: Eye, iconOnly: true },
+              { value: "code", label: "Code", icon: Code2, iconOnly: true },
+            ]}
+            ariaLabel="View mode"
           />
         </div>
       </TopBar>

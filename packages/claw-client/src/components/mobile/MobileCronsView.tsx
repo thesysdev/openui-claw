@@ -1,15 +1,17 @@
 "use client";
 
 import type { Thread } from "@openuidev/react-headless";
-import { Clock3, X } from "lucide-react";
+import { Clock3, MoreVertical, Pause, Play, Trash2, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { CronDetailTray, type CronJobEdits } from "@/components/crons/CronDetailTray";
 import { cronOwnerLabel, humanFrequency } from "@/components/crons/format";
 import { SectionHeader } from "@/components/home/SectionHeader";
 import { HeaderIconButton } from "@/components/layout/HeaderIconButton";
-import { Tag } from "@/components/layout/sidebar/Tag";
-import { MobileListCard, MobileListRow } from "@/components/mobile/MobileListRow";
+import { MobileCronRow } from "@/components/mobile/MobileCronRow";
+import { MobileDetailHeader } from "@/components/mobile/MobileDetailHeader";
+import { MobileListCard } from "@/components/mobile/MobileListRow";
+import { MobileMenuDrawer } from "@/components/mobile/MobileMenuDrawer";
 import { SortButton } from "@/components/ui/SortButton";
 import type { CronJobRecord, CronRunEntry } from "@/lib/cron";
 import { useBodyScrollLock } from "@/lib/hooks/useBodyScrollLock";
@@ -162,50 +164,40 @@ export function MobileCronsView({
   }, []);
 
   return (
-    <div className="flex h-full flex-1 overflow-hidden bg-background">
-      <div className="min-w-0 flex-1 overflow-y-auto p-ml">
-        <div className="mx-auto max-w-[1080px]">
-          {sorted.length === 0 ? (
-            <div className="flex min-h-[150px] items-center justify-center rounded-2xl border border-dashed border-border-default px-ml text-center text-sm text-text-neutral-tertiary">
-              <p>
-                Ask your agent to schedule recurring jobs
-                <br />
-                like daily digests or weekly reports.
-              </p>
-            </div>
-          ) : (
+    <div className="claw-fade-in flex h-full flex-1 overflow-hidden bg-background">
+      {sorted.length === 0 ? (
+        <div
+          className="flex h-full flex-1 items-center justify-center p-ml"
+          style={{ minHeight: "calc(100dvh - 120px)" }}
+        >
+          <p className="text-center text-sm text-text-neutral-tertiary">
+            Ask your agent to schedule recurring jobs
+            <br />
+            like daily digests or weekly reports.
+          </p>
+        </div>
+      ) : (
+        <div className="min-w-0 flex-1 overflow-y-auto p-ml">
+          <div className="mx-auto max-w-[1080px]">
             <section className="mb-3xl">
               <SectionHeader
                 title="All cron jobs"
                 right={<SortButton value={sort} onChange={setSort} />}
               />
               <MobileListCard>
-                {sorted.map((job) => {
-                  const owner = cronOwnerLabel(job, threads);
-                  const subtitle = owner
-                    ? `${humanFrequency(job)} · by ${owner}`
-                    : humanFrequency(job);
-                  return (
-                    <MobileListRow
-                      key={job.id}
-                      icon={Clock3}
-                      title={job.name}
-                      subtitle={subtitle}
-                      category="activity"
-                      right={
-                        <Tag size="md" variant={job.enabled ? "success" : "neutral"}>
-                          {job.enabled ? "Active" : "Paused"}
-                        </Tag>
-                      }
-                      onClick={() => setSelectedId(job.id)}
-                    />
-                  );
-                })}
+                {sorted.map((job) => (
+                  <MobileCronRow
+                    key={job.id}
+                    job={job}
+                    threads={threads}
+                    onClick={() => setSelectedId(job.id)}
+                  />
+                ))}
               </MobileListCard>
             </section>
-          )}
+          </div>
         </div>
-      </div>
+      )}
 
       {selected ? (
         <MobileCronDetailOverlay
@@ -249,6 +241,7 @@ function MobileCronDetailOverlay({
   onOpenThread: (threadId: string) => void;
 }) {
   useBodyScrollLock(true);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [vw, setVw] = useState<number>(() =>
     typeof window === "undefined" ? 360 : window.innerWidth,
   );
@@ -260,15 +253,16 @@ function MobileCronDetailOverlay({
   }, []);
 
   return (
-    <div className="fixed inset-0 z-[70] flex flex-col bg-background dark:bg-foreground">
-      <div className="sticky top-0 z-10 flex items-center justify-between gap-m border-b border-border-default/70 bg-background px-ml py-s dark:border-border-default/16 dark:bg-foreground">
-        <h2 className="min-w-0 truncate font-heading text-md font-medium text-text-neutral-primary">
-          {job.name}
-        </h2>
-        <HeaderIconButton onClick={onClose} label="Close cron job">
-          <X size={16} />
-        </HeaderIconButton>
-      </div>
+    <div className="claw-fade-in fixed inset-0 z-[70] flex flex-col bg-background dark:bg-foreground">
+      <MobileDetailHeader
+        onBack={onClose}
+        title={{ label: job.name }}
+        actions={
+          <HeaderIconButton onClick={() => setMenuOpen(true)} label="Open menu">
+            <MoreVertical size={18} />
+          </HeaderIconButton>
+        }
+      />
       <div className="min-h-0 flex-1 overflow-hidden">
         <CronDetailTray
           job={job}
@@ -283,8 +277,35 @@ function MobileCronDetailOverlay({
           onDelete={onDelete}
           onDuplicate={onDuplicate}
           onOpenThread={onOpenThread}
+          mobile
         />
       </div>
+      <MobileMenuDrawer
+        open={menuOpen}
+        onClose={() => setMenuOpen(false)}
+        title={job.name}
+        items={[
+          {
+            key: "run-now",
+            label: "Run now",
+            icon: Play,
+            onSelect: () => onRunNow(job),
+          },
+          {
+            key: "toggle",
+            label: job.enabled ? "Pause job" : "Resume job",
+            icon: job.enabled ? Pause : Play,
+            onSelect: () => onToggleEnabled(job, !job.enabled),
+          },
+          {
+            key: "delete",
+            label: "Delete job",
+            icon: Trash2,
+            destructive: true,
+            onSelect: () => onDelete(job),
+          },
+        ]}
+      />
     </div>
   );
 }
