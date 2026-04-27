@@ -517,14 +517,14 @@ body {
   padding: var(--space-m) var(--space-l);
   margin-left: 0 !important;
   margin-right: auto !important;
-  background: var(--color-sunk-light) !important;
-  color: rgb(var(--color-text-neutral-primary)) !important;
+  background: color-mix(in srgb, var(--color-interactive-accent-default) 10%, transparent) !important;
+  color: rgb(var(--color-text-accent-primary)) !important;
   font-size: var(--font-size-md) !important;
   line-height: var(--line-height-body) !important;
 }
 
 .dark .openui-claw-thread-container .openui-shell-thread-message-user__content {
-  background: var(--color-foreground) !important;
+  background: color-mix(in srgb, var(--color-interactive-accent-default) 14%, transparent) !important;
 }
 
 .openui-claw-thread-container .openui-shell-thread-error {
