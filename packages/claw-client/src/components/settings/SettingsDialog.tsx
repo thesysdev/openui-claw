@@ -5,6 +5,7 @@ import { saveSettings } from "@/lib/storage";
 import type { Settings } from "@/lib/storage";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@openuidev/react-ui";
 import { AutomatedSetup } from "./AutomatedSetup";
+import { PreferencesPanel } from "./PreferencesPanel";
 
 interface Props {
   open: boolean;
@@ -58,6 +59,7 @@ export function SettingsDialog({ open, currentSettings, onClose, onSave }: Props
         <TabsList className="mb-4">
           <TabsTrigger value="automated" text="Automated" />
           <TabsTrigger value="manual" text="Manual" />
+          <TabsTrigger value="preferences" text="Preferences" />
         </TabsList>
 
         <TabsContent value="manual">
@@ -129,6 +131,19 @@ export function SettingsDialog({ open, currentSettings, onClose, onSave }: Props
 
         <TabsContent value="automated">
           <AutomatedSetup />
+          <div className="flex justify-end mt-4">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 rounded-lg text-sm text-text-neutral-secondary hover:bg-foreground transition-colors"
+            >
+              Close
+            </button>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="preferences">
+          <PreferencesPanel />
           <div className="flex justify-end mt-4">
             <button
               type="button"

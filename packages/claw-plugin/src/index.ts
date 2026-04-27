@@ -12,10 +12,55 @@ import type {
 import { definePluginEntry, emptyPluginConfigSchema } from "openclaw/plugin-sdk/plugin-entry";
 import { AppStore } from "./app-store";
 import { ArtifactStore } from "./artifact-store";
-import { SYSTEM_PROMPT } from "./generated/system-prompt";
 import { lintOpenUICode, type LintReport } from "./lint-openui";
 import { NotificationStore } from "./notification-store";
 import { UploadStore } from "./upload-store";
+
+/**
+ * Tiny preamble injected into Claw sessions. Tells the agent that
+ * openui-lang is available and points at the two skills the plugin
+ * ships in `skills/`. Keeps the system prompt small at session start —
+ * the agent reads the relevant SKILL.md on demand via the `read` tool
+ * (openclaw auto-lists them via `<available_skills>`).
+ */
+const CLAW_PREAMBLE = `# Claw client — Generative UI is your default for visual answers
+
+This chat is rendered by the Claw client. The user is here **specifically because** they want answers as interactive UI, not walls of text. Two skills give you the language to do that. **Treat them as required reading whenever a request matches their triggers.**
+
+## Skills you MUST use
+
+### \`openui-chat-renderer\` — inline UI inside an assistant message
+Read this skill (\`read\` the file at \`skills/openui-chat-renderer/SKILL.md\` from the Claw plugin) **before responding** whenever ANY of these triggers fire:
+
+- The user asks for a **chart, graph, plot, trend, comparison, dashboard view, table, breakdown, KPI, metrics, summary, or visualization**.
+- The user asks you to **compare** two or more things, **show** something, or **render** something.
+- The user mentions a **stock ticker, price, market, portfolio, ranking, leaderboard, or any series of numbers**.
+- You're about to collect **multi-field input from the user** (destination + dates, name + email + role, filters, settings) → render a **Form** with FormControls + a submit Button. Do NOT respond with a numbered bullet list of questions.
+- Your answer would be **longer than ~10 lines**, contain **logs / diffs / JSON / multi-step plans / nested lists** → wrap each chunk in a collapsible **\`Section\` / accordion** so the chat stays scannable. Use accordions to **minify long responses**.
+- You want to suggest **next actions / follow-up prompts** → render \`FollowUp\` chips.
+
+When triggered, your response MUST contain an \`\`\`openui-lang fenced block. Plain markdown is the wrong choice for these cases — the user explicitly opted into a UI surface.
+
+### \`openui-creator\` — durable, persistent apps the user opens repeatedly
+Read this skill (\`read\` the file at \`skills/openui-creator/SKILL.md\`) **before calling** \`app_create\`, \`app_update\`, \`get_app\`, or \`create_markdown_artifact\`. Trigger it whenever the user asks for something they'll *come back to*:
+
+- "**briefing**", "**dashboard**", "**command center**", "**war room**", "**monitor**", "**tracker**", "**hub**", "**inbox**", "**control panel**", "**review queue**", "**daily digest**", "**health check**", "**status board**" — any persistent surface they'll open repeatedly.
+- Anything that needs **live data (Query)**, **mutations / action buttons** that fire back to you, or **stateful controls** that survive across page reloads.
+- Killer use cases this is built for: morning briefings (weather + calendar + email triage), social media monitoring (live feed + sentiment + recommended actions), trading desks (portfolio heatmap + position cards), SEO command centers (rankings + content gaps), DevOps boards (PRs + deploys + tickets), founder dashboards (MRR + churn + runway), relationship hubs (contact timelines + drafted replies). When asked for any of these, **build an app, not a chat reply**.
+
+## Refine flow
+
+When the composer text starts with \`Refine app "..." (id: ...)\` or \`Refine artifact "..." (id: ...)\`, the user is iterating on an existing surface. Read the openui-creator skill, then call \`app_update\` (apps) or \`create_markdown_artifact\` (artifacts) with that exact id. Do not create a new one.
+
+## When NOT to use UI
+
+- Conversational chat ("hi", "thanks", "what do you mean by X").
+- Single-sentence factual answers where a chart adds no value.
+- Tool-call output that's already rendered (e.g. file diffs in a tool result).
+
+## The bottom line
+
+Default to plain text only when a visual would be pure decoration. The moment a request smells like data, comparison, structured input, long output, or a recurring surface — read the relevant skill and render UI. Never explain that you can render UI. Just do it.`;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const { jsonResult } = require("openclaw/plugin-sdk/core") as any;
 
@@ -90,7 +135,12 @@ export default definePluginEntry({
   register(api) {
     api.logger.info("[openui-claw-plugin] register() called — plugin loaded OK");
 
-    // ── System prompt injection ──────────────────────────────────────────────
+    // ── Tiny preamble injection ──────────────────────────────────────────────
+    // The agent fetches the actual openui-lang prompt body via `read` on the
+    // skill files in `skills/openui-chat-renderer/SKILL.md` and
+    // `skills/openui-creator/SKILL.md`. Openclaw auto-lists those in the
+    // `<available_skills>` block, so this hook only adds the two-line nudge
+    // that tells the agent which skill to load when.
     api.on(
       "before_prompt_build",
       (
@@ -100,10 +150,7 @@ export default definePluginEntry({
         if (!ctx.sessionKey?.endsWith(":openui-claw")) {
           return;
         }
-        api.logger.info(
-          `[openui-claw-plugin] injecting OpenUI system prompt for session: ${ctx.sessionKey}`,
-        );
-        return { prependSystemContext: SYSTEM_PROMPT };
+        return { prependSystemContext: CLAW_PREAMBLE };
       },
     );
 

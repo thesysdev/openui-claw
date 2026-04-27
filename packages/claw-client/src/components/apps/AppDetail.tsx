@@ -104,6 +104,9 @@ export function AppDetail({
   const [viewMode, setViewMode] = useState<"preview" | "code">("preview");
   const [renderErrors, setRenderErrors] = useState<string[]>([]);
   const [debugOpen, setDebugOpen] = useState(false);
+  // Bumped to force a refetch without `window.location.reload()` — keeps the
+  // surrounding React tree (other open chats, scroll positions) intact.
+  const [refreshTick, setRefreshTick] = useState(0);
 
   // Captures the latest reactive state from the Renderer so @ToAssistant
   // actions can prefix the user's message with what the app was showing.
@@ -122,7 +125,7 @@ export function AppDetail({
         else setRecord(r);
       })
       .finally(() => setLoading(false));
-  }, [appId, apps, updatedAt]);
+  }, [appId, apps, updatedAt, refreshTick]);
 
   // Route built-in Renderer actions through the shared handler module.
   //   - `OpenUrl`              → open in a new tab.
@@ -235,12 +238,7 @@ export function AppDetail({
           onCustomize={onCustomize ? () => onCustomize(record) : undefined}
           onShare={onShare ? () => onShare(record) : undefined}
           onDelete={onDeleted ? () => setConfirmDelete(true) : undefined}
-          onRefresh={() => {
-            // Cheap reload: re-fetch by bumping a local timestamp. The parent
-            // may pass `updatedAt` to force a refetch; here we just refresh
-            // via a route-level mechanism if available, else reload the page.
-            window.location.reload();
-          }}
+          onRefresh={() => setRefreshTick((t) => t + 1)}
         />
       )}
 

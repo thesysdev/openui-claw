@@ -1,20 +1,14 @@
 "use client";
 
 import type { Thread } from "@openuidev/react-headless";
-import {
-  useCallback,
-  useMemo,
-  useRef,
-  useState,
-  type MouseEvent as ReactMouseEvent,
-} from "react";
+import { useCallback, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 
-import { Pause, Pencil, Play, Trash2 } from "lucide-react";
+import { Pause, Pencil, Play, RotateCw, Trash2 } from "lucide-react";
 
-import { IconButton } from "@/components/layout/sidebar/IconButton";
 import { SectionHeader } from "@/components/home/SectionHeader";
-import { SortPills } from "@/components/ui/SortPills";
+import { IconButton } from "@/components/layout/sidebar/IconButton";
 import { Tag } from "@/components/layout/sidebar/Tag";
+import { SortPills } from "@/components/ui/SortPills";
 import type { CronJobRecord, CronRunEntry } from "@/lib/cron";
 import { relTime } from "@/lib/time";
 
@@ -33,6 +27,13 @@ export interface CronsViewProps {
   /** Optional deep-link — when set, the tray opens for this job on mount. */
   initialSelectedId?: string;
   onOpenThread: (threadId: string) => void;
+  /** Gateway-backed mutations. Optimistic local overlay flips first, then we
+   *  call the RPC, then a refresh pulls authoritative state (which clears the
+   *  overlay if the server agrees, or reverts visually if it doesn't). */
+  onUpdateCronJob?: (id: string, patch: Record<string, unknown>) => Promise<boolean>;
+  onRunCronJob?: (id: string, mode?: "force" | "due") => Promise<boolean>;
+  onRemoveCronJob?: (id: string) => Promise<boolean>;
+  onRefreshCronData?: () => Promise<unknown>;
 }
 
 export function CronsView({
@@ -41,6 +42,10 @@ export function CronsView({
   threads,
   initialSelectedId,
   onOpenThread,
+  onUpdateCronJob,
+  onRunCronJob,
+  onRemoveCronJob,
+  onRefreshCronData,
 }: CronsViewProps) {
   const [sort, setSort] = useState<Sort>("recent");
   /** Local overlay — keyed by job id. Surfaces optimistic edits before a backend round-trip. */
@@ -48,25 +53,30 @@ export function CronsView({
   const [deletedIds, setDeletedIds] = useState<Set<string>>(new Set());
   const [selectedId, setSelectedId] = useState<string | null>(initialSelectedId ?? null);
   const [trayWidth, setTrayWidth] = useState(480);
+  /** Job ids whose Run-now click is in flight — used to spin the icon so the
+   *  user gets immediate feedback even though the row's "Last run" column
+   *  doesn't update until the cron actually completes. */
+  const [runningIds, setRunningIds] = useState<Set<string>>(new Set());
   const dragRef = useRef<{ startX: number; startWidth: number } | null>(null);
 
-  const onDragStart = useCallback((e: ReactMouseEvent) => {
-    dragRef.current = { startX: e.clientX, startWidth: trayWidth };
-    const onMove = (ev: MouseEvent) => {
-      if (!dragRef.current) return;
-      const delta = dragRef.current.startX - ev.clientX;
-      setTrayWidth(
-        Math.min(MAX_TRAY, Math.max(MIN_TRAY, dragRef.current.startWidth + delta)),
-      );
-    };
-    const onUp = () => {
-      dragRef.current = null;
-      document.removeEventListener("mousemove", onMove);
-      document.removeEventListener("mouseup", onUp);
-    };
-    document.addEventListener("mousemove", onMove);
-    document.addEventListener("mouseup", onUp);
-  }, [trayWidth]);
+  const onDragStart = useCallback(
+    (e: ReactMouseEvent) => {
+      dragRef.current = { startX: e.clientX, startWidth: trayWidth };
+      const onMove = (ev: MouseEvent) => {
+        if (!dragRef.current) return;
+        const delta = dragRef.current.startX - ev.clientX;
+        setTrayWidth(Math.min(MAX_TRAY, Math.max(MIN_TRAY, dragRef.current.startWidth + delta)));
+      };
+      const onUp = () => {
+        dragRef.current = null;
+        document.removeEventListener("mousemove", onMove);
+        document.removeEventListener("mouseup", onUp);
+      };
+      document.addEventListener("mousemove", onMove);
+      document.addEventListener("mouseup", onUp);
+    },
+    [trayWidth],
+  );
 
   /** Apply local overlay on top of the source record and drop deleted jobs. */
   const mergedJobs = useMemo(
@@ -99,15 +109,35 @@ export function CronsView({
     }));
   };
 
-  const handleRunNow = (job: CronJobRecord) => {
+  const handleRunNow = async (job: CronJobRecord) => {
     patch(job.id, { updatedAtMs: Date.now() });
+    if (!onRunCronJob) return;
+    setRunningIds((prev) => new Set(prev).add(job.id));
+    try {
+      const ok = await onRunCronJob(job.id, "force");
+      if (ok && onRefreshCronData) await onRefreshCronData();
+    } finally {
+      setRunningIds((prev) => {
+        const next = new Set(prev);
+        next.delete(job.id);
+        return next;
+      });
+    }
   };
 
-  const handleToggleEnabled = (job: CronJobRecord, nextEnabled: boolean) => {
+  const handleToggleEnabled = async (job: CronJobRecord, nextEnabled: boolean) => {
     patch(job.id, { enabled: nextEnabled });
+    if (!onUpdateCronJob) return;
+    const ok = await onUpdateCronJob(job.id, { enabled: nextEnabled });
+    if (!ok) {
+      // Server refused — revert overlay so UI matches reality.
+      patch(job.id, { enabled: !nextEnabled });
+      return;
+    }
+    if (onRefreshCronData) await onRefreshCronData();
   };
 
-  const handleSaveEdits = (job: CronJobRecord, edits: CronJobEdits) => {
+  const handleSaveEdits = async (job: CronJobRecord, edits: CronJobEdits) => {
     const nextSchedule =
       edits.scheduleExpr && edits.scheduleExpr !== job.schedule?.expr
         ? { ...(job.schedule ?? { kind: "cron" }), kind: "cron", expr: edits.scheduleExpr }
@@ -117,11 +147,38 @@ export function CronsView({
       description: edits.prompt ?? job.description,
       schedule: nextSchedule,
     });
+    if (!onUpdateCronJob) return;
+    const serverPatch: Record<string, unknown> = {};
+    if (edits.name !== undefined) serverPatch.name = edits.name;
+    if (edits.prompt !== undefined) {
+      // openclaw stores the agent prompt under payload.message; mirror that
+      // to match the gateway shape so the agent picks up the new prompt on
+      // its next run.
+      serverPatch.payload = { ...(job.payload ?? {}), message: edits.prompt };
+    }
+    if (edits.scheduleExpr && edits.scheduleExpr !== job.schedule?.expr) {
+      serverPatch.schedule = nextSchedule;
+    }
+    if (Object.keys(serverPatch).length === 0) return;
+    const ok = await onUpdateCronJob(job.id, serverPatch);
+    if (ok && onRefreshCronData) await onRefreshCronData();
   };
 
-  const handleDelete = (job: CronJobRecord) => {
+  const handleDelete = async (job: CronJobRecord) => {
     setDeletedIds((curr) => new Set([...curr, job.id]));
     setSelectedId(null);
+    if (!onRemoveCronJob) return;
+    const ok = await onRemoveCronJob(job.id);
+    if (!ok) {
+      // Server refused — un-hide.
+      setDeletedIds((curr) => {
+        const next = new Set(curr);
+        next.delete(job.id);
+        return next;
+      });
+      return;
+    }
+    if (onRefreshCronData) await onRefreshCronData();
   };
 
   const handleDuplicate = (job: CronJobRecord) => {
@@ -164,7 +221,10 @@ export function CronsView({
                 right={
                   <SortPills
                     value={sort}
-                    options={[{ key: "recent", label: "Recent" }, { key: "a-z", label: "A–Z" }]}
+                    options={[
+                      { key: "recent", label: "Recent" },
+                      { key: "a-z", label: "A–Z" },
+                    ]}
                     onChange={setSort}
                   />
                 }
@@ -235,12 +295,14 @@ export function CronsView({
                               onClick={(e) => e.stopPropagation()}
                             >
                               <IconButton
-                                icon={Play}
+                                icon={RotateCw}
                                 variant="tertiary"
                                 size="sm"
-                                title="Run now"
+                                title={runningIds.has(job.id) ? "Running…" : "Run now"}
                                 aria-label="Run now"
-                                onClick={() => handleRunNow(job)}
+                                disabled={runningIds.has(job.id)}
+                                spin={runningIds.has(job.id)}
+                                onClick={() => void handleRunNow(job)}
                               />
                               <IconButton
                                 icon={job.enabled ? Pause : Play}
@@ -248,14 +310,14 @@ export function CronsView({
                                 size="sm"
                                 title={job.enabled ? "Pause job" : "Resume job"}
                                 aria-label={job.enabled ? "Pause job" : "Resume job"}
-                                onClick={() => handleToggleEnabled(job, !job.enabled)}
+                                onClick={() => void handleToggleEnabled(job, !job.enabled)}
                               />
                               <IconButton
                                 icon={Pencil}
                                 variant="tertiary"
                                 size="sm"
-                                title="Edit job"
-                                aria-label="Edit job"
+                                title="Open job"
+                                aria-label="Open job"
                                 onClick={() => setSelectedId(job.id)}
                               />
                               <IconButton
@@ -264,7 +326,7 @@ export function CronsView({
                                 size="sm"
                                 title="Delete job"
                                 aria-label="Delete job"
-                                onClick={() => handleDelete(job)}
+                                onClick={() => void handleDelete(job)}
                               />
                             </div>
                           </Td>
@@ -308,13 +370,7 @@ export function CronsView({
   );
 }
 
-function Th({
-  children,
-  className = "",
-}: {
-  children: React.ReactNode;
-  className?: string;
-}) {
+function Th({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return (
     <th
       className={`px-ml py-m font-label text-sm font-medium text-text-neutral-secondary ${className}`}
@@ -324,13 +380,7 @@ function Th({
   );
 }
 
-function Td({
-  children,
-  className = "",
-}: {
-  children: React.ReactNode;
-  className?: string;
-}) {
+function Td({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return (
     <td className={`px-ml py-ml align-middle ${className}`}>
       <div className={`flex items-center ${className.includes("text-right") ? "justify-end" : ""}`}>

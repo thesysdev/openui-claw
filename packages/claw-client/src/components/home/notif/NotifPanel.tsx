@@ -1,79 +1,88 @@
 "use client";
 
-import { BellOff } from "lucide-react";
-import { useMemo, useState } from "react";
+import { BellOff, BellRing, PanelRightClose, PanelRightOpen } from "lucide-react";
+import { useMemo } from "react";
 
 import { Counter } from "@/components/ui/Counter";
+import { IconButton } from "@/components/layout/sidebar/IconButton";
 
 import { NeedsInputCard } from "./NeedsInputCard";
 import { NotifRow } from "./NotifRow";
-import type { HomeNotif, NotifType } from "./types";
-
-type Filter = "all" | "tasks" | "needs input" | "alerts";
-
-const FILTER_KEYS: Filter[] = ["all", "tasks", "needs input", "alerts"];
-const FILTER_TYPE: Record<Filter, NotifType | null> = {
-  all: null,
-  tasks: "task",
-  "needs input": "needs_input",
-  alerts: "alert",
-};
+import type { HomeNotif } from "./types";
 
 export interface NotifPanelProps {
   notifications: HomeNotif[];
   onOpenNotif?: (n: HomeNotif) => void;
   onMarkRead?: (id: string) => void;
+  onMarkAllRead?: () => void | Promise<void>;
   onAction?: (n: HomeNotif) => void;
+  collapsed?: boolean;
+  onToggleCollapsed?: (next: boolean) => void;
 }
 
-/** Right-side panel: header with tabs + scrollable list of notifications. */
+/**
+ * Home-screen notifications panel. Single flat list — no tab filtering. Unread
+ * needs-input items still get their richer card treatment at the top of the
+ * list because they require a user action. When `collapsed` is true the panel
+ * shrinks to a thin rail with the unread badge.
+ */
 export function NotifPanel({
   notifications,
   onOpenNotif,
   onMarkRead,
+  onMarkAllRead,
   onAction,
+  collapsed = false,
+  onToggleCollapsed,
 }: NotifPanelProps) {
-  const [filter, setFilter] = useState<Filter>("all");
-
   const unread = useMemo(
     () => notifications.filter((n) => !n.read).length,
     [notifications],
   );
-
-  const counts = useMemo<Record<Filter, number>>(
-    () => ({
-      all: notifications.length,
-      tasks: notifications.filter((n) => n.type === "task").length,
-      "needs input": notifications.filter((n) => n.type === "needs_input").length,
-      alerts: notifications.filter((n) => n.type === "alert").length,
-    }),
-    [notifications],
-  );
-
-  const filtered = useMemo(() => {
-    const type = FILTER_TYPE[filter];
-    return type == null ? notifications : notifications.filter((n) => n.type === type);
-  }, [filter, notifications]);
 
   const needsInputCards = useMemo(
     () => notifications.filter((n) => n.type === "needs_input" && !n.read),
     [notifications],
   );
 
-  const showCards = filter === "all" || filter === "needs input";
+  const rows = useMemo(
+    () => notifications.filter((n) => !(n.type === "needs_input" && !n.read)),
+    [notifications],
+  );
 
-  /** Notifications to render as regular rows (needs_input-unread excluded when shown as cards). */
-  const rows = useMemo(() => {
-    return filtered.filter(
-      (n) => !(showCards && n.type === "needs_input" && !n.read),
+  if (collapsed) {
+    return (
+      <aside className="flex h-full w-12 shrink-0 flex-col items-center border-l border-border-default/50 py-m dark:border-border-default/16">
+        <IconButton
+          icon={PanelRightOpen}
+          variant="tertiary"
+          size="md"
+          title="Show notifications"
+          aria-label="Show notifications"
+          onClick={() => onToggleCollapsed?.(false)}
+        />
+        <button
+          type="button"
+          onClick={() => onToggleCollapsed?.(false)}
+          className="relative mt-m flex h-l w-l items-center justify-center rounded-m text-text-neutral-tertiary transition-colors hover:bg-sunk-light hover:text-text-neutral-primary dark:hover:bg-foreground"
+          title={unread > 0 ? `${unread} unread` : "Notifications"}
+          aria-label={unread > 0 ? `${unread} unread` : "Notifications"}
+        >
+          <BellRing size={16} />
+          {unread > 0 ? (
+            <span className="absolute -right-1 -top-1 inline-flex min-w-[16px] items-center justify-center rounded-full bg-status-error px-[4px] py-[1px] text-2xs font-bold text-background">
+              {unread > 99 ? "99+" : unread}
+            </span>
+          ) : null}
+        </button>
+      </aside>
     );
-  }, [filtered, showCards]);
+  }
 
   return (
     <div className="flex h-full w-[360px] shrink-0 flex-col overflow-hidden border-l border-border-default/50 dark:border-border-default/16">
-      {/* ── Header ── */}
-      <div className="px-ml pt-ml">
-        <div className="mb-m flex items-center gap-s">
+      <div className="border-b border-border-default/50 px-ml py-ml dark:border-border-default/16">
+        <div className="flex items-center gap-s">
           <span className="font-heading text-md font-bold text-text-neutral-primary">
             Notifications
           </span>
@@ -82,41 +91,35 @@ export function NotifPanel({
               {unread}
             </Counter>
           ) : null}
-        </div>
-        <div
-          className="flex gap-ml border-b border-border-default/50 dark:border-border-default/16"
-          style={{ marginBottom: "-1px" }}
-        >
-          {FILTER_KEYS.map((f) => {
-            const active = filter === f;
-            return (
+          <div className="ml-auto flex items-center gap-xs">
+            {onMarkAllRead && unread > 0 ? (
               <button
-                key={f}
                 type="button"
-                onClick={() => setFilter(f)}
-                className={`flex items-center gap-xs border-b-2 px-0 py-xs font-label text-xs capitalize transition-colors duration-150 ${
-                  active
-                    ? "border-text-neutral-primary text-text-neutral-primary font-medium"
-                    : "border-transparent text-text-neutral-tertiary hover:text-text-neutral-secondary font-regular"
-                }`}
+                onClick={() => {
+                  void onMarkAllRead();
+                }}
+                className="rounded-m px-s py-2xs font-label text-xs text-text-neutral-secondary transition-colors hover:bg-sunk-light hover:text-text-neutral-primary dark:hover:bg-foreground"
+                title="Mark all as read"
               >
-                {f}
-                <Counter
-                  size="md"
-                  color="neutral"
-                  kind={active ? "subtle" : "secondary"}
-                >
-                  {counts[f]}
-                </Counter>
+                Mark all read
               </button>
-            );
-          })}
+            ) : null}
+            {onToggleCollapsed ? (
+              <IconButton
+                icon={PanelRightClose}
+                variant="tertiary"
+                size="md"
+                title="Collapse notifications"
+                aria-label="Collapse notifications"
+                onClick={() => onToggleCollapsed(true)}
+              />
+            ) : null}
+          </div>
         </div>
       </div>
 
-      {/* ── Body ── */}
       <div className="flex-1 overflow-y-auto px-s py-s">
-        {showCards && needsInputCards.length > 0 ? (
+        {needsInputCards.length > 0 ? (
           <div className="px-xs pb-s pt-xs">
             {needsInputCards.map((n) => (
               <NeedsInputCard
@@ -129,13 +132,11 @@ export function NotifPanel({
           </div>
         ) : null}
 
-        {rows.length === 0 ? (
+        {rows.length === 0 && needsInputCards.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center gap-s px-ml text-center">
             <BellOff size={16} className="text-text-neutral-tertiary/60" />
             <p className="font-body text-sm text-text-neutral-tertiary">
-              {filtered.length === 0
-                ? "It's quiet here"
-                : "Only needs-input items — see above"}
+              It's quiet here
             </p>
           </div>
         ) : (

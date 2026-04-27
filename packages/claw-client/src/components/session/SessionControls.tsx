@@ -4,16 +4,7 @@ import { useCallback } from "react";
 import { Brain, Cpu } from "lucide-react";
 import type { ModelChoice, SessionRow } from "@/types/gateway-responses";
 import { qualifyModel } from "@/lib/models";
-
-const THINKING_LEVELS = [
-  { value: "", label: "Default" },
-  { value: "off", label: "Off" },
-  { value: "minimal", label: "Minimal" },
-  { value: "low", label: "Low" },
-  { value: "medium", label: "Medium" },
-  { value: "high", label: "High" },
-  { value: "xhigh", label: "Extra High" },
-] as const;
+import { THINKING_LEVELS } from "@/lib/thinking-levels";
 
 function formatK(n: number): string {
   return n >= 1000 ? `${Math.round(n / 100) / 10}k` : String(n);

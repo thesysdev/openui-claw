@@ -49,6 +49,8 @@ export function ArtifactDetail({
   const [notFound, setNotFound] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  // Bumped to force a refetch without `window.location.reload()`.
+  const [refreshTick, setRefreshTick] = useState(0);
 
   useEffect(() => {
     setLoading(true);
@@ -61,7 +63,7 @@ export function ArtifactDetail({
         else setRecord(r);
       })
       .finally(() => setLoading(false));
-  }, [artifactId, artifacts, updatedAt]);
+  }, [artifactId, artifacts, updatedAt, refreshTick]);
 
   if (loading) {
     return (
@@ -96,15 +98,46 @@ export function ArtifactDetail({
     setDeleting(true);
     try {
       await artifacts.deleteArtifact(artifactId);
-      if (mode === "page") {
-        window.location.hash = artifactsHash();
-      }
+      // Routing belongs to the parent — `onDeleted` from ChatApp already
+      // navigates home. Mutating `window.location.hash` here used to cause
+      // a second navigation when the parent also routed.
       onDeleted?.();
     } catch {
       setDeleting(false);
       setConfirmDelete(false);
     }
   }
+
+  // Shared two-step delete control — same shape as AppDetail's, kept in sync
+  // by lifting both into a single render fragment we can drop into either
+  // mode's TopBar.
+  const deleteControl = confirmDelete ? (
+    <>
+      <Button
+        variant="borderless"
+        size="sm"
+        onClick={() => setConfirmDelete(false)}
+      >
+        Cancel
+      </Button>
+      <Button
+        variant="destructive"
+        size="sm"
+        disabled={deleting}
+        onClick={handleDelete}
+      >
+        {deleting ? "Deleting…" : "Confirm delete"}
+      </Button>
+    </>
+  ) : (
+    <IconButton
+      icon={Trash2}
+      variant="tertiary"
+      size="md"
+      title="Delete artifact"
+      onClick={handleDelete}
+    />
+  );
 
   return (
     <div className="flex h-full flex-col">
@@ -114,60 +147,56 @@ export function ArtifactDetail({
           onClose={onClose ?? (() => { window.location.hash = artifactsHash(); })}
           onCustomize={onCustomize ? () => onCustomize(record) : undefined}
           onShare={onShare ? () => onShare(record) : undefined}
-          onDelete={() => void handleDelete()}
-          onRefresh={() => window.location.reload()}
+          onDelete={() => setConfirmDelete(true)}
+          onRefresh={() => setRefreshTick((t) => t + 1)}
         />
       )}
 
-      {mode === "panel" ? (
-        <TopBar
-          actions={
-            <>
-              {onRefine ? (
-                <Button
-                  variant="tertiary"
-                  size="md"
-                  icon={Sparkles}
-                  onClick={() => void onRefine(record)}
-                >
-                  Refine
-                </Button>
-              ) : null}
-              <IconButton
-                icon={Trash2}
+      <TopBar
+        actions={
+          <>
+            {onRefine ? (
+              <Button
                 variant="tertiary"
                 size="md"
-                title="Delete artifact"
-                onClick={() => void handleDelete()}
+                icon={Sparkles}
+                onClick={() => void onRefine(record)}
+              >
+                Refine
+              </Button>
+            ) : null}
+            {deleteControl}
+            {mode === "panel" && onClose ? (
+              <IconButton
+                icon={X}
+                variant="tertiary"
+                size="md"
+                title="Close"
+                aria-label="Close"
+                onClick={onClose}
               />
-              {onClose ? (
-                <IconButton
-                  icon={X}
-                  variant="tertiary"
-                  size="md"
-                  title="Close"
-                  aria-label="Close"
-                  onClick={onClose}
-                />
-              ) : null}
-            </>
-          }
-        >
-          <TextTile label={record.title} category="artifacts" />
-          {siblings && siblings.length >= 1 && onSwitch ? (
-            <TitleSwitcher
-              activeId={artifactId}
-              currentLabel={record.title}
-              items={siblings}
-              onSelect={onSwitch}
-            />
-          ) : (
-            <span className="font-label text-md font-medium text-text-neutral-primary">
-              {record.title}
-            </span>
-          )}
-        </TopBar>
-      ) : null}
+            ) : null}
+          </>
+        }
+      >
+        {mode === "panel" ? (
+          <>
+            <TextTile label={record.title} category="artifacts" />
+            {siblings && siblings.length >= 1 && onSwitch ? (
+              <TitleSwitcher
+                activeId={artifactId}
+                currentLabel={record.title}
+                items={siblings}
+                onSelect={onSwitch}
+              />
+            ) : (
+              <span className="font-label text-md font-medium text-text-neutral-primary">
+                {record.title}
+              </span>
+            )}
+          </>
+        ) : null}
+      </TopBar>
 
       <div className="min-h-0 flex-1 overflow-auto">
         <ArtifactContentView

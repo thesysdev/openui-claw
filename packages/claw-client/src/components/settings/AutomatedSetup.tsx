@@ -21,7 +21,9 @@ export function AutomatedSetup() {
           Run this on your Mac Mini:
         </label>
         <div className="relative">
-          <pre className="rounded-lg border border-border-default bg-sunk-light px-3 py-2.5 text-sm font-mono text-text-neutral-secondary whitespace-pre-wrap break-all overflow-x-auto">
+          {/* Shell commands shouldn't break mid-path. Allow horizontal
+              scroll instead — `whitespace-pre` + `overflow-x-auto`. */}
+          <pre className="rounded-lg border border-border-default bg-sunk-light px-3 py-2.5 pr-20 text-sm font-mono text-text-neutral-secondary whitespace-pre overflow-x-auto">
             {INSTALL_COMMAND}
           </pre>
           <button
@@ -36,12 +38,9 @@ export function AutomatedSetup() {
 
       <p className="text-sm text-text-neutral-tertiary">
         This command provisions a Cloudflare Tunnel, installs{" "}
-        <code className="font-mono bg-foreground px-1 rounded">
-          cloudflared
-        </code>{" "}
-        as a system service, and prints a link to open in your browser.
-        You&apos;ll need <code className="font-mono bg-foreground px-1 rounded">sudo</code>{" "}
-        access and Node.js 18+.
+        <code className="font-mono bg-foreground px-1 rounded">cloudflared</code> as a system
+        service, and prints a link to open in your browser. You&apos;ll need{" "}
+        <code className="font-mono bg-foreground px-1 rounded">sudo</code> access and Node.js 18+.
       </p>
     </div>
   );

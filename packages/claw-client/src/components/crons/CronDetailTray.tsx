@@ -1,22 +1,14 @@
 "use client";
 
-import {
-  Check,
-  ExternalLink,
-  Pause,
-  Pencil,
-  Play,
-  Trash2,
-  X,
-} from "lucide-react";
-import { useMemo, useState, type MouseEvent as ReactMouseEvent } from "react";
 import type { Thread } from "@openuidev/react-headless";
+import { Check, ExternalLink, Pause, Pencil, Play, RotateCw, Trash2, X } from "lucide-react";
+import { useEffect, useMemo, useState, type MouseEvent as ReactMouseEvent } from "react";
 
-import { Button } from "@/components/ui/Button";
-import { IconButton } from "@/components/layout/sidebar/IconButton";
-import { StatusDot } from "@/components/ui/StatusDot";
-import { Tag } from "@/components/layout/sidebar/Tag";
 import { TopBar } from "@/components/chat/TopBar";
+import { IconButton } from "@/components/layout/sidebar/IconButton";
+import { Tag } from "@/components/layout/sidebar/Tag";
+import { Button } from "@/components/ui/Button";
+import { StatusDot } from "@/components/ui/StatusDot";
 import type { CronJobRecord, CronRunEntry } from "@/lib/cron";
 import { relTime } from "@/lib/time";
 
@@ -38,10 +30,10 @@ export interface CronDetailTrayProps {
   width: number;
   onDragStart: (e: ReactMouseEvent) => void;
   onClose: () => void;
-  onRunNow?: (job: CronJobRecord) => void;
-  onToggleEnabled?: (job: CronJobRecord, nextEnabled: boolean) => void;
-  onSaveEdits?: (job: CronJobRecord, edits: CronJobEdits) => void;
-  onDelete?: (job: CronJobRecord) => void;
+  onRunNow?: (job: CronJobRecord) => void | Promise<void>;
+  onToggleEnabled?: (job: CronJobRecord, nextEnabled: boolean) => void | Promise<void>;
+  onSaveEdits?: (job: CronJobRecord, edits: CronJobEdits) => void | Promise<void>;
+  onDelete?: (job: CronJobRecord) => void | Promise<void>;
   onDuplicate?: (job: CronJobRecord) => void;
   onOpenThread?: (threadId: string) => void;
 }
@@ -62,6 +54,15 @@ export function CronDetailTray({
 }: CronDetailTrayProps) {
   const [tab, setTab] = useState<DetailTab>("details");
   const [confirmDelete, setConfirmDelete] = useState(false);
+
+  // The tray instance can outlive a single job (the parent uses one tray and
+  // swaps `job` when the user picks another row). Reset to "details" whenever
+  // the job changes so opening Edit on a new job doesn't land you on the
+  // History tab inherited from the previous job.
+  useEffect(() => {
+    setTab("details");
+    setConfirmDelete(false);
+  }, [job.id]);
 
   const jobRuns = useMemo(
     () => runs.filter((r) => r.jobId === job.id).sort((a, b) => b.ts - a.ts),
@@ -97,7 +98,6 @@ export function CronDetailTray({
           className="min-w-0 flex-1 font-heading text-md font-medium text-text-neutral-primary"
         />
       </TopBar>
-
 
       {/* ── Tabs ── */}
       <div className="flex gap-ml border-b border-border-default/50 px-ml dark:border-border-default/16">
@@ -138,7 +138,17 @@ export function CronDetailTray({
             onRunNow={() => onRunNow?.(job)}
             onTogglePause={() => onToggleEnabled?.(job, !job.enabled)}
             onDelete={onDelete ? () => onDelete(job) : undefined}
-            onOpenThread={onOpenThread}
+            onOpenAgent={() => {
+              // Resolve the agent's main thread id (the chat thread the user
+              // expects to land in), not the cron's synthetic session key —
+              // the latter routes to a non-existent chat URL.
+              const agentId = job.agentId;
+              if (!agentId) return;
+              const main = (
+                threads as { id: string; clawAgentId?: string; clawKind?: string }[]
+              ).find((t) => (t.clawAgentId ?? t.id) === agentId && t.clawKind === "main");
+              if (main) onOpenThread?.(main.id);
+            }}
           />
         ) : (
           <HistoryPanel runs={jobRuns} onOpenThread={onOpenThread} />
@@ -170,7 +180,7 @@ function DetailsPanel({
   onRunNow,
   onTogglePause,
   onDelete,
-  onOpenThread,
+  onOpenAgent,
 }: {
   job: CronJobRecord;
   lastRun: CronRunEntry | undefined;
@@ -181,7 +191,7 @@ function DetailsPanel({
   onRunNow: () => void;
   onTogglePause: () => void;
   onDelete?: () => void;
-  onOpenThread?: (threadId: string) => void;
+  onOpenAgent?: () => void;
 }) {
   return (
     <div className="flex flex-col gap-xl">
@@ -229,18 +239,17 @@ function DetailsPanel({
                   }
                   size={6}
                 />
-                <span className="truncate font-body text-sm text-text-neutral-primary">
-                  {lastRun.summary ??
-                    (lastRun.status === "failed" ? "Failed" : "Completed")}
+                <span className="font-body text-sm text-text-neutral-primary">
+                  {relTime(lastRun.ts)}
                 </span>
-                <span className="shrink-0 font-body text-sm text-text-neutral-tertiary">
-                  · {relTime(lastRun.ts)}
-                </span>
+                {lastRun.status && lastRun.status !== "ok" ? (
+                  <span className="font-body text-sm text-text-neutral-tertiary">
+                    · {lastRun.status}
+                  </span>
+                ) : null}
               </div>
             ) : (
-              <span className="font-body text-sm text-text-neutral-tertiary">
-                No runs yet
-              </span>
+              <span className="font-body text-sm text-text-neutral-tertiary">No runs yet</span>
             )
           }
         />
@@ -252,30 +261,24 @@ function DetailsPanel({
             </span>
           }
           trailing={
-            job.threadId ? (
+            onOpenAgent && job.agentId ? (
               <ExternalLink size={13} className="shrink-0 text-text-neutral-tertiary" />
             ) : null
           }
-          onClick={job.threadId ? () => onOpenThread?.(job.threadId!) : undefined}
+          onClick={onOpenAgent && job.agentId ? onOpenAgent : undefined}
         />
       </ListCard>
 
       {/* ── Actions · Run now · Pause · Delete ── */}
       <section>
-        <h3 className="mb-s font-label text-sm font-medium text-text-neutral-tertiary">
-          Actions
-        </h3>
+        <h3 className="mb-s font-label text-sm font-medium text-text-neutral-tertiary">Actions</h3>
         {confirmDelete && onDelete ? (
           <div className="flex items-center justify-between gap-s rounded-m border border-border-default/50 bg-sunk-light/50 px-m py-s dark:border-border-default/16 dark:bg-foreground">
             <span className="font-body text-sm text-text-neutral-secondary">
               Delete this cron job? Runs will stop immediately.
             </span>
             <div className="flex shrink-0 items-center gap-xs">
-              <Button
-                variant="secondary"
-                size="md"
-                onClick={() => onConfirmDelete(false)}
-              >
+              <Button variant="secondary" size="md" onClick={() => onConfirmDelete(false)}>
                 Cancel
               </Button>
               <Button variant="secondary" size="md" icon={Trash2} onClick={onDelete}>
@@ -285,7 +288,7 @@ function DetailsPanel({
           </div>
         ) : (
           <div className="flex flex-wrap items-center gap-xs">
-            <Button variant="secondary" size="md" icon={Play} onClick={onRunNow}>
+            <Button variant="secondary" size="md" icon={RotateCw} onClick={onRunNow}>
               Run now
             </Button>
             <Button
@@ -312,11 +315,9 @@ function DetailsPanel({
 
       {/* ── Prompt · editable block ── */}
       <section>
-        <h3 className="mb-s font-label text-sm font-medium text-text-neutral-tertiary">
-          Prompt
-        </h3>
+        <h3 className="mb-s font-label text-sm font-medium text-text-neutral-tertiary">Prompt</h3>
         <InlineTextarea
-          value={job.description ?? ""}
+          value={job.payload?.message ?? job.prompt ?? job.description ?? ""}
           placeholder="Instructions the agent runs each trigger…"
           onSave={(next) => onSaveField({ prompt: next })}
         />
@@ -435,8 +436,7 @@ function HistoryPanel({
                   </td>
                   <td className="px-m py-s">
                     <p className="font-body text-sm text-text-neutral-primary">
-                      {run.summary ??
-                        (run.status === "failed" ? "Failed" : "Completed")}
+                      {run.summary ?? (run.status === "failed" ? "Failed" : "Completed")}
                     </p>
                     {run.error ? (
                       <p className="mt-2xs whitespace-pre-wrap font-mono text-xs text-text-danger-primary">
@@ -478,27 +478,17 @@ function HistoryPanel({
 // Building blocks
 // ─────────────────────────────────────────────────────────────────────────────
 
-function Field({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-xs">
-      <span className="font-label text-sm font-medium text-text-neutral-tertiary">
-        {label}
-      </span>
+      <span className="font-label text-sm font-medium text-text-neutral-tertiary">{label}</span>
       {children}
     </div>
   );
 }
 
 function FieldHint({ children }: { children: React.ReactNode }) {
-  return (
-    <span className="font-body text-sm text-text-neutral-tertiary">{children}</span>
-  );
+  return <span className="font-body text-sm text-text-neutral-tertiary">{children}</span>;
 }
 
 /** Inline-editable single-line field. Shows pencil on hover; click to edit. */
@@ -579,9 +569,7 @@ function InlineText({
       className={`group flex min-w-0 items-center gap-xs rounded-m px-s py-2xs text-left transition-colors hover:bg-sunk-light dark:hover:bg-foreground ${className}`}
     >
       <span className="truncate">
-        {value || (
-          <span className="text-text-neutral-tertiary">{placeholder ?? "—"}</span>
-        )}
+        {value || <span className="text-text-neutral-tertiary">{placeholder ?? "—"}</span>}
       </span>
       <Pencil
         size={12}
@@ -655,9 +643,7 @@ function InlineTextarea({
         {value.trim() ? (
           value
         ) : (
-          <span className="text-text-neutral-tertiary">
-            {placeholder ?? "Click to add"}
-          </span>
+          <span className="text-text-neutral-tertiary">{placeholder ?? "Click to add"}</span>
         )}
       </p>
       <span className="inline-flex items-center gap-xs font-label text-sm text-text-neutral-tertiary opacity-0 transition-opacity group-hover:opacity-100">

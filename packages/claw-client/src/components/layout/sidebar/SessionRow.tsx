@@ -1,6 +1,6 @@
 "use client";
 
-import { CornerDownLeft, EllipsisVertical, Pencil, Trash2 } from "lucide-react";
+import { CornerDownLeft, EllipsisVertical, Pencil, Pin, PinOff, Trash2 } from "lucide-react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { forwardRef } from "react";
 
@@ -23,6 +23,9 @@ export interface SessionRowProps {
   onMouseLeave?: () => void;
   onRename?: () => void;
   onDelete?: () => void;
+  /** When provided, shows a Pin / Unpin item in the dropdown. */
+  pinned?: boolean;
+  onTogglePin?: () => void;
 }
 
 /**
@@ -48,6 +51,8 @@ export const SessionRow = forwardRef<HTMLInputElement, SessionRowProps>(
       onMouseLeave,
       onRename,
       onDelete,
+      pinned = false,
+      onTogglePin,
     },
     ref,
   ) => {
@@ -100,7 +105,14 @@ export const SessionRow = forwardRef<HTMLInputElement, SessionRowProps>(
             >
               {label}
             </button>
-            {isExtra && !busy && (onRename || onDelete) && (
+            {pinned ? (
+              <Pin
+                size={11}
+                className="shrink-0 text-text-neutral-tertiary"
+                aria-label="Pinned"
+              />
+            ) : null}
+            {isExtra && !busy && (onRename || onDelete || onTogglePin) && (
               <DropdownMenu.Root>
                 <DropdownMenu.Trigger asChild>
                   <button
@@ -117,6 +129,24 @@ export const SessionRow = forwardRef<HTMLInputElement, SessionRowProps>(
                     align="start"
                     sideOffset={2}
                   >
+                    {onTogglePin && (
+                      <DropdownMenu.Item
+                        className="flex cursor-pointer items-center gap-xs rounded-m px-s py-xs text-sm text-text-neutral-secondary outline-none transition-colors hover:bg-sunk-light hover:text-text-neutral-primary focus:bg-sunk-light focus:text-text-neutral-primary dark:hover:bg-foreground dark:focus:bg-foreground"
+                        onSelect={onTogglePin}
+                      >
+                        {pinned ? (
+                          <>
+                            <PinOff size={13} className="text-text-neutral-tertiary" />
+                            Unpin
+                          </>
+                        ) : (
+                          <>
+                            <Pin size={13} className="text-text-neutral-tertiary" />
+                            Pin
+                          </>
+                        )}
+                      </DropdownMenu.Item>
+                    )}
                     {onRename && (
                       <DropdownMenu.Item
                         className="flex cursor-pointer items-center gap-xs rounded-m px-s py-xs text-sm text-text-neutral-secondary outline-none transition-colors hover:bg-sunk-light hover:text-text-neutral-primary focus:bg-sunk-light focus:text-text-neutral-primary dark:hover:bg-foreground dark:focus:bg-foreground"

@@ -261,7 +261,7 @@ export function mergeHistoryMessages(raw: ChatHistoryMessage[]): MergedMessage[]
       continue;
     }
 
-    if (m.role === "tool") {
+    if (m.role === "tool" || (m.role as string) === "toolResult") {
       if (!pending) continue;
 
       const toolCallId =

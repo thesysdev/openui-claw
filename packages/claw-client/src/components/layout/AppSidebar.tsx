@@ -11,11 +11,13 @@ import {
   cronsHash,
   homeHash,
   navigate,
+  skillsHash,
   useHashRoute,
 } from "@/lib/hooks/useHashRoute";
 import type { ClawThread } from "@/types/claw-thread";
 import { useThreadList } from "@openuidev/react-headless";
 import {
+  BookOpen,
   ChevronRight,
   Clock3,
   Cpu,
@@ -32,6 +34,7 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { togglePinnedThread, usePinnedThreadIds } from "@/lib/session-pins";
 import { AgentTab } from "./sidebar/AgentTab";
 import { ExpandCollapse } from "./sidebar/ExpandCollapse";
 import { IconButton } from "./sidebar/IconButton";
@@ -155,6 +158,7 @@ export function AppSidebar({
   const [expandedAgent, setExpandedAgent] = useState<string | null>(null);
   const [hov, setHov] = useState<string | null>(null);
 
+  const pinnedThreadIds = usePinnedThreadIds();
   const [titleOverrides, setTitleOverrides] = useState<Map<string, string>>(() => new Map());
   const [deletedIds, setDeletedIds] = useState<Set<string>>(() => new Set());
   const [creatingForAgent, setCreatingForAgent] = useState<string | null>(null);
@@ -435,18 +439,6 @@ export function AppSidebar({
             open={sectionsOpen.agents}
             hovered={hov === "agents-head"}
             collapsed={nc}
-            trailing={
-              <IconButton
-                icon={Plus}
-                variant="tertiary"
-                size="sm"
-                title="Create agent"
-                aria-label="Create agent"
-                onClick={() => {
-                  // TODO: wire up create-agent flow
-                }}
-              />
-            }
             onClick={() => toggleSection("agents")}
             onMouseEnter={() => setHov("agents-head")}
             onMouseLeave={() => setHov(null)}
@@ -471,7 +463,14 @@ export function AppSidebar({
                   const sessions = g.threads;
                   const main = sessions.find((t) => t.clawKind === "main");
                   const extras = sessions.filter((t) => t.clawKind !== "main");
-                  const ordered = main ? [main, ...extras] : sessions;
+                  // Pinned extras float above unpinned. Order is stable
+                  // within each bucket so the user's mental model
+                  // (recency) is preserved.
+                  const pinnedExtras = extras.filter((t) => pinnedThreadIds.has(t.id));
+                  const unpinnedExtras = extras.filter((t) => !pinnedThreadIds.has(t.id));
+                  const ordered = main
+                    ? [main, ...pinnedExtras, ...unpinnedExtras]
+                    : [...pinnedExtras, ...unpinnedExtras];
 
                   return (
                     <AgentTab
@@ -536,6 +535,8 @@ export function AppSidebar({
                             onMouseLeave={() => setHov(null)}
                             onRename={() => startEditing(t.id, t.title)}
                             onDelete={() => handleDelete(t.id)}
+                            pinned={pinnedThreadIds.has(t.id)}
+                            onTogglePin={isExtra ? () => togglePinnedThread(t.id) : undefined}
                           />
                         );
                       })}
@@ -705,6 +706,21 @@ export function AppSidebar({
             onMouseEnter={() => setHov("crons")}
             onMouseLeave={() => setHov(null)}
             title="Cron Jobs"
+          />
+        </div>
+
+        <div className={`${nc ? "px-2xs" : "px-s"} transition-[padding] duration-300`}>
+          <NavTab
+            tile={<IconTile icon={BookOpen} />}
+            label="Skills"
+            href={skillsHash()}
+            active={route?.view === "skills"}
+            hovered={hov === "skills"}
+            collapsed={nc}
+            onClick={() => navigate({ view: "skills" })}
+            onMouseEnter={() => setHov("skills")}
+            onMouseLeave={() => setHov(null)}
+            title="Skills"
           />
         </div>
       </div>

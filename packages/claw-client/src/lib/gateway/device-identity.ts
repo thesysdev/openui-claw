@@ -1,6 +1,6 @@
 import * as ed from "@noble/ed25519";
-import { sha512 } from "@noble/hashes/sha512";
-import { sha256 } from "@noble/hashes/sha256";
+import { sha512 } from "@noble/hashes/sha2";
+import { sha256 } from "@noble/hashes/sha2";
 
 // @noble/ed25519 v2 requires a SHA-512 implementation to be provided
 ed.etc.sha512Sync = sha512;

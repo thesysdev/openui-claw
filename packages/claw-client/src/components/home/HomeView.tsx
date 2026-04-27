@@ -1,5 +1,6 @@
 "use client";
 
+import type { Thread } from "@openuidev/react-headless";
 import {
   Clock3,
   Cpu,
@@ -10,20 +11,21 @@ import {
   Pencil,
   Play,
   Plus,
+  RotateCw,
   ScrollText,
   Table2,
   Trash2,
 } from "lucide-react";
-import type { Thread } from "@openuidev/react-headless";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 
 import { AgentCard, type AgentCardData } from "@/components/cards/AgentCard";
-import { Button } from "@/components/ui/Button";
 import { IconButton } from "@/components/layout/sidebar/IconButton";
-import { navigate } from "@/lib/hooks/useHashRoute";
-import type { AppSummary, ArtifactSummary } from "@/lib/engines/types";
+import { Button } from "@/components/ui/Button";
 import type { CronJobRecord, CronRunEntry } from "@/lib/cron";
+import type { AppSummary, ArtifactSummary } from "@/lib/engines/types";
+import { navigate } from "@/lib/hooks/useHashRoute";
 import type { NotificationRecord } from "@/lib/notifications";
+import { relTime } from "@/lib/time";
 import type { ClawThread } from "@/types/claw-thread";
 
 import { Greeting } from "./Greeting";
@@ -76,12 +78,16 @@ function notifTypeFromKind(kind: string): NotifType {
 }
 
 function toHomeNotif(n: NotificationRecord): HomeNotif {
+  // Prefer the underlying event's true timestamp when known
+  // (`metadata.runAtMs` for cron runs) — otherwise the server-set `createdAt`
+  // can drift on every upsert, surfacing stale runs as "just now".
+  const runAtMs = typeof n.metadata?.runAtMs === "number" ? n.metadata.runAtMs : null;
   return {
     id: n.id,
     type: notifTypeFromKind(n.kind),
     title: n.title,
     desc: n.message,
-    time: Date.parse(n.createdAt),
+    time: runAtMs ?? Date.parse(n.createdAt),
     read: !n.unread,
     agent: n.source?.agentId,
   };
@@ -143,6 +149,7 @@ export interface HomeViewProps {
   onOpenArtifact: (artifactId: string) => void;
   onOpenNotif?: (notifId: string) => void;
   onMarkNotifRead?: (notifId: string) => void;
+  onMarkAllNotifsRead?: () => void | Promise<void>;
 }
 
 export function HomeView({
@@ -158,6 +165,7 @@ export function HomeView({
   onOpenArtifact,
   onOpenNotif,
   onMarkNotifRead,
+  onMarkAllNotifsRead,
 }: HomeViewProps) {
   const agents = useMemo(() => buildAgents(threads as ClawThread[]), [threads]);
   const homeNotifs = useMemo(() => notifications.map(toHomeNotif), [notifications]);
@@ -170,6 +178,25 @@ export function HomeView({
     [artifacts],
   );
   const visibleCrons = useMemo(() => cronJobs.slice(0, 3), [cronJobs]);
+
+  // Persist the notifications-panel collapse choice across reloads.
+  const NOTIF_COLLAPSED_KEY = "openui-claw:notif-panel-collapsed";
+  const [notifPanelCollapsed, setNotifPanelCollapsedState] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    try {
+      return window.localStorage.getItem(NOTIF_COLLAPSED_KEY) === "1";
+    } catch {
+      return false;
+    }
+  });
+  const setNotifPanelCollapsed = (next: boolean) => {
+    setNotifPanelCollapsedState(next);
+    try {
+      window.localStorage.setItem(NOTIF_COLLAPSED_KEY, next ? "1" : "0");
+    } catch {
+      /* ignore */
+    }
+  };
 
   const openAgent = (agent: AgentCardData) => {
     const main = (threads as ClawThread[]).find(
@@ -316,12 +343,7 @@ export function HomeView({
                   const ownerLabel = cronOwnerLabel(job, threads);
                   const freq = humanFrequency(job);
                   return (
-                    <CronHomeRow
-                      key={job.id}
-                      job={job}
-                      ownerLabel={ownerLabel}
-                      frequency={freq}
-                    />
+                    <CronHomeRow key={job.id} job={job} ownerLabel={ownerLabel} frequency={freq} />
                   );
                 })}
               </div>
@@ -335,7 +357,10 @@ export function HomeView({
         notifications={homeNotifs}
         onOpenNotif={(n) => onOpenNotif?.(n.id)}
         onMarkRead={(id) => onMarkNotifRead?.(id)}
+        onMarkAllRead={onMarkAllNotifsRead}
         onAction={(n) => onOpenNotif?.(n.id)}
+        collapsed={notifPanelCollapsed}
+        onToggleCollapsed={setNotifPanelCollapsed}
       />
     </div>
   );
@@ -370,11 +395,21 @@ function CronHomeRow({
     fn();
   };
 
+  // `<div role="button">` instead of `<button>` so we can host nested
+  // `<IconButton>` action buttons inside without React's "button cannot be a
+  // descendant of button" hydration warning.
   return (
-    <button
-      type="button"
+    <div
+      role="button"
+      tabIndex={0}
       onClick={openTray}
-      className="group -mx-s flex w-full items-center gap-m rounded-lg px-s py-s text-left transition-colors duration-150 hover:bg-sunk-light dark:hover:bg-foreground"
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          openTray();
+        }
+      }}
+      className="group -mx-s flex w-full cursor-pointer items-center gap-m rounded-lg px-s py-s text-left transition-colors duration-150 hover:bg-sunk-light focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-default dark:hover:bg-foreground"
     >
       <div className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-m bg-cat-activity/10">
         <Clock3 size={14} className="text-cat-activity" />
@@ -391,11 +426,22 @@ function CronHomeRow({
               <span>by {ownerLabel}</span>
             </>
           ) : null}
+          {typeof job.state?.lastRunAtMs === "number" ? (
+            <>
+              <span className="mx-2xs inline-block h-[3px] w-[3px] shrink-0 rounded-full bg-text-neutral-tertiary/50 align-middle" />
+              <span>
+                last run {relTime(job.state.lastRunAtMs)}
+                {job.state.lastRunStatus && job.state.lastRunStatus !== "ok"
+                  ? ` (${job.state.lastRunStatus})`
+                  : ""}
+              </span>
+            </>
+          ) : null}
         </p>
       </div>
       <div className="flex shrink-0 items-center gap-xs opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100">
         <IconButton
-          icon={Play}
+          icon={RotateCw}
           variant="tertiary"
           size="sm"
           title="Run now"
@@ -418,8 +464,8 @@ function CronHomeRow({
           icon={Pencil}
           variant="tertiary"
           size="sm"
-          title="Edit job"
-          aria-label="Edit job"
+          title="Open job"
+          aria-label="Open job"
           onClick={stopAnd(openTray)}
         />
         <IconButton
@@ -431,6 +477,6 @@ function CronHomeRow({
           onClick={stopAnd(openTray)}
         />
       </div>
-    </button>
+    </div>
   );
 }

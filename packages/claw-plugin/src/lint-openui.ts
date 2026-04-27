@@ -1,11 +1,22 @@
 import {
   createParser,
   enrichErrors,
+  type LibraryJSONSchema,
   type OpenUIError,
   type ParseResult,
   type Parser,
 } from "@openuidev/lang-core";
-import { COMPONENT_NAMES, LIBRARY_SCHEMA } from "./generated/library-schema";
+import schemaJson from "./generated/openui-schema.json";
+
+// `openui-schema.json` ships `{schema, componentNames}` — the JSON Schema
+// emitted by `openuiLibrary.toJSONSchema()` plus a flat list of component
+// names extracted at build time. The constrained `LibraryJSONSchema` type
+// in lang-core only names the fields the parser reads (`$defs.*.{properties,
+// required}`), so the cast at the boundary stays.
+const LIBRARY_SCHEMA: LibraryJSONSchema =
+  (schemaJson as unknown as { schema: LibraryJSONSchema }).schema;
+const COMPONENT_NAMES: readonly string[] =
+  (schemaJson as unknown as { componentNames: string[] }).componentNames;
 
 /** Public-shape of a single lint finding returned to the LLM. */
 export interface LintFinding {

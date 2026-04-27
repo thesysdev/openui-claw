@@ -14,6 +14,11 @@ export type NotificationTarget =
       artifactId: string;
     }
   | {
+      view: "crons";
+      /** Optional — focus a specific cron job in the crons view. */
+      jobId?: string;
+    }
+  | {
       view: "home";
     };
 
@@ -38,6 +43,13 @@ export type NotificationRecord = {
   metadata?: Record<string, unknown>;
 };
 
-export function shouldSurfaceNotification(notification: Pick<NotificationRecord, "kind">): boolean {
+/**
+ * Drop notifications we don't care to surface in the inbox. We currently
+ * surface only cron notifications (the only kind the server emits today);
+ * read history is preserved so users can scroll back through past runs.
+ */
+export function shouldSurfaceNotification(
+  notification: Pick<NotificationRecord, "kind">,
+): boolean {
   return notification.kind.startsWith("cron_");
 }

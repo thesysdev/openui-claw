@@ -21,8 +21,7 @@ const VARIANT_STYLES: Record<IconButtonVariant, string> = {
     "bg-transparent text-text-neutral-tertiary border border-transparent hover:bg-sunk dark:hover:bg-sunk-light hover:text-text-neutral-primary",
   inverted:
     "bg-inverted-background text-background border border-transparent shadow-sm hover:opacity-90",
-  pill:
-    "bg-transparent text-text-neutral-tertiary border border-transparent aria-[pressed=true]:bg-sunk-light aria-[pressed=true]:text-text-neutral-primary",
+  pill: "bg-transparent text-text-neutral-tertiary border border-transparent aria-[pressed=true]:bg-sunk-light aria-[pressed=true]:text-text-neutral-primary",
 };
 
 export interface IconButtonProps {
@@ -33,6 +32,8 @@ export interface IconButtonProps {
   disabled?: boolean;
   /** For `pill` variant — controls the active fill via aria-pressed. */
   active?: boolean;
+  /** When true, the icon spins (e.g. cron Run-now in flight). */
+  spin?: boolean;
   onClick?: MouseEventHandler<HTMLButtonElement>;
   "aria-label"?: string;
   children?: ReactNode;
@@ -45,6 +46,7 @@ export function IconButton({
   title,
   disabled = false,
   active = false,
+  spin = false,
   onClick,
   ...rest
 }: IconButtonProps) {
@@ -59,7 +61,7 @@ export function IconButton({
       className={`flex shrink-0 items-center justify-center rounded-m transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-50 ${s.box} ${VARIANT_STYLES[variant]}`}
       aria-label={rest["aria-label"] ?? title}
     >
-      <Icon size={s.icon} />
+      <Icon size={s.icon} className={spin ? "animate-spin" : undefined} />
     </button>
   );
 }

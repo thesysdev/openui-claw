@@ -145,7 +145,6 @@ export interface ConversationStore {
   renameSession(sessionId: string, title: string): Promise<void>;
 
   loadHistory(sessionId: string): Promise<StoredMessage[]>;
-  appendMessage(sessionId: string, message: StoredMessage): Promise<void>;
 
   getSessionConfig(sessionId: string): Promise<Record<string, string>>;
   setSessionConfig(sessionId: string, key: string, value: string): Promise<void>;
@@ -196,6 +195,34 @@ export interface UploadStore {
   deleteUpload(id: string): Promise<void>;
 }
 
+// ── Skills ────────────────────────────────────────────────────────────────────
+
+/**
+ * Mirrors the gateway's `SkillStatusEntry` shape — see openclaw
+ * `src/agents/skills-status.ts`. Only fields the UI cares about are
+ * declared explicitly; everything else stays opaque.
+ */
+export interface SkillStatusEntry {
+  name: string;
+  description: string;
+  source: string;
+  bundled: boolean;
+  skillKey: string;
+  emoji?: string;
+  homepage?: string;
+  always: boolean;
+  disabled: boolean;
+  blockedByAllowlist: boolean;
+  eligible: boolean;
+}
+
+export interface SkillsStore {
+  /** Returns the gateway-resolved skill list for the active agent. */
+  status(agentId?: string): Promise<SkillStatusEntry[]>;
+  /** Toggles a skill's enabled state via `skills.update`. */
+  setEnabled(skillKey: string, enabled: boolean): Promise<boolean>;
+}
+
 // ── Engine capabilities ───────────────────────────────────────────────────────
 
 export interface EngineCapabilities {
@@ -218,6 +245,7 @@ export interface Engine {
   readonly artifacts?: ArtifactStore; // present when capabilities.artifacts
   readonly apps?: AppStore; // present when capabilities.apps
   readonly uploads?: UploadStore; // present when capabilities.uploads
+  readonly skills?: SkillsStore; // present when the gateway exposes skills.status
 
   // Lifecycle
   connect(): Promise<void>;
@@ -233,13 +261,6 @@ export interface Engine {
   ): Promise<Response>;
   abort(sessionId: string): Promise<void>;
 
-  // Store-forwarding convenience methods
-  createSession(agentId: string, title?: string): Promise<SessionInfo>;
-  loadHistory(sessionId: string): Promise<StoredMessage[]>;
-  listSessions?(agentId?: string): Promise<SessionInfo[]>;
-  deleteSession?(sessionId: string): Promise<boolean>;
-  getSessionConfig?(sessionId: string): Promise<Record<string, string>>;
-  setSessionConfig?(sessionId: string, key: string, value: string): Promise<void>;
 }
 
 // ── Engine config ─────────────────────────────────────────────────────────────

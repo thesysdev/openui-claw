@@ -23,7 +23,7 @@ import {
   Loader2,
   X,
 } from "lucide-react";
-import { useCallback, useId, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -73,11 +73,19 @@ function formatDuration(durationMs: number | null): string | null {
   return `${(durationMs / 1000).toFixed(durationMs >= 10_000 ? 0 : 1)}s`;
 }
 
-const ASSISTANT_MARKDOWN_CLASSES =
-  "prose prose-sm max-w-none dark:prose-invert prose-p:leading-relaxed prose-p:text-md prose-headings:font-semibold prose-headings:tracking-tight prose-h1:text-lg prose-h2:text-lg prose-h3:text-md prose-li:text-md prose-strong:font-semibold prose-pre:bg-sunk-light prose-pre:border prose-pre:border-border-default/30 prose-pre:rounded-lg prose-pre:text-sm prose-pre:text-text-neutral-primary prose-code:text-sm prose-code:text-text-neutral-primary prose-code:before:content-none prose-code:after:content-none prose-a:text-text-accent-primary prose-a:underline-offset-2 prose-table:text-sm";
+// Shared prose styling for any markdown rendered inside an assistant
+// surface — bubble *and* timeline trace. Keeping the base in one place so
+// future tweaks (font sizes, code/link colors) propagate uniformly.
+const BASE_MARKDOWN_CLASSES =
+  "prose prose-sm max-w-none dark:prose-invert prose-p:leading-relaxed prose-p:text-md prose-headings:font-semibold prose-headings:tracking-tight prose-li:text-md prose-strong:font-semibold prose-pre:bg-sunk-light prose-pre:border prose-pre:border-border-default/30 prose-pre:rounded-lg prose-pre:text-sm prose-pre:text-text-neutral-primary prose-code:text-sm prose-code:text-text-neutral-primary prose-code:before:content-none prose-code:after:content-none prose-a:text-text-accent-primary prose-a:underline-offset-2";
 
+const ASSISTANT_MARKDOWN_CLASSES =
+  `${BASE_MARKDOWN_CLASSES} prose-h1:text-lg prose-h2:text-lg prose-h3:text-md prose-table:text-sm`;
+
+// Trace blocks live in narrower, denser rows — kill paragraph margins and
+// tighten heading spacing so reasoning/tool detail panels don't bloat.
 const TRACE_MARKDOWN_CLASSES =
-  "prose prose-sm max-w-none dark:prose-invert prose-p:my-0 prose-p:leading-relaxed prose-p:text-md prose-headings:font-semibold prose-headings:tracking-tight prose-headings:mb-2 prose-headings:mt-0 prose-li:text-md prose-strong:font-semibold prose-pre:bg-sunk-light prose-pre:border prose-pre:border-border-default/30 prose-pre:rounded-lg prose-pre:text-sm prose-pre:text-text-neutral-primary prose-code:text-sm prose-code:text-text-neutral-primary prose-code:before:content-none prose-code:after:content-none prose-a:text-text-accent-primary prose-a:underline-offset-2";
+  `${BASE_MARKDOWN_CLASSES} prose-p:my-0 prose-headings:mb-2 prose-headings:mt-0`;
 
 // ── New compact "Behind the scenes" timeline ─────────────────────────────────
 //
@@ -460,7 +468,16 @@ export function AssistantMessage({ message }: Props) {
   const processMessage = useThread((s) => s.processMessage);
   const updateMessage = useThread((s) => s.updateMessage);
 
-  const isStreaming = useMemo(() => {
+  // Latch: a message can only be "streaming" during the run that originally
+  // produced it. After RUN_FINISHED, ChatApp reloads history which remounts
+  // this component under the canonical message id — so we initialize the
+  // latch from `isRunning` at mount: if no run is active when we mount, this
+  // is a historical message and its spinner must stay off forever, regardless
+  // of any future `isRunning` flips.
+  const wasStreamingRef = useRef(false);
+  const hasEndedRef = useRef(!isRunning);
+
+  const rawIsStreaming = useMemo(() => {
     if (!isRunning) return false;
     for (let i = messages.length - 1; i >= 0; i--) {
       if (messages[i]?.role === "assistant") {
@@ -469,6 +486,14 @@ export function AssistantMessage({ message }: Props) {
     }
     return false;
   }, [isRunning, messages, message.id]);
+
+  if (rawIsStreaming) {
+    wasStreamingRef.current = true;
+  } else if (wasStreamingRef.current) {
+    hasEndedRef.current = true;
+  }
+
+  const isStreaming = rawIsStreaming && !hasEndedRef.current;
 
   // Parse <context> suffix out of content; remaining is the response body.
   const { content: responseBody, contextString } = useMemo(() => {
@@ -657,7 +682,16 @@ export function AssistantMessage({ message }: Props) {
         onAction={handleAction}
         onStateUpdate={handleStateUpdate}
         initialState={initialState}
-        onError={(errors) => console.log("errors", errors)}
+        onError={(errors) => {
+          // Inline assistant UI doesn't have an AppDetail-style debug panel,
+          // so surface render errors via console.warn (visible in DevTools)
+          // rather than a silent console.log. AppDetail.tsx mirrors these
+          // into its tool log, but here we'd just bloat every chat with a
+          // Callout for user-invisible parser glitches.
+          if (errors.length > 0) {
+            console.warn("[claw:assistant-render]", { messageId: message.id, errors });
+          }
+        }}
       />
     ) : (
       <div
