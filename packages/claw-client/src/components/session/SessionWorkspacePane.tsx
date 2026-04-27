@@ -20,7 +20,6 @@ import { NavTab } from "@/components/layout/sidebar/NavTab";
 import { Tag } from "@/components/layout/sidebar/Tag";
 import { SectionTab } from "@/components/layout/sidebar/SectionTab";
 import { BorderTile, TextTile } from "@/components/layout/sidebar/Tile";
-import { FilterChips } from "@/components/ui/FilterChips";
 
 // Edge-to-edge separator: stretches past the pane's `px-s` padding so the
 // 1px rule hits both side walls of the rail.
@@ -166,45 +165,37 @@ export function WorkspaceSections({
     Partial<Record<"apps" | "artifacts", boolean>>
   >({});
   const [hoveredId, setHoveredId] = useState<string | null>(null);
-  const [scope, setScope] = useState<"session" | "agent">("session");
 
   const toggle = (k: keyof typeof openMap) =>
     setOpenMap((p) => ({ ...p, [k]: !p[k] }));
   const toggleExpand = (k: "apps" | "artifacts") =>
     setExpandedMap((p) => ({ ...p, [k]: !p[k] }));
 
-  const visibleApps = expandedMap.apps ? apps : apps.slice(0, 3);
-  const visibleArts = expandedMap.artifacts ? artifacts : artifacts.slice(0, 3);
+  const scopedApps = apps;
+  const scopedArtifacts = artifacts;
+
+  const visibleApps = expandedMap.apps ? scopedApps : scopedApps.slice(0, 3);
+  const visibleArts = expandedMap.artifacts
+    ? scopedArtifacts
+    : scopedArtifacts.slice(0, 3);
 
   const contextCount = uploads.length + (linkedApp ? 1 : 0);
 
   return (
     <div className="px-s pt-m">
-      <div className="mb-m">
-        <FilterChips<"session" | "agent">
-          value={scope}
-          onChange={setScope}
-          options={[
-            { value: "session", label: "This session" },
-            { value: "agent", label: "All sessions" },
-          ]}
-          ariaLabel="Workspace scope"
-        />
-      </div>
-
       {/* Apps */}
       <Section
         id="apps"
         icon={LayoutGrid}
         label="Apps"
         category="apps"
-        count={apps.length}
+        count={scopedApps.length}
         open={openMap.apps}
         onToggle={() => toggle("apps")}
         hoveredId={hoveredId}
         setHoveredId={setHoveredId}
       >
-        {apps.length === 0 ? (
+        {scopedApps.length === 0 ? (
           <EmptyBox label="No apps yet" />
         ) : (
           <>
@@ -230,10 +221,10 @@ export function WorkspaceSections({
                 />
               );
             })}
-            {apps.length > 3 ? (
+            {scopedApps.length > 3 ? (
               <NavTab
                 tile={<BorderTile icon={ChevronRight} />}
-                label={expandedMap.apps ? "View less" : `View all ${apps.length}`}
+                label={expandedMap.apps ? "View less" : `View all ${scopedApps.length}`}
                 muted
                 hovered={hoveredId === "apps-viewall"}
                 onClick={() => toggleExpand("apps")}
@@ -253,13 +244,13 @@ export function WorkspaceSections({
         icon={FileText}
         label="Artifacts"
         category="artifacts"
-        count={artifacts.length}
+        count={scopedArtifacts.length}
         open={openMap.artifacts}
         onToggle={() => toggle("artifacts")}
         hoveredId={hoveredId}
         setHoveredId={setHoveredId}
       >
-        {artifacts.length === 0 ? (
+        {scopedArtifacts.length === 0 ? (
           <EmptyBox label="No artifacts yet" />
         ) : (
           <>
@@ -287,13 +278,13 @@ export function WorkspaceSections({
                 />
               );
             })}
-            {artifacts.length > 3 ? (
+            {scopedArtifacts.length > 3 ? (
               <NavTab
                 tile={<BorderTile icon={ChevronRight} />}
                 label={
                   expandedMap.artifacts
                     ? "View less"
-                    : `View all ${artifacts.length}`
+                    : `View all ${scopedArtifacts.length}`
                 }
                 muted
                 hovered={hoveredId === "arts-viewall"}

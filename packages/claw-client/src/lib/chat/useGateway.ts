@@ -524,16 +524,6 @@ export function useGateway({ onAuthFailed }: { onAuthFailed: () => void }) {
     };
   }, []);
 
-  const listSkills = useCallback(
-    async (agentId?: string) => engineRef.current?.skills?.status(agentId) ?? [],
-    [],
-  );
-  const setSkillEnabled = useCallback(
-    async (skillKey: string, enabled: boolean) =>
-      engineRef.current?.skills?.setEnabled(skillKey, enabled) ?? false,
-    [],
-  );
-
   const updateCronJob = useCallback(
     async (id: string, patch: Record<string, unknown>) =>
       engineRef.current?.updateCronJob(id, patch) ?? false,
@@ -584,7 +574,5 @@ export function useGateway({ onAuthFailed }: { onAuthFailed: () => void }) {
     removeCronJob,
     gatewayCommands,
     onSessionChanged,
-    listSkills,
-    setSkillEnabled,
   };
 }

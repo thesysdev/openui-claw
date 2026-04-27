@@ -11,13 +11,11 @@ import {
   cronsHash,
   homeHash,
   navigate,
-  skillsHash,
   useHashRoute,
 } from "@/lib/hooks/useHashRoute";
 import type { ClawThread } from "@/types/claw-thread";
 import { useThreadList } from "@openuidev/react-headless";
 import {
-  BookOpen,
   ChevronRight,
   Clock3,
   Cpu,
@@ -707,20 +705,6 @@ export function AppSidebar({
           />
         </div>
 
-        <div className={`${nc ? "px-2xs" : "px-s"} transition-[padding] duration-300`}>
-          <NavTab
-            tile={<IconTile icon={BookOpen} />}
-            label="Skills"
-            href={skillsHash()}
-            active={route?.view === "skills"}
-            hovered={hov === "skills"}
-            collapsed={nc}
-            onClick={() => navigate({ view: "skills" })}
-            onMouseEnter={() => setHov("skills")}
-            onMouseLeave={() => setHov(null)}
-            title="Skills"
-          />
-        </div>
       </div>
 
       {/* ── Footer: connection + theme toggle + settings ── */}

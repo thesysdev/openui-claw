@@ -10,6 +10,7 @@ import { EmptyChatWelcome } from "@/components/chat/EmptyChatWelcome";
 import { TopBar } from "@/components/chat/TopBar";
 import { CommandPalette } from "@/components/CommandPalette";
 import { CronsView } from "@/components/crons/CronsView";
+import { CronTrayHost } from "@/components/crons/CronTrayHost";
 import { HomeView } from "@/components/home/HomeView";
 import { AppSidebar } from "@/components/layout/AppSidebar";
 import { ClawThreadContainer } from "@/components/layout/ClawThreadContainer";
@@ -23,7 +24,6 @@ import { MobileAppDetail } from "@/components/mobile/MobileAppDetail";
 import { MobileAppsView } from "@/components/mobile/MobileAppsView";
 import { MobileArtifactDetail } from "@/components/mobile/MobileArtifactDetail";
 import { MobileArtifactsView } from "@/components/mobile/MobileArtifactsView";
-import { MobileCommandPalette } from "@/components/mobile/MobileCommandPalette";
 import { MobileCronsView } from "@/components/mobile/MobileCronsView";
 import { MobileHomeView } from "@/components/mobile/MobileHomeView";
 import { MobileNotificationInboxDrawer } from "@/components/mobile/MobileNotificationInboxDrawer";
@@ -38,8 +38,6 @@ import {
   SessionWorkspacePane,
 } from "@/components/session/SessionWorkspacePane";
 import { SettingsDialog } from "@/components/settings/SettingsDialog";
-import { SettingsView } from "@/components/settings/SettingsView";
-import { SkillsView } from "@/components/skills/SkillsView";
 import { loadPinnedAppIds, savePinnedAppIds } from "@/lib/app-pins";
 import { openClawAdapter } from "@/lib/chat/openClawAdapter";
 import { serializeAssistantTimelineContent } from "@/lib/chat/timeline";
@@ -92,7 +90,7 @@ import {
   useThread,
   useThreadList,
 } from "@openuidev/react-headless";
-import { ArtifactPanel, ArtifactPortalTarget, Shell, ThemeProvider } from "@openuidev/react-ui";
+import { ArtifactPanel, Shell, ThemeProvider } from "@openuidev/react-ui";
 import {
   ArrowLeft,
   BellRing,
@@ -223,6 +221,7 @@ function ThreadArea({
   onToggleWorkspacePaneCollapsed,
   gatewayCommands,
   createSession,
+  deleteSession,
 }: {
   sessionMeta: Map<string, SessionRow>;
   availableModels: ModelChoice[];
@@ -259,6 +258,7 @@ function ThreadArea({
   onToggleWorkspacePaneCollapsed: (collapsed: boolean) => void;
   gatewayCommands: GatewayCommand[];
   createSession: (agentId: string) => Promise<string | null>;
+  deleteSession: (threadId: string) => Promise<boolean>;
 }) {
   const { threads: allThreadsRaw, selectedThreadId } = useThreadList();
   const isRunning = useThread((state) => state.isRunning);
@@ -344,12 +344,22 @@ function ThreadArea({
     [artifactList, sessionKey],
   );
 
-  const paneApps = sessionApps;
-  const paneArtifacts = sessionArtifacts;
-  // Uploads scoped to the active thread only — mirrors the per-session
-  // filtering we apply to apps/artifacts above.
   const paneUploads = workspace.uploads;
   const paneLinkedApp = workspace.linkedApp;
+
+  // The refined `linkedApp` may live in a different session than the current
+  // thread (e.g. refining from /apps/<id> can land on the agent's main thread
+  // if the app's origin session no longer exists). Without this, the app
+  // isn't in `sessionApps` → no <ArtifactPanel> registers for it → the
+  // auto-opened side pane portal target stays empty. Append the linkedApp
+  // record (looked up from the global appList) when it's not already there.
+  const paneApps = useMemo(() => {
+    if (!paneLinkedApp) return sessionApps;
+    if (sessionApps.some((a) => a.id === paneLinkedApp.appId)) return sessionApps;
+    const found = appList.find((a) => a.id === paneLinkedApp.appId);
+    return found ? [...sessionApps, found] : sessionApps;
+  }, [sessionApps, paneLinkedApp, appList]);
+  const paneArtifacts = sessionArtifacts;
 
   const workspaceCount = paneUploads.length + (paneLinkedApp ? 1 : 0);
 
@@ -898,12 +908,16 @@ function ThreadArea({
         </ClawThreadContainer>
 
         {(() => {
-          // Fullscreen artifact preview surface. We register one
-          // <ArtifactPanel> per known app/artifact below; whichever is active
-          // (per the artifact store) portals its content into our
-          // <ArtifactPortalTarget>. No <ArtifactPanel> = no portal = nothing
-          // renders — so there's no empty side-pane animation while data
-          // loads, and our own modal layer is gone.
+          // Register one <ArtifactPanel> per known app/artifact/upload.
+          // Each panel portals into the <ArtifactPortalTarget> mounted by
+          // ClawThreadContainer's right pane. The panels themselves render
+          // no DOM until activated, so iterating the FULL `appList`/
+          // `artifactList` (not session-filtered `paneApps`/`paneArtifacts`)
+          // is essentially free and guarantees that any cross-session
+          // refine target has a panel ready to portal — without this,
+          // auto-opening a linkedApp from the agent's main thread would
+          // activate an id with no registered panel and the side pane
+          // would render empty.
           const threadsAll = allThreadsRaw as unknown as ClawThread[];
           const agentNameFor = makeAgentNameResolver(threadsAll);
           const handleClose = () => {
@@ -913,19 +927,7 @@ function ThreadArea({
           const artifactSiblings = buildArtifactSiblings(artifactList, agentNameFor);
           return (
             <>
-              <div
-                className={
-                  activeArtifactId
-                    ? "absolute inset-0 z-[60] flex bg-background dark:bg-sunk"
-                    : "hidden"
-                }
-              >
-                <div className="flex min-w-0 flex-1 flex-col">
-                  <ArtifactPortalTarget className="h-full w-full" />
-                </div>
-              </div>
-
-              {paneApps.map((app) => (
+              {appList.map((app) => (
                 <ArtifactPanel
                   key={`${app.id}:${app.updatedAt}`}
                   artifactId={sessionAppPreviewId(app.id)}
@@ -940,7 +942,9 @@ function ThreadArea({
                       mode="panel"
                       isPinned={pinnedAppIds.has(app.id)}
                       onTogglePinned={onTogglePinned}
-                      onRefine={onRefineApp}
+                      // In-chat panel: omit onRefine so the Refine action
+                      // hides — the user is already in the refine session
+                      // (composer is primed and `linkedApp` is set).
                       onContinueConversation={onAppContinueConversation}
                       onDeleted={onRefreshSummaries}
                       onClose={handleClose}
@@ -953,7 +957,7 @@ function ThreadArea({
                 </ArtifactPanel>
               ))}
 
-              {paneArtifacts.map((artifact) => (
+              {artifactList.map((artifact) => (
                 <ArtifactPanel
                   key={`${artifact.id}:${artifact.updatedAt}`}
                   artifactId={sessionArtifactPreviewId(artifact.id)}
@@ -968,7 +972,8 @@ function ThreadArea({
                       mode="panel"
                       onDeleted={onRefreshSummaries}
                       onClose={handleClose}
-                      onRefine={onRefineArtifact}
+                      // In-chat panel: omit onRefine — see comment on
+                      // <AppDetail> above.
                       siblings={artifactSiblings}
                       onSwitch={(nextArtId) =>
                         artifactStore.getState().openArtifact(sessionArtifactPreviewId(nextArtId))
@@ -1055,7 +1060,11 @@ function ThreadArea({
           />
         )}
 
-        {workspacePaneCollapsed ? (
+        {/* When an artifact panel is open, force the workspace rail into its
+            collapsed icon-strip variant so users keep the per-thread context
+            tiles within reach without the full pane competing for the right
+            edge that the artifact slide-in claims. */}
+        {activeArtifactId || workspacePaneCollapsed ? (
           <aside className="hidden h-full w-12 shrink-0 flex-col items-center overflow-y-auto border-l border-border-default/50 bg-transparent dark:border-border-default/16 lg:flex">
             <div className="flex min-h-[48px] w-full items-center justify-center border-b border-border-default px-2xs dark:border-border-default/16">
               <IconButton
@@ -1257,8 +1266,6 @@ interface ChatAppInnerProps {
   onRunCronJob: (id: string, mode?: "force" | "due") => Promise<boolean>;
   onRemoveCronJob: (id: string) => Promise<boolean>;
   gatewayCommands: GatewayCommand[];
-  listSkills: (agentId?: string) => Promise<import("@/lib/engines/types").SkillStatusEntry[]>;
-  setSkillEnabled: (skillKey: string, enabled: boolean) => Promise<boolean>;
 }
 
 function ChatAppInner({
@@ -1307,8 +1314,6 @@ function ChatAppInner({
   onRunCronJob,
   onRemoveCronJob,
   gatewayCommands,
-  listSkills,
-  setSkillEnabled,
 }: ChatAppInnerProps) {
   // Extra (non-destructured-above) props that flow through ChatAppInner.
   // Using `arguments` would be noisy; re-grab via a local re-assignment.
@@ -1322,6 +1327,7 @@ function ChatAppInner({
   const [notificationPaneCollapsed, setNotificationPaneCollapsed] = useState(false);
   const [workspacePaneCollapsed, setWorkspacePaneCollapsed] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [cronTrayJobId, setCronTrayJobId] = useState<string | null>(null);
 
   useEffect(() => {
     const listener = (event: KeyboardEvent) => {
@@ -1599,14 +1605,11 @@ function ChatAppInner({
       if (!nextThreadId) return;
 
       if (target.kind === "app") {
-        // Link the app to the thread so the workspace pane "Refining ..." chip
-        // shows up. We deliberately do NOT auto-open the artifact panel here:
-        // when the user clicked Refine from the standalone `/apps/<id>` page,
-        // they were already looking at the app full-screen, and re-opening it
-        // as an artifact panel in the new chat covers the composer
-        // ("the chat hides"). Artifact refine has the same shape and works
-        // fine because it doesn't auto-open. If the user wants the preview
-        // visible alongside the chat, the workspace pane already exposes it.
+        // Link the app to the thread so the "Refining ..." chip shows up,
+        // and queue the app's artifact preview to auto-open. With the split-
+        // pane Shell.ThreadContainer, the chat stays visible on the left
+        // while the app pins on the right — so opening the preview no longer
+        // hides the composer.
         onUpdateThreadWorkspace(nextThreadId, (current) => ({
           ...current,
           linkedApp: {
@@ -1616,6 +1619,15 @@ function ChatAppInner({
             sessionKey: target.record.sessionKey,
           },
         }));
+        onSetPendingPreviewOpen({
+          threadId: nextThreadId,
+          previewId: sessionAppPreviewId(target.record.id),
+        });
+      } else {
+        onSetPendingPreviewOpen({
+          threadId: nextThreadId,
+          previewId: sessionArtifactPreviewId(target.record.id),
+        });
       }
 
       loadThreads();
@@ -1722,7 +1734,7 @@ function ChatAppInner({
         notification.target.sessionId.includes(":cron:");
 
       if (isLegacyCronTarget && notification.source?.cronId) {
-        navigate({ view: "crons", selectedId: notification.source.cronId });
+        setCronTrayJobId(notification.source.cronId);
       } else {
         switch (notification.target.view) {
           case "chat":
@@ -1735,11 +1747,11 @@ function ChatAppInner({
             navigate({ view: "artifact", artifactId: notification.target.artifactId });
             break;
           case "crons":
-            navigate(
-              notification.target.jobId
-                ? { view: "crons", selectedId: notification.target.jobId }
-                : { view: "crons" },
-            );
+            if (notification.target.jobId) {
+              setCronTrayJobId(notification.target.jobId);
+            } else {
+              navigate({ view: "crons" });
+            }
             break;
           default:
             navigate({ view: "home" });
@@ -1841,6 +1853,7 @@ function ChatAppInner({
       onMarkAllNotifsRead: async () => {
         await onMarkNotificationsRead();
       },
+      onOpenCron: (jobId: string) => setCronTrayJobId(jobId),
     };
     mainContent = (
       <div className="flex h-full min-w-0 flex-1 overflow-hidden">
@@ -1911,26 +1924,6 @@ function ChatAppInner({
           />
         )}
       </Shell.ThreadContainer>
-    );
-  } else if (route.view === "settings") {
-    mainContent = (
-      <div className="flex h-full min-w-0 flex-1 overflow-hidden">
-        <SettingsView
-          currentSettings={getSettings()}
-          section={route.section}
-          onSave={(newSettings) => onSettingsSave(newSettings)}
-        />
-      </div>
-    );
-  } else if (route.view === "skills") {
-    mainContent = (
-      <div className="flex h-full min-w-0 flex-1 overflow-hidden">
-        <SkillsView
-          loadSkills={listSkills}
-          setEnabled={setSkillEnabled}
-          connectionState={connectionState}
-        />
-      </div>
     );
   } else if (route.view === "crons") {
     const cronsProps = {
@@ -2036,6 +2029,7 @@ function ChatAppInner({
         agentModelById={agentModelById}
         patchSession={patchSession}
         createSession={createSession}
+        deleteSession={deleteSession}
         resetSession={resetSession}
         compactSession={compactSession}
         onSessionChanged={onSessionChanged}
@@ -2115,7 +2109,7 @@ function ChatAppInner({
             void openNotification(notification);
           }}
         />
-        <MobileCommandPalette
+        <CommandPalette
           open={paletteOpen}
           onClose={() => setPaletteOpen(false)}
           threads={threads as unknown as ClawThreadListItem[]}
@@ -2137,12 +2131,31 @@ function ChatAppInner({
             }
           }}
         />
+        {cronTrayJobId ? (
+          <CronTrayHost
+            jobId={cronTrayJobId}
+            cronJobs={cronJobs}
+            runs={cronRuns}
+            threads={threads}
+            isMobile
+            onClose={() => setCronTrayJobId(null)}
+            onOpenThread={(threadId) => {
+              setCronTrayJobId(null);
+              navigate({ view: "chat", sessionId: threadId });
+            }}
+            onUpdateCronJob={onUpdateCronJob}
+            onRunCronJob={onRunCronJob}
+            onRemoveCronJob={onRemoveCronJob}
+            onRefreshCronData={onRefreshCronData}
+          />
+        ) : null}
       </Shell.Container>
     );
   }
 
   return (
     <Shell.Container agentName="Claw" logoUrl={LOGO_URL}>
+      <RouteSidebarSync collapse={route.view === "app" || route.view === "artifact"} />
       <AppSidebar
         connectionState={connectionState}
         onSettingsClick={onSettingsClick}
@@ -2192,6 +2205,24 @@ function ChatAppInner({
           }
         }}
       />
+      {cronTrayJobId ? (
+        <CronTrayHost
+          jobId={cronTrayJobId}
+          cronJobs={cronJobs}
+          runs={cronRuns}
+          threads={threads}
+          isMobile={false}
+          onClose={() => setCronTrayJobId(null)}
+          onOpenThread={(threadId) => {
+            setCronTrayJobId(null);
+            navigate({ view: "chat", sessionId: threadId });
+          }}
+          onUpdateCronJob={onUpdateCronJob}
+          onRunCronJob={onRunCronJob}
+          onRemoveCronJob={onRemoveCronJob}
+          onRefreshCronData={onRefreshCronData}
+        />
+      ) : null}
     </Shell.Container>
   );
 }
@@ -2249,8 +2280,6 @@ export default function ChatApp() {
     removeCronJob,
     gatewayCommands,
     onSessionChanged,
-    listSkills,
-    setSkillEnabled,
   } = useGateway({ onAuthFailed: () => setSettingsOpen(true) });
 
   const refreshAppList = useCallback(async () => {
@@ -2458,7 +2487,7 @@ export default function ChatApp() {
       >
         <ChatAppInner
           connectionState={connectionState}
-          onSettingsClick={() => navigate({ view: "settings" })}
+          onSettingsClick={() => setSettingsOpen(true)}
           onSettingsSave={(newSettings) => {
             reconnect(newSettings);
             setSettingsOpen(false);
@@ -2505,8 +2534,6 @@ export default function ChatApp() {
           onRunCronJob={runCronJob}
           onRemoveCronJob={removeCronJob}
           gatewayCommands={gatewayCommands}
-          listSkills={listSkills}
-          setSkillEnabled={setSkillEnabled}
         />
 
         {isMobile ? (
@@ -2595,4 +2622,15 @@ export default function ChatApp() {
       </ChatProvider>
     </ThemeProvider>
   );
+}
+
+// Auto-collapse the main left sidebar when the user lands on a fullscreen
+// app/artifact view. Lives inside <Shell.Container> so it can call into the
+// shell store. Renders nothing.
+function RouteSidebarSync({ collapse }: { collapse: boolean }) {
+  const setIsSidebarOpen = Shell.useShellStore((s) => s.setIsSidebarOpen);
+  useEffect(() => {
+    if (collapse) setIsSidebarOpen(false);
+  }, [collapse, setIsSidebarOpen]);
+  return null;
 }

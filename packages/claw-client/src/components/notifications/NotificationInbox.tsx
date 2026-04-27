@@ -5,7 +5,6 @@ import {
   BellRing,
   CheckCircle2,
   Inbox,
-  PanelRightClose,
   PanelRightOpen,
   X,
 } from "lucide-react";
@@ -177,12 +176,10 @@ function NotificationInboxContent({
   notifications,
   onOpenNotification,
   onMarkAllRead,
-  onCollapse,
 }: {
   notifications: NotificationRecord[];
   onOpenNotification: (notification: NotificationRecord) => void | Promise<void>;
   onMarkAllRead?: () => void | Promise<void>;
-  onCollapse?: () => void;
 }) {
   const unreadCount = useMemo(
     () => notifications.filter((notification) => notification.unread).length,
@@ -231,16 +228,6 @@ function NotificationInboxContent({
                 Mark all read
               </button>
             ) : null}
-            {onCollapse ? (
-              <button
-                type="button"
-                className="rounded-xl p-s text-text-neutral-tertiary transition-colors hover:bg-sunk-light hover:text-text-neutral-primary"
-                onClick={onCollapse}
-                aria-label="Collapse notifications"
-              >
-                <PanelRightClose className="h-ml w-ml" />
-              </button>
-            ) : null}
           </div>
         </div>
 
@@ -277,7 +264,6 @@ export function NotificationInboxPane(props: {
   notifications: NotificationRecord[];
   onOpenNotification: (notification: NotificationRecord) => void | Promise<void>;
   onMarkAllRead?: () => void | Promise<void>;
-  onCollapse?: () => void;
 }) {
   return (
     <aside className="hidden h-full w-[348px] shrink-0 border-l border-border-default/70 bg-foreground xl:block">

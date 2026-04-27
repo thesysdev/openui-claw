@@ -524,10 +524,10 @@ export function SessionComposer({
       linkedApp,
       uploads: pendingUploads,
     });
-    const contentParts = [wrapContent(humanText)];
-    if (contextPayload.length > 0) {
-      contentParts.push(wrapContext(JSON.stringify(contextPayload)));
-    }
+    const contentParts =
+      contextPayload.length > 0
+        ? [wrapContent(humanText), wrapContext(JSON.stringify(contextPayload))]
+        : [humanText];
 
     const uploadIds = pendingUploads.map((upload) => upload.id);
     setTextContent("");

@@ -16,7 +16,7 @@ import {
   Table2,
   Trash2,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 
 import { AgentCard, type AgentCardData } from "@/components/cards/AgentCard";
 import { IconButton } from "@/components/layout/sidebar/IconButton";
@@ -24,7 +24,6 @@ import { Tag } from "@/components/layout/sidebar/Tag";
 import { Button } from "@/components/ui/Button";
 import type { CronJobRecord, CronRunEntry } from "@/lib/cron";
 import type { AppSummary, ArtifactSummary } from "@/lib/engines/types";
-import { navigate } from "@/lib/hooks/useHashRoute";
 import type { NotificationRecord } from "@/lib/notifications";
 import { relTime } from "@/lib/time";
 import type { ClawThread } from "@/types/claw-thread";
@@ -154,6 +153,7 @@ export interface HomeViewProps {
   onOpenNotif?: (notifId: string) => void;
   onMarkNotifRead?: (notifId: string) => void;
   onMarkAllNotifsRead?: () => void | Promise<void>;
+  onOpenCron?: (jobId: string) => void;
 }
 
 export function HomeView({
@@ -170,6 +170,7 @@ export function HomeView({
   onOpenNotif,
   onMarkNotifRead,
   onMarkAllNotifsRead,
+  onOpenCron,
 }: HomeViewProps) {
   const agents = useMemo(() => buildAgents(threads as ClawThread[]), [threads]);
   const homeNotifs = useMemo(() => notifications.map(toHomeNotif), [notifications]);
@@ -182,25 +183,6 @@ export function HomeView({
     [artifacts],
   );
   const visibleCrons = useMemo(() => cronJobs.slice(0, 3), [cronJobs]);
-
-  // Persist the notifications-panel collapse choice across reloads.
-  const NOTIF_COLLAPSED_KEY = "openui-claw:notif-panel-collapsed";
-  const [notifPanelCollapsed, setNotifPanelCollapsedState] = useState<boolean>(() => {
-    if (typeof window === "undefined") return false;
-    try {
-      return window.localStorage.getItem(NOTIF_COLLAPSED_KEY) === "1";
-    } catch {
-      return false;
-    }
-  });
-  const setNotifPanelCollapsed = (next: boolean) => {
-    setNotifPanelCollapsedState(next);
-    try {
-      window.localStorage.setItem(NOTIF_COLLAPSED_KEY, next ? "1" : "0");
-    } catch {
-      /* ignore */
-    }
-  };
 
   const openAgent = (agent: AgentCardData) => {
     const main = (threads as ClawThread[]).find(
@@ -347,7 +329,13 @@ export function HomeView({
                   const ownerLabel = cronOwnerLabel(job, threads);
                   const freq = humanFrequency(job);
                   return (
-                    <CronHomeRow key={job.id} job={job} ownerLabel={ownerLabel} frequency={freq} />
+                    <CronHomeRow
+                      key={job.id}
+                      job={job}
+                      ownerLabel={ownerLabel}
+                      frequency={freq}
+                      onOpen={() => onOpenCron?.(job.id)}
+                    />
                   );
                 })}
               </div>
@@ -363,8 +351,6 @@ export function HomeView({
         onMarkRead={(id) => onMarkNotifRead?.(id)}
         onMarkAllRead={onMarkAllNotifsRead}
         onAction={(n) => onOpenNotif?.(n.id)}
-        collapsed={notifPanelCollapsed}
-        onToggleCollapsed={setNotifPanelCollapsed}
       />
     </div>
   );
@@ -380,19 +366,21 @@ function ViewAllButton({ count, onClick }: { count: number; onClick: () => void 
 
 /**
  * Home-page cron row — same rhythm as `HomeRow` but with a 4-icon action
- * group (Run / Pause / Edit / Delete) shown on hover. Click anywhere else
- * deep-links to `/crons/:id` which opens the detail tray.
+ * group (Run / Pause / Edit / Delete) shown on hover. Clicking opens the
+ * cron detail tray as an overlay over the home page.
  */
 function CronHomeRow({
   job,
   ownerLabel,
   frequency,
+  onOpen,
 }: {
   job: CronJobRecord;
   ownerLabel: string;
   frequency: string;
+  onOpen: () => void;
 }) {
-  const openTray = () => navigate({ view: "crons", selectedId: job.id });
+  const openTray = onOpen;
 
   const stopAnd = (fn: () => void) => (e: React.MouseEvent) => {
     e.stopPropagation();

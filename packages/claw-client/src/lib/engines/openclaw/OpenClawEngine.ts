@@ -51,8 +51,6 @@ import type {
   ModelInfo,
   OpenClawEngineConfig,
   SessionInfo,
-  SkillsStore,
-  SkillStatusEntry,
   StoredMessage,
   UploadMeta,
   UploadRecord,
@@ -330,28 +328,29 @@ export class OpenClawEngine implements Engine {
     },
   };
 
-  readonly skills: SkillsStore = {
-    status: async (agentId?: string): Promise<SkillStatusEntry[]> => {
-      try {
-        const params = agentId ? { agentId } : {};
-        const result = await this._request<{ skills: SkillStatusEntry[] }>("skills.status", params);
-        return result?.skills ?? [];
-      } catch (error) {
-        warn("skills.status failed:", error);
-        return [];
-      }
-    },
-
-    setEnabled: async (skillKey: string, enabled: boolean): Promise<boolean> => {
-      try {
-        await this._request("skills.update", { skillKey, enabled });
-        return true;
-      } catch (error) {
-        warn("skills.update failed:", error);
-        return false;
-      }
-    },
-  };
+  // Skills feature removed — see SkillsStore type in engines/types.ts (commented out).
+  // readonly skills: SkillsStore = {
+  //   status: async (agentId?: string): Promise<SkillStatusEntry[]> => {
+  //     try {
+  //       const params = agentId ? { agentId } : {};
+  //       const result = await this._request<{ skills: SkillStatusEntry[] }>("skills.status", params);
+  //       return result?.skills ?? [];
+  //     } catch (error) {
+  //       warn("skills.status failed:", error);
+  //       return [];
+  //     }
+  //   },
+  //
+  //   setEnabled: async (skillKey: string, enabled: boolean): Promise<boolean> => {
+  //     try {
+  //       await this._request("skills.update", { skillKey, enabled });
+  //       return true;
+  //     } catch (error) {
+  //       warn("skills.update failed:", error);
+  //       return false;
+  //     }
+  //   },
+  // };
 
   // ── Lifecycle ─────────────────────────────────────────────────────────────
 

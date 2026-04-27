@@ -9,7 +9,6 @@
  * Special cases:
  *   - assistant messages with type:"thinking" content blocks → captured in a
  *     lightweight assistant timeline so replay order matches the live stream.
- *   - model:"gateway-injected" messages (compaction summaries) → ActivityMessage (role:"activity")
  */
 
 import type { AssistantTimelineSegment } from "@/lib/chat/timeline";
@@ -22,6 +21,7 @@ export type ToolCallOutput = {
 };
 
 export const ERROR_SENTINEL = "<!--AGENT_ERROR-->";
+export const GATEWAY_SENTINEL = "<!--GATEWAY-->";
 
 export type MergedMessage =
   | {
@@ -160,15 +160,22 @@ export function mergeHistoryMessages(raw: ChatHistoryMessage[]): MergedMessage[]
     }
 
     if (m.role === "assistant") {
-      // Compaction summary messages injected by the gateway
-      if ((m as unknown as { model?: string }).model === "gateway-injected") {
+      // Gateway-injected replies (model:"gateway-injected") are deterministic,
+      // self-contained turns produced by command handlers (/status, /help, …).
+      // They must not merge with adjacent assistant messages, otherwise two
+      // consecutive `/status` runs would fuse into one bubble.
+      const isGatewayInjected =
+        (m as unknown as { model?: string }).model === "gateway-injected";
+      if (isGatewayInjected) {
         flush();
-        output.push({
-          id: m.__openclaw?.id ?? m.id ?? crypto.randomUUID(),
-          role: "activity",
-          activityType: "compaction",
-          content: { text: extractText(m.content) ?? "" },
-        });
+        const text = extractText(m.content);
+        if (text) {
+          output.push({
+            id: m.__openclaw?.id ?? m.id ?? crypto.randomUUID(),
+            role: "assistant",
+            content: `${GATEWAY_SENTINEL}${text}`,
+          });
+        }
         continue;
       }
 
