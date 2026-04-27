@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  Clock3,
   Cpu,
   FileText,
   Image as ImageIcon,
@@ -10,7 +9,6 @@ import {
   ScrollText,
   Table2,
 } from "lucide-react";
-import type { Thread } from "@openuidev/react-headless";
 import { useMemo } from "react";
 
 import { AgentCard, type AgentCardData } from "@/components/cards/AgentCard";
@@ -18,11 +16,11 @@ import { Greeting } from "@/components/home/Greeting";
 import { SectionHeader } from "@/components/home/SectionHeader";
 import type { HomeViewProps } from "@/components/home/HomeView";
 import { MobileButton } from "@/components/mobile/MobileButton";
+import { MobileCronRow } from "@/components/mobile/MobileCronRow";
 import { MobileListCard, MobileListRow } from "@/components/mobile/MobileListRow";
 import { Button } from "@/components/ui/Button";
 import { Counter } from "@/components/ui/Counter";
 import { navigate } from "@/lib/hooks/useHashRoute";
-import type { CronJobRecord } from "@/lib/cron";
 import type { ClawThread } from "@/types/claw-thread";
 
 const ARTIFACT_ICON: Record<string, typeof FileText> = {
@@ -54,30 +52,6 @@ function buildAgents(threads: ClawThread[]): AgentCardData[] {
 
 function truncate(value: string, max = 48): string {
   return value.length > max ? `${value.slice(0, max - 1)}…` : value;
-}
-
-function cronOwnerLabel(job: CronJobRecord, threads: Thread[]): string {
-  const sessionKey = job.sessionKey ?? "";
-  const agentPart = sessionKey.split(":")[0] ?? "";
-  const thread = job.threadId ? threads.find((t) => t.id === job.threadId) : undefined;
-  const sessionName = thread?.title ?? "";
-  const agent = agentPart ? truncate(agentPart) : "";
-  const session = sessionName ? truncate(sessionName) : "";
-  if (agent && session) return `${agent} / ${session}`;
-  return agent || session;
-}
-
-function humanFrequency(job: CronJobRecord): string {
-  const s = job.schedule;
-  if (!s) return "Manual";
-  if (s.kind === "cron" && s.expr) return s.expr;
-  if (s.kind === "interval" && s.everyMs) {
-    const ms = s.everyMs;
-    if (ms < 60 * 60 * 1000) return `Every ${Math.round(ms / 60000)} min`;
-    if (ms < 24 * 60 * 60 * 1000) return `Every ${Math.round(ms / 3_600_000)} h`;
-    return `Every ${Math.round(ms / 86_400_000)} d`;
-  }
-  return s.kind;
 }
 
 function ViewAllButton({ count, onClick }: { count: number; onClick: () => void }) {
@@ -121,7 +95,7 @@ export function MobileHomeView({
   };
 
   return (
-    <div className="flex h-full flex-1 overflow-hidden bg-background">
+    <div className="claw-fade-in flex h-full flex-1 overflow-hidden bg-background">
       <div className="flex-1 overflow-y-auto">
         <div className="mx-auto max-w-[1080px] px-ml py-ml">
           <Greeting name={userName} />
@@ -230,30 +204,12 @@ export function MobileHomeView({
             ) : (
               <MobileListCard>
                 {visibleCrons.map((job) => (
-                  <button
+                  <MobileCronRow
                     key={job.id}
-                    type="button"
+                    job={job}
+                    threads={threads}
                     onClick={() => navigate({ view: "crons", selectedId: job.id })}
-                    className="flex min-h-[64px] w-full items-center gap-m bg-transparent px-ml py-m text-left transition-colors duration-150 first:rounded-t-2xl last:rounded-b-2xl active:bg-sunk-light dark:active:bg-elevated-light"
-                  >
-                    <div className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-m bg-cat-activity/10">
-                      <Clock3 size={14} className="text-cat-activity" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate font-body text-sm font-medium text-text-neutral-primary">
-                        {job.name}
-                      </p>
-                      <p className="truncate font-body text-2xs text-text-neutral-tertiary/70">
-                        <span className="text-cat-activity">{humanFrequency(job)}</span>
-                        {cronOwnerLabel(job, threads) ? (
-                          <>
-                            <span className="mx-2xs inline-block h-[3px] w-[3px] shrink-0 rounded-full bg-text-neutral-tertiary/50 align-middle" />
-                            <span>by {cronOwnerLabel(job, threads)}</span>
-                          </>
-                        ) : null}
-                      </p>
-                    </div>
-                  </button>
+                  />
                 ))}
               </MobileListCard>
             )}

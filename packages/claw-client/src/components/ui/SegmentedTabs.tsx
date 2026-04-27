@@ -1,11 +1,15 @@
 "use client";
 
-import type { ComponentType } from "react";
+import type { ComponentType, ReactNode } from "react";
 
 export interface SegmentedTabOption<V extends string = string> {
   value: V;
-  label: string;
+  label: ReactNode;
+  /** Plain-text fallback for aria-label / title when `label` is a ReactNode. */
+  labelText?: string;
   icon?: ComponentType<{ size?: number; className?: string }>;
+  /** When true, only the icon is rendered (label exposed via aria-label). */
+  iconOnly?: boolean;
 }
 
 export interface SegmentedTabsProps<V extends string = string> {
@@ -28,28 +32,31 @@ export function SegmentedTabs<V extends string>({
 }: SegmentedTabsProps<V>) {
   return (
     <div
-      className="grid w-full overflow-hidden rounded-lg bg-sunk-light p-[2px] dark:bg-foreground"
+      className="grid h-7 w-full overflow-hidden rounded-lg border border-border-default/70 bg-sunk-light dark:border-border-default/16 dark:bg-foreground"
       style={{ gridTemplateColumns: `repeat(${options.length}, minmax(0, 1fr))` }}
       role="tablist"
       aria-label={ariaLabel}
     >
-      {options.map(({ value: optValue, label, icon: Icon }) => {
+      {options.map(({ value: optValue, label, labelText, icon: Icon, iconOnly }) => {
         const active = value === optValue;
+        const ariaLabel = iconOnly ? labelText ?? (typeof label === "string" ? label : undefined) : undefined;
         return (
           <button
             key={optValue}
             type="button"
             role="tab"
             aria-selected={active}
+            aria-label={ariaLabel}
+            title={ariaLabel}
             onClick={() => onChange(optValue)}
-            className={`flex h-7 items-center justify-center gap-1.5 rounded-md text-sm transition-colors ${
+            className={`flex h-full items-center justify-center gap-1.5 rounded-md text-sm transition-colors ${
               active
                 ? "bg-background font-medium text-text-neutral-primary shadow-sm dark:bg-elevated"
                 : "text-text-neutral-secondary active:text-text-neutral-primary sm:hover:text-text-neutral-primary"
             }`}
           >
             {Icon ? <Icon size={14} /> : null}
-            {label}
+            {iconOnly ? null : label}
           </button>
         );
       })}

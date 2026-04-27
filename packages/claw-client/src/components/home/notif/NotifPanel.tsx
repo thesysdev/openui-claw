@@ -4,18 +4,23 @@ import { BellOff } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { Counter } from "@/components/ui/Counter";
+import { FilterChips } from "@/components/ui/FilterChips";
 
 import { NeedsInputCard } from "./NeedsInputCard";
 import { NotifRow } from "./NotifRow";
 import type { HomeNotif, NotifType } from "./types";
 
-type Filter = "all" | "tasks" | "needs input" | "alerts";
+type Filter = "all" | "needs_input" | "alerts";
 
-const FILTER_KEYS: Filter[] = ["all", "tasks", "needs input", "alerts"];
+const FILTER_LABELS: Record<Filter, string> = {
+  all: "All",
+  needs_input: "Needs input",
+  alerts: "Alerts",
+};
+const FILTER_KEYS: Filter[] = ["all", "needs_input", "alerts"];
 const FILTER_TYPE: Record<Filter, NotifType | null> = {
   all: null,
-  tasks: "task",
-  "needs input": "needs_input",
+  needs_input: "needs_input",
   alerts: "alert",
 };
 
@@ -43,8 +48,7 @@ export function NotifPanel({
   const counts = useMemo<Record<Filter, number>>(
     () => ({
       all: notifications.length,
-      tasks: notifications.filter((n) => n.type === "task").length,
-      "needs input": notifications.filter((n) => n.type === "needs_input").length,
+      needs_input: notifications.filter((n) => n.type === "needs_input").length,
       alerts: notifications.filter((n) => n.type === "alert").length,
     }),
     [notifications],
@@ -60,7 +64,7 @@ export function NotifPanel({
     [notifications],
   );
 
-  const showCards = filter === "all" || filter === "needs input";
+  const showCards = filter === "all" || filter === "needs_input";
 
   /** Notifications to render as regular rows (needs_input-unread excluded when shown as cards). */
   const rows = useMemo(() => {
@@ -83,34 +87,17 @@ export function NotifPanel({
             </Counter>
           ) : null}
         </div>
-        <div
-          className="flex gap-ml border-b border-border-default/50 dark:border-border-default/16"
-          style={{ marginBottom: "-1px" }}
-        >
-          {FILTER_KEYS.map((f) => {
-            const active = filter === f;
-            return (
-              <button
-                key={f}
-                type="button"
-                onClick={() => setFilter(f)}
-                className={`flex items-center gap-xs border-b-2 px-0 py-xs font-label text-xs capitalize transition-colors duration-150 ${
-                  active
-                    ? "border-text-neutral-primary text-text-neutral-primary font-medium"
-                    : "border-transparent text-text-neutral-tertiary hover:text-text-neutral-secondary font-regular"
-                }`}
-              >
-                {f}
-                <Counter
-                  size="md"
-                  color="neutral"
-                  kind={active ? "subtle" : "secondary"}
-                >
-                  {counts[f]}
-                </Counter>
-              </button>
-            );
-          })}
+        <div className="pb-m">
+          <FilterChips<Filter>
+            value={filter}
+            onChange={setFilter}
+            options={FILTER_KEYS.map((f) => ({
+              value: f,
+              label: FILTER_LABELS[f],
+              count: counts[f],
+            }))}
+            ariaLabel="Notification filter"
+          />
         </div>
       </div>
 
@@ -130,14 +117,14 @@ export function NotifPanel({
         ) : null}
 
         {rows.length === 0 ? (
-          <div className="flex h-full flex-col items-center justify-center gap-s px-ml text-center">
-            <BellOff size={16} className="text-text-neutral-tertiary/60" />
-            <p className="font-body text-sm text-text-neutral-tertiary">
-              {filtered.length === 0
-                ? "It's quiet here"
-                : "Only needs-input items — see above"}
-            </p>
-          </div>
+          filtered.length === 0 ? (
+            <div className="flex h-full flex-col items-center justify-center gap-s px-ml text-center">
+              <BellOff size={16} className="text-text-neutral-tertiary/60" />
+              <p className="font-body text-sm text-text-neutral-tertiary">
+                It&apos;s quiet here
+              </p>
+            </div>
+          ) : null
         ) : (
           rows.map((n, i) => (
             <NotifRow

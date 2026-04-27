@@ -374,11 +374,11 @@ export function AppSidebar({
     >
       {/* ── Header: logo + collapse ── */}
       <div
-        className={`flex min-h-[52px] items-center ${
+        className={`flex h-[48px] items-center border-b border-border-default/40 dark:border-border-default/16 ${
           nc ? "justify-center px-0" : "justify-between px-ml"
-        } pt-ml pb-m transition-[padding] duration-300`}
+        } transition-[padding] duration-300`}
       >
-        <Logo name="OpenClaw" suffix="UI" collapsed={nc} />
+        <Logo name="OpenUI" suffix="shell" collapsed={nc} />
         <IconButton
           icon={nc ? PanelLeft : PanelLeftClose}
           variant="tertiary"
@@ -388,10 +388,8 @@ export function AppSidebar({
         />
       </div>
 
-      <SectionSeparator />
-
       {/* ── Search ── */}
-      <div className={`${nc ? "px-2xs" : "px-s"} transition-[padding] duration-300`}>
+      <div className={`pt-m ${nc ? "px-2xs" : "px-s"} transition-[padding] duration-300`}>
         <NavTab
           tile={<IconTile icon={Search} />}
           label="Search"

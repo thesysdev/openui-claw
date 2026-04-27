@@ -17,6 +17,8 @@ import { IconButton } from "@/components/layout/sidebar/IconButton";
 import type { ModelChoice } from "@/types/gateway-responses";
 import { qualifyModel } from "@/lib/models";
 import { ContextRing, type ContextBreakdownItem } from "@/components/ui/ContextRing";
+import { MobileSwitcherSheet } from "@/components/mobile/MobileSwitcherSheet";
+import { useIsMobile } from "@/lib/hooks/useIsMobile";
 
 const THINKING_LEVELS = [
   { value: "", label: "Default" },
@@ -40,15 +42,16 @@ function TextButtonSelect({
   title,
 }: {
   value: string;
-  options: ReadonlyArray<{ value: string; label: string }>;
+  options: ReadonlyArray<{ value: string; label: string; description?: string }>;
   onChange: (value: string) => void;
   title?: string;
 }) {
   const [open, setOpen] = useState(false);
+  const isMobile = useIsMobile();
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || isMobile) return;
     const onDown = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
     };
@@ -61,7 +64,7 @@ function TextButtonSelect({
       document.removeEventListener("mousedown", onDown);
       document.removeEventListener("keydown", onKey);
     };
-  }, [open]);
+  }, [open, isMobile]);
 
   const current = options.find((o) => o.value === value) ?? options[0];
 
@@ -76,7 +79,20 @@ function TextButtonSelect({
       >
         {current?.label ?? "Default"}
       </Button>
-      {open ? (
+      {isMobile ? (
+        <MobileSwitcherSheet
+          open={open}
+          onClose={() => setOpen(false)}
+          title={title ?? "Select"}
+          activeId={value}
+          options={options.map((o) => ({
+            id: o.value,
+            label: o.label,
+            description: o.description,
+          }))}
+          onSelect={(id) => onChange(id)}
+        />
+      ) : open ? (
         <div className="absolute bottom-full right-0 z-50 mb-2xs min-w-[160px] rounded-lg border border-border-default bg-popover-background p-3xs shadow-xl dark:bg-elevated">
           {options.map((opt) => {
             const isActive = opt.value === value;

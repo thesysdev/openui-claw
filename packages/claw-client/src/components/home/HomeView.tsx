@@ -20,6 +20,7 @@ import { useMemo } from "react";
 import { AgentCard, type AgentCardData } from "@/components/cards/AgentCard";
 import { Button } from "@/components/ui/Button";
 import { IconButton } from "@/components/layout/sidebar/IconButton";
+import { Tag } from "@/components/layout/sidebar/Tag";
 import { navigate } from "@/lib/hooks/useHashRoute";
 import type { AppSummary, ArtifactSummary } from "@/lib/engines/types";
 import type { CronJobRecord, CronRunEntry } from "@/lib/cron";
@@ -103,12 +104,15 @@ function truncate(value: string, max = 48): string {
 function cronOwnerLabel(job: CronJobRecord, threads: Thread[]): string {
   const sessionKey = job.sessionKey ?? "";
   const agentPart = sessionKey.split(":")[0] ?? "";
-  const thread = job.threadId ? threads.find((t) => t.id === job.threadId) : undefined;
-  const sessionName = thread?.title ?? "";
-  const agent = agentPart ? truncate(agentPart) : "";
-  const session = sessionName ? truncate(sessionName) : "";
-  if (agent && session) return `${agent} / ${session}`;
-  return agent || session;
+  const mainThread = agentPart
+    ? threads.find(
+        (t) =>
+          // @ts-expect-error claw-augmented thread fields
+          (t.clawAgentId ?? t.id) === agentPart && t.clawKind === "main",
+      )
+    : undefined;
+  const agentName = mainThread?.title ?? agentPart;
+  return agentName ? truncate(agentName) : "";
 }
 
 function humanFrequency(job: CronJobRecord): string {
@@ -384,10 +388,14 @@ function CronHomeRow({
           {job.name}
         </p>
         <p className="truncate font-body text-2xs text-text-neutral-tertiary/70">
-          <span className="text-cat-activity">{frequency}</span>
+          <Tag size="sm" variant={job.enabled ? "success" : "neutral"} className="align-middle">
+            {job.enabled ? "Active" : "Paused"}
+          </Tag>
+          <span className="mx-xs inline-block h-[3px] w-[3px] shrink-0 rounded-full bg-text-neutral-tertiary/50 align-middle" />
+          <span>{frequency}</span>
           {ownerLabel ? (
             <>
-              <span className="mx-2xs inline-block h-[3px] w-[3px] shrink-0 rounded-full bg-text-neutral-tertiary/50 align-middle" />
+              <span className="mx-xs inline-block h-[3px] w-[3px] shrink-0 rounded-full bg-text-neutral-tertiary/50 align-middle" />
               <span>by {ownerLabel}</span>
             </>
           ) : null}

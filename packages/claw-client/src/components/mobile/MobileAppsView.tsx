@@ -1,6 +1,6 @@
 "use client";
 
-import { LayoutGrid } from "lucide-react";
+import { LayoutGrid, Sparkles, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { SectionHeader } from "@/components/home/SectionHeader";
@@ -14,13 +14,21 @@ export interface AppsViewProps {
   apps: AppSummary[];
   pinnedAppIds: Set<string>;
   onOpenApp: (appId: string) => void;
+  onDeleteApp?: (appId: string) => void | Promise<void>;
+  onRefineApp?: (app: AppSummary) => void;
 }
 
 function truncate(value: string, max = 48): string {
   return value.length > max ? `${value.slice(0, max - 1)}…` : value;
 }
 
-export function MobileAppsView({ apps, pinnedAppIds, onOpenApp }: AppsViewProps) {
+export function MobileAppsView({
+  apps,
+  pinnedAppIds,
+  onOpenApp,
+  onDeleteApp,
+  onRefineApp,
+}: AppsViewProps) {
   const [sort, setSort] = useState<Sort>("recent");
 
   const { topApps, otherApps } = useMemo(() => {
@@ -40,53 +48,58 @@ export function MobileAppsView({ apps, pinnedAppIds, onOpenApp }: AppsViewProps)
     return arr;
   }, [otherApps, sort]);
 
-  return (
-    <div className="h-full flex-1 overflow-y-auto bg-background p-ml">
-      <div className="mx-auto max-w-[1080px]">
-        {apps.length === 0 ? (
-          <p className="rounded-2xl border border-dashed border-border-default px-ml py-xl text-sm text-text-neutral-tertiary">
-            Agents will create apps here as you chat.
-          </p>
-        ) : (
-          <>
-            {topApps.length > 0 && (
-              <section className="mb-ml">
-                <SectionHeader title="Top apps" />
-                <MobileListCard>
-                  {topApps.map((app) => (
-                    <MobileListRow
-                      key={app.id}
-                      icon={LayoutGrid}
-                      title={app.title}
-                      subtitle={`by ${truncate(app.agentId)}`}
-                      category="app"
-                      onClick={() => onOpenApp(app.id)}
-                    />
-                  ))}
-                </MobileListCard>
-              </section>
-            )}
+  if (apps.length === 0) {
+    return (
+      <div
+        className="flex h-full flex-1 items-center justify-center bg-background p-ml"
+        style={{ minHeight: "calc(100dvh - 120px)" }}
+      >
+        <p className="text-center text-sm text-text-neutral-tertiary">
+          Agents will create apps here as you chat.
+        </p>
+      </div>
+    );
+  }
 
-            <section className="mb-3xl">
-              <SectionHeader
-                title="All apps"
-                right={<SortButton value={sort} onChange={setSort} />}
-              />
-              <MobileListCard>
-                {sortedOther.map((app) => (
-                  <MobileListRow
-                    key={app.id}
-                    icon={LayoutGrid}
-                    title={app.title}
-                    subtitle={`by ${truncate(app.agentId)}`}
-                    category="app"
-                    onClick={() => onOpenApp(app.id)}
-                  />
-                ))}
-              </MobileListCard>
-            </section>
-          </>
+  return (
+    <div className="claw-fade-in h-full flex-1 overflow-y-auto bg-background p-ml">
+      <div className="mx-auto max-w-[1080px]">
+        {topApps.length > 0 && (
+          <section className="mb-ml">
+            <SectionHeader title="Top apps" />
+            <MobileListCard>
+              {topApps.map((app) => (
+                <MobileListRow
+                  key={app.id}
+                  icon={LayoutGrid}
+                  title={app.title}
+                  subtitle={`by ${truncate(app.agentId)}`}
+                  category="app"
+                  onClick={() => onOpenApp(app.id)}
+                />
+              ))}
+            </MobileListCard>
+          </section>
         )}
+
+        <section className="mb-3xl">
+          <SectionHeader
+            title="All apps"
+            right={<SortButton value={sort} onChange={setSort} />}
+          />
+          <MobileListCard>
+            {sortedOther.map((app) => (
+              <MobileListRow
+                key={app.id}
+                icon={LayoutGrid}
+                title={app.title}
+                subtitle={`by ${truncate(app.agentId)}`}
+                category="app"
+                onClick={() => onOpenApp(app.id)}
+              />
+            ))}
+          </MobileListCard>
+        </section>
       </div>
     </div>
   );

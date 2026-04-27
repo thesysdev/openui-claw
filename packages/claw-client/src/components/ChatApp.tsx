@@ -68,9 +68,27 @@ import { MobileArtifactsView } from "@/components/mobile/MobileArtifactsView";
 import { MobileCommandPalette } from "@/components/mobile/MobileCommandPalette";
 import { MobileCronsView } from "@/components/mobile/MobileCronsView";
 import { MobileHomeView } from "@/components/mobile/MobileHomeView";
+import { MobileAgentTopBar } from "@/components/mobile/MobileAgentTopBar";
+import { MobileAppDetail } from "@/components/mobile/MobileAppDetail";
+import { MobileArtifactDetail } from "@/components/mobile/MobileArtifactDetail";
 import { MobileNotificationInboxDrawer } from "@/components/mobile/MobileNotificationInboxDrawer";
 import { MobileSettingsDialog } from "@/components/mobile/MobileSettingsDialog";
+import { MobileWorkspaceDrawer } from "@/components/mobile/MobileWorkspaceDrawer";
 import type { NotificationRecord } from "@/lib/notifications";
+import {
+  MOCK_APPS,
+  MOCK_APP_STORE,
+  MOCK_ARTIFACTS,
+  MOCK_ARTIFACT_STORE,
+  MOCK_AVAILABLE_MODELS,
+  MOCK_CRON_JOBS,
+  MOCK_CRON_RUNS,
+  MOCK_MESSAGES,
+  MOCK_NOTIFICATIONS,
+  MOCK_SESSION_META,
+  MOCK_THREAD_LIST,
+  USE_MOCK_DATA,
+} from "@/lib/mock-data";
 import {
   EMPTY_THREAD_WORKSPACE,
   deriveThreadWorkspaceFromMessages,
@@ -170,6 +188,19 @@ function NotificationToastViewport({
   );
 }
 
+// Returns a callback that walks the browser history one step (so back from a
+// chat opened via Refine returns to the app/artifact you came from). Falls
+// back to `defaultNav` when there is no prior in-app entry.
+function smartBack(defaultNav: () => void): () => void {
+  return () => {
+    if (typeof window !== "undefined" && window.history.length > 1) {
+      window.history.back();
+      return;
+    }
+    defaultNav();
+  };
+}
+
 function ThreadArea({
   sessionMeta,
   availableModels,
@@ -239,6 +270,13 @@ function ThreadArea({
   const threadMessages = useThread((state) => state.messages);
   const setThreadMessages = useThread((state) => state.setMessages);
   const artifactStore = useArtifactStore();
+
+  // Mock mode: load messages directly on thread selection since the
+  // gateway-driven `onSessionChanged` event never fires.
+  useEffect(() => {
+    if (!USE_MOCK_DATA || !selectedThreadId) return;
+    void loadThread(selectedThreadId).then(setThreadMessages);
+  }, [selectedThreadId, loadThread, setThreadMessages]);
   const { activeArtifactId } = useActiveArtifact();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const previousRunningRef = useRef(false);
@@ -655,7 +693,7 @@ function ThreadArea({
         />
 
         <Shell.ThreadContainer className="openui-claw-thread-container min-w-0 flex-1">
-          {isEmbed ? null : <Shell.MobileHeader />}
+          {isEmbed || isMobile ? null : <Shell.MobileHeader />}
           {(() => {
             // Derive the top-bar data from the current thread list. Scoped
             // into an IIFE so we don't leak locals elsewhere.
@@ -679,6 +717,56 @@ function ThreadArea({
             const sessions = allThreads.filter(
               (t) => (t.clawAgentId ?? t.id) === currentAgentId,
             );
+            const onNewSession = async () => {
+              const newId = await createSession(currentAgentId);
+              if (newId) navigate({ view: "chat", sessionId: newId });
+            };
+            if (isMobile) {
+              return (
+                <MobileAgentTopBar
+                  agent={{
+                    id: currentAgentId,
+                    name: agentNameMap.get(currentAgentId) ?? currentAgentId,
+                  }}
+                  allAgents={allAgents}
+                  activeSession={{
+                    id: currentThread.id,
+                    title: currentThread.title,
+                  }}
+                  sessions={sessions}
+                  onBack={smartBack(() => navigate({ view: "agents" }))}
+                  onSwitchAgent={(a) => {
+                    const target =
+                      allThreads.find(
+                        (t) => (t.clawAgentId ?? t.id) === a.id && t.clawKind === "main",
+                      ) ?? allThreads.find((t) => (t.clawAgentId ?? t.id) === a.id);
+                    if (target) navigate({ view: "chat", sessionId: target.id });
+                  }}
+                  onSelectSession={(threadId) =>
+                    navigate({ view: "chat", sessionId: threadId })
+                  }
+                  onNewSession={onNewSession}
+                  onOpenWorkspace={() => setMobileWorkspaceOpen(true)}
+                  onDeleteSession={async () => {
+                    await deleteSession(currentThread.id);
+                    navigate({ view: "agents" });
+                  }}
+                  onDeleteAgent={async () => {
+                    const main =
+                      allThreads.find(
+                        (t) =>
+                          (t.clawAgentId ?? t.id) === currentAgentId &&
+                          t.clawKind === "main",
+                      ) ?? allThreads.find((t) => (t.clawAgentId ?? t.id) === currentAgentId);
+                    const target = main?.id;
+                    if (target) {
+                      await deleteSession(target);
+                      navigate({ view: "agents" });
+                    }
+                  }}
+                />
+              );
+            }
             return (
               <AgentTopBar
                 agent={{
@@ -691,7 +779,7 @@ function ThreadArea({
                   title: currentThread.title,
                 }}
                 sessions={sessions}
-                onBack={() => navigate({ view: isMobile ? "agents" : "home" })}
+                onBack={() => navigate({ view: "home" })}
                 onSwitchAgent={(a) => {
                   // Open that agent's main thread if present, else any thread.
                   const target =
@@ -704,10 +792,7 @@ function ThreadArea({
                 onSelectSession={(threadId) =>
                   navigate({ view: "chat", sessionId: threadId })
                 }
-                onNewSession={async () => {
-                  const newId = await createSession(currentAgentId);
-                  if (newId) navigate({ view: "chat", sessionId: newId });
-                }}
+                onNewSession={onNewSession}
               />
             );
           })()}
@@ -876,33 +961,63 @@ function ThreadArea({
           );
         })() : null}
 
-        <SessionWorkspaceDrawer
-          open={mobileWorkspaceOpen}
-          onClose={() => setMobileWorkspaceOpen(false)}
-          apps={paneApps}
-          artifacts={paneArtifacts}
-          uploads={paneUploads}
-          linkedApp={paneLinkedApp}
-          pinnedAppIds={pinnedAppIds}
-          activePreviewId={activeArtifactId}
-          onOpenApp={(appId) => {
-            artifactStore.getState().openArtifact(sessionAppPreviewId(appId));
-            setMobileWorkspaceOpen(false);
-          }}
-          onOpenArtifact={(artifactId) => {
-            artifactStore.getState().openArtifact(sessionArtifactPreviewId(artifactId));
-            setMobileWorkspaceOpen(false);
-          }}
-          onOpenUpload={(uploadId) => {
-            artifactStore.getState().openArtifact(sessionUploadPreviewId(uploadId));
-            setMobileWorkspaceOpen(false);
-          }}
-          onTogglePinned={onTogglePinned}
-          onPickFiles={() => {
-            setMobileWorkspaceOpen(false);
-            openFilePicker();
-          }}
-        />
+        {isMobile ? (
+          <MobileWorkspaceDrawer
+            open={mobileWorkspaceOpen}
+            onClose={() => setMobileWorkspaceOpen(false)}
+            apps={paneApps}
+            artifacts={paneArtifacts}
+            uploads={paneUploads}
+            linkedApp={paneLinkedApp}
+            pinnedAppIds={pinnedAppIds}
+            activePreviewId={activeArtifactId}
+            onOpenApp={(appId) => {
+              artifactStore.getState().openArtifact(sessionAppPreviewId(appId));
+              setMobileWorkspaceOpen(false);
+            }}
+            onOpenArtifact={(artifactId) => {
+              artifactStore.getState().openArtifact(sessionArtifactPreviewId(artifactId));
+              setMobileWorkspaceOpen(false);
+            }}
+            onOpenUpload={(uploadId) => {
+              artifactStore.getState().openArtifact(sessionUploadPreviewId(uploadId));
+              setMobileWorkspaceOpen(false);
+            }}
+            onTogglePinned={onTogglePinned}
+            onPickFiles={() => {
+              setMobileWorkspaceOpen(false);
+              openFilePicker();
+            }}
+          />
+        ) : (
+          <SessionWorkspaceDrawer
+            open={mobileWorkspaceOpen}
+            onClose={() => setMobileWorkspaceOpen(false)}
+            apps={paneApps}
+            artifacts={paneArtifacts}
+            uploads={paneUploads}
+            linkedApp={paneLinkedApp}
+            pinnedAppIds={pinnedAppIds}
+            activePreviewId={activeArtifactId}
+            onOpenApp={(appId) => {
+              artifactStore.getState().openArtifact(sessionAppPreviewId(appId));
+              setMobileWorkspaceOpen(false);
+            }}
+            onOpenArtifact={(artifactId) => {
+              artifactStore.getState().openArtifact(sessionArtifactPreviewId(artifactId));
+              setMobileWorkspaceOpen(false);
+            }}
+            onOpenUpload={(uploadId) => {
+              artifactStore.getState().openArtifact(sessionUploadPreviewId(uploadId));
+              setMobileWorkspaceOpen(false);
+            }}
+            onTogglePinned={onTogglePinned}
+            onPickFiles={() => {
+              setMobileWorkspaceOpen(false);
+              openFilePicker();
+            }}
+          />
+        )}
 
         {isEmbed ? null : workspacePaneCollapsed ? (
           <aside className="hidden h-full w-12 shrink-0 flex-col items-center overflow-y-auto border-l border-border-default/50 bg-transparent dark:border-border-default/16 lg:flex">
@@ -1152,6 +1267,13 @@ function ChatAppInner({
   const { threads, selectedThreadId, selectThread, loadThreads } = useThreadList();
   const selectedThreadIsRunning = useThread((state) => state.isRunning);
   const dispatchChatProcessMessage = useThread((state) => state.processMessage);
+
+  // Mock mode bootstraps the thread list immediately since there's no gateway
+  // connection to drive the auto-fetch.
+  useEffect(() => {
+    if (USE_MOCK_DATA) loadThreads();
+  }, [loadThreads]);
+
   const [mobileNotificationInboxOpen, setMobileNotificationInboxOpen] = useState(false);
   const [notificationPaneCollapsed, setNotificationPaneCollapsed] = useState(false);
   const [workspacePaneCollapsed, setWorkspacePaneCollapsed] = useState(false);
@@ -1588,37 +1710,67 @@ function ChatAppInner({
       </div>
     );
   } else if (route.view === "agents") {
-    const agentsProps = {
-      threads,
-      onOpenThread: (threadId: string) => navigate({ view: "chat", sessionId: threadId }),
-    };
-    mainContent = (
-      <Shell.ThreadContainer>
-        {isMobile ? <MobileAgentsView {...agentsProps} /> : <AgentsView {...agentsProps} />}
-      </Shell.ThreadContainer>
-    );
-  } else if (route.view === "apps") {
-    const appsProps = {
-      apps: appList,
-      pinnedAppIds,
-      onOpenApp: (appId: string) => navigate({ view: "app", appId }),
-    };
-    mainContent = (
-      <Shell.ThreadContainer>
-        {isMobile ? <MobileAppsView {...appsProps} /> : <AppsView {...appsProps} />}
-      </Shell.ThreadContainer>
-    );
-  } else if (route.view === "artifacts" && artifacts) {
-    const artifactsProps = {
-      artifacts,
-      onOpenArtifact: (artifactId: string) => navigate({ view: "artifact", artifactId }),
-    };
+    const onOpenThread = (threadId: string) => navigate({ view: "chat", sessionId: threadId });
     mainContent = (
       <Shell.ThreadContainer>
         {isMobile ? (
-          <MobileArtifactsView {...artifactsProps} />
+          <MobileAgentsView threads={threads} onOpenThread={onOpenThread} />
         ) : (
-          <ArtifactsView {...artifactsProps} />
+          <AgentsView threads={threads} onOpenThread={onOpenThread} />
+        )}
+      </Shell.ThreadContainer>
+    );
+  } else if (route.view === "apps") {
+    const onOpenApp = (appId: string) => navigate({ view: "app", appId });
+    mainContent = (
+      <Shell.ThreadContainer>
+        {isMobile ? (
+          <MobileAppsView
+            apps={appList}
+            pinnedAppIds={pinnedAppIds}
+            onOpenApp={onOpenApp}
+            onDeleteApp={async (appId) => {
+              await onDeleteApp(appId);
+              onRefreshApps();
+            }}
+            onRefineApp={(app) => {
+              const id = app.sessionKey
+                ? sessionRouteIdFromSessionKey(app.sessionKey, knownAgentIds.current)
+                : null;
+              if (id) navigate({ view: "chat", sessionId: id });
+            }}
+          />
+        ) : (
+          <AppsView apps={appList} pinnedAppIds={pinnedAppIds} onOpenApp={onOpenApp} />
+        )}
+      </Shell.ThreadContainer>
+    );
+  } else if (route.view === "artifacts" && artifacts) {
+    const onOpenArtifact = (artifactId: string) => navigate({ view: "artifact", artifactId });
+    mainContent = (
+      <Shell.ThreadContainer>
+        {isMobile ? (
+          <MobileArtifactsView
+            artifacts={artifacts}
+            onOpenArtifact={onOpenArtifact}
+            connectionState={connectionState}
+            onDeleteArtifact={async (artifactId) => {
+              await artifacts.deleteArtifact(artifactId);
+              onRefreshArtifacts();
+            }}
+            onRefineArtifact={(artifact) => {
+              const id = artifact.source?.sessionId
+                ? sessionRouteIdFromSessionKey(artifact.source.sessionId, knownAgentIds.current)
+                : null;
+              if (id) navigate({ view: "chat", sessionId: id });
+            }}
+          />
+        ) : (
+          <ArtifactsView
+            artifacts={artifacts}
+            onOpenArtifact={onOpenArtifact}
+            connectionState={connectionState}
+          />
         )}
       </Shell.ThreadContainer>
     );
@@ -1654,54 +1806,89 @@ function ChatAppInner({
         routeThreads.find((t) => t.id === routeRefineTray.threadId)?.id ??
         "agent"
       : "agent";
-    mainContent = (
-      <div className="relative flex h-full min-w-0 flex-1 bg-background dark:bg-sunk">
-        <RefineTray
-          threadId={routeRefineTray.threadId}
-          agentName={agentNameFor(trayAgentId)}
-          width={routeRefineTray.width}
-          onDragStart={routeRefineTray.onDragStart}
-          onClose={routeRefineTray.close}
+    const refineNavigateToChat = (sessionKey: string | undefined) => {
+      const id = sessionKey
+        ? sessionRouteIdFromSessionKey(sessionKey, knownAgentIds.current)
+        : null;
+      if (id) navigate({ view: "chat", sessionId: id });
+    };
+    if (isMobile && route.view === "app" && apps) {
+      mainContent = (
+        <MobileAppDetail
+          appId={route.appId}
+          apps={apps}
+          updatedAt={activeAppUpdatedAt}
+          onContinueConversation={handleAppContinueConversation}
+          onRefine={(record) => refineNavigateToChat(record.sessionKey)}
+          onDeleted={onRefreshApps}
+          onClose={smartBack(() => navigate({ view: "apps" }))}
+          siblings={appSiblings}
+          onSwitch={(nextAppId) => navigate({ view: "app", appId: nextAppId })}
         />
+      );
+    } else if (isMobile && route.view === "artifact" && artifacts) {
+      mainContent = (
+        <MobileArtifactDetail
+          artifactId={route.artifactId}
+          artifacts={artifacts}
+          updatedAt={activeArtifactUpdatedAt}
+          onRefine={(record) => refineNavigateToChat(record.source?.sessionId)}
+          onDeleted={onRefreshArtifacts}
+          onClose={smartBack(() => navigate({ view: "artifacts" }))}
+          siblings={artifactSiblings}
+          onSwitch={(nextArtId) => navigate({ view: "artifact", artifactId: nextArtId })}
+        />
+      );
+    } else {
+      mainContent = (
+        <div className="relative flex h-full min-w-0 flex-1 bg-background dark:bg-sunk">
+          <RefineTray
+            threadId={routeRefineTray.threadId}
+            agentName={agentNameFor(trayAgentId)}
+            width={routeRefineTray.width}
+            onDragStart={routeRefineTray.onDragStart}
+            onClose={routeRefineTray.close}
+          />
 
-        <div className="flex min-w-0 flex-1 flex-col">
-          {route.view === "app" && apps ? (
-            <AppDetail
-              appId={route.appId}
-              apps={apps}
-              updatedAt={activeAppUpdatedAt}
-              mode="panel"
-              isPinned={pinnedAppIds.has(route.appId)}
-              onTogglePinned={onTogglePinned}
-              onRefine={(record) => openRefineFromSessionKey(record.sessionKey)}
-              onContinueConversation={handleAppContinueConversation}
-              onDeleted={() => {
-                onRefreshApps();
-                navigate({ view: "home" });
-              }}
-              onClose={() => navigate({ view: "home" })}
-              siblings={appSiblings}
-              onSwitch={(nextAppId) => navigate({ view: "app", appId: nextAppId })}
-            />
-          ) : null}
-          {route.view === "artifact" && artifacts ? (
-            <ArtifactDetail
-              artifactId={route.artifactId}
-              artifacts={artifacts}
-              updatedAt={activeArtifactUpdatedAt}
-              mode="panel"
-              onDeleted={onRefreshArtifacts}
-              onClose={() => navigate({ view: "home" })}
-              onRefine={(record) => openRefineFromSessionKey(record.source?.sessionId)}
-              siblings={artifactSiblings}
-              onSwitch={(nextArtId) =>
-                navigate({ view: "artifact", artifactId: nextArtId })
-              }
-            />
-          ) : null}
+          <div className="flex min-w-0 flex-1 flex-col">
+            {route.view === "app" && apps ? (
+              <AppDetail
+                appId={route.appId}
+                apps={apps}
+                updatedAt={activeAppUpdatedAt}
+                mode="panel"
+                isPinned={pinnedAppIds.has(route.appId)}
+                onTogglePinned={onTogglePinned}
+                onRefine={(record) => openRefineFromSessionKey(record.sessionKey)}
+                onContinueConversation={handleAppContinueConversation}
+                onDeleted={() => {
+                  onRefreshApps();
+                  navigate({ view: "home" });
+                }}
+                onClose={() => navigate({ view: "home" })}
+                siblings={appSiblings}
+                onSwitch={(nextAppId) => navigate({ view: "app", appId: nextAppId })}
+              />
+            ) : null}
+            {route.view === "artifact" && artifacts ? (
+              <ArtifactDetail
+                artifactId={route.artifactId}
+                artifacts={artifacts}
+                updatedAt={activeArtifactUpdatedAt}
+                mode="panel"
+                onDeleted={onRefreshArtifacts}
+                onClose={() => navigate({ view: "home" })}
+                onRefine={(record) => openRefineFromSessionKey(record.source?.sessionId)}
+                siblings={artifactSiblings}
+                onSwitch={(nextArtId) =>
+                  navigate({ view: "artifact", artifactId: nextArtId })
+                }
+              />
+            ) : null}
+          </div>
         </div>
-      </div>
-    );
+      );
+    }
   } else {
     mainContent = (
       <ThreadArea
@@ -1762,6 +1949,12 @@ function ChatAppInner({
           onOpenSearch={() => setPaletteOpen(true)}
           onOpenNotifications={() => setMobileNotificationInboxOpen(true)}
           onOpenSettings={onSettingsClick}
+          chromeless={
+            route.view === "chat" ||
+            route.view === "app" ||
+            route.view === "artifact" ||
+            (route.view === "crons" && Boolean(route.selectedId))
+          }
         >
           {mainContent}
         </MobileShell>
@@ -1976,6 +2169,9 @@ export default function ChatApp() {
   const adaptedFetchThreadList = useCallback(async (): Promise<{
     threads: Thread[];
   }> => {
+    if (USE_MOCK_DATA) {
+      return { threads: MOCK_THREAD_LIST.map(toThreadRow) };
+    }
     const rows = await fetchThreadList();
     return {
       threads: rows.map(toThreadRow),
@@ -1991,7 +2187,9 @@ export default function ChatApp() {
 
   const adaptedLoadThread = useCallback(
     async (threadId: string): Promise<Message[]> => {
-      const msgs = await loadThread(threadId);
+      const msgs = USE_MOCK_DATA
+        ? MOCK_MESSAGES[threadId] ?? []
+        : await loadThread(threadId);
       const historyWorkspace = deriveThreadWorkspaceFromMessages(msgs);
 
       // Hydrate sent uploads from the plugin (server-authoritative). Resolve
@@ -2132,15 +2330,19 @@ export default function ChatApp() {
           compactSession={compactSession}
           onSessionChanged={onSessionChanged}
           loadThread={adaptedLoadThread}
-          sessionMeta={sessionMeta}
-          availableModels={availableModels}
+          sessionMeta={
+            USE_MOCK_DATA
+              ? new Map(MOCK_SESSION_META.map((row) => [row.key, row]))
+              : sessionMeta
+          }
+          availableModels={USE_MOCK_DATA ? MOCK_AVAILABLE_MODELS : availableModels}
           patchSession={patchSession}
           knownAgentIds={knownAgentIds}
-          artifacts={artifacts}
-          apps={apps}
+          artifacts={USE_MOCK_DATA ? MOCK_ARTIFACT_STORE : artifacts}
+          apps={USE_MOCK_DATA ? MOCK_APP_STORE : apps}
           uploads={uploads}
-          appList={appList}
-          artifactList={artifactList}
+          appList={USE_MOCK_DATA ? MOCK_APPS : appList}
+          artifactList={USE_MOCK_DATA ? MOCK_ARTIFACTS : artifactList}
           pinnedAppIds={pinnedAppIds}
           onTogglePinned={togglePinnedApp}
           workspaceByThread={workspaceByThread}
@@ -2153,12 +2355,12 @@ export default function ChatApp() {
           onDeleteApp={handleDeleteApp}
           onRefreshApps={refreshAppList}
           onRefreshArtifacts={refreshArtifactList}
-          notifications={notifications}
+          notifications={USE_MOCK_DATA ? MOCK_NOTIFICATIONS : notifications}
           onMarkNotificationsRead={markNotificationsRead}
           onRefreshNotifications={refreshNotifications}
           onUpsertNotification={upsertNotification}
-          cronJobs={cronJobs}
-          cronRuns={cronRuns}
+          cronJobs={USE_MOCK_DATA ? MOCK_CRON_JOBS : cronJobs}
+          cronRuns={USE_MOCK_DATA ? MOCK_CRON_RUNS : cronRuns}
           cronStatus={cronStatus}
           onRefreshCronData={refreshCronData}
           gatewayCommands={gatewayCommands}

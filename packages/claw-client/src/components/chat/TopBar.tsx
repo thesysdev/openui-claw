@@ -35,7 +35,7 @@ export interface TopBarProps {
 export function TopBar({ leading, children, actions, className = "" }: TopBarProps) {
   return (
     <div
-      className={`flex min-h-[48px] shrink-0 items-center gap-3 border-b border-border-default/40 bg-background px-4 py-2 dark:border-border-default/16 ${className}`}
+      className={`flex h-[48px] shrink-0 items-center gap-3 border-b border-border-default/40 bg-background px-4 dark:border-border-default/16 ${className}`}
     >
       {leading}
       <div className="flex min-w-0 flex-1 items-center gap-3">{children}</div>

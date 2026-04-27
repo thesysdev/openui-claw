@@ -13,7 +13,9 @@ import { useMemo, useState, type MouseEvent as ReactMouseEvent } from "react";
 import type { Thread } from "@openuidev/react-headless";
 
 import { Button } from "@/components/ui/Button";
+import { Counter } from "@/components/ui/Counter";
 import { IconButton } from "@/components/layout/sidebar/IconButton";
+import { SegmentedTabs } from "@/components/ui/SegmentedTabs";
 import { StatusDot } from "@/components/ui/StatusDot";
 import { Tag } from "@/components/layout/sidebar/Tag";
 import { TopBar } from "@/components/chat/TopBar";
@@ -44,6 +46,8 @@ export interface CronDetailTrayProps {
   onDelete?: (job: CronJobRecord) => void;
   onDuplicate?: (job: CronJobRecord) => void;
   onOpenThread?: (threadId: string) => void;
+  /** Mobile preset — hides inner TopBar, swaps tabs for a segmented control, and uses spacious padding. */
+  mobile?: boolean;
 }
 
 export function CronDetailTray({
@@ -59,6 +63,7 @@ export function CronDetailTray({
   onDelete,
   onDuplicate,
   onOpenThread,
+  mobile,
 }: CronDetailTrayProps) {
   const [tab, setTab] = useState<DetailTab>("details");
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -76,53 +81,53 @@ export function CronDetailTray({
 
   return (
     <div
-      className="claw-slide-in-right relative flex h-full shrink-0 flex-col border-l border-border-default/50 bg-background dark:border-border-default/16"
+      className={`relative flex h-full shrink-0 flex-col border-l border-border-default/50 bg-background dark:border-border-default/16 ${mobile ? "" : "claw-slide-in-right"}`}
       style={{ width }}
     >
-      <TopBar
-        actions={
-          <IconButton
-            icon={X}
-            variant="tertiary"
-            size="md"
-            title="Close"
-            aria-label="Close cron job"
-            onClick={onClose}
+      {mobile ? null : (
+        <TopBar
+          actions={
+            <IconButton
+              icon={X}
+              variant="tertiary"
+              size="md"
+              title="Close"
+              aria-label="Close cron job"
+              onClick={onClose}
+            />
+          }
+        >
+          <InlineText
+            value={job.name}
+            onSave={(next) => saveField({ name: next })}
+            className="min-w-0 flex-1 font-heading text-md font-medium text-text-neutral-primary"
           />
-        }
-      >
-        <InlineText
-          value={job.name}
-          onSave={(next) => saveField({ name: next })}
-          className="min-w-0 flex-1 font-heading text-md font-medium text-text-neutral-primary"
-        />
-      </TopBar>
+        </TopBar>
+      )}
 
 
       {/* ── Tabs ── */}
-      <div className="flex gap-ml border-b border-border-default/50 px-ml dark:border-border-default/16">
-        {(
-          [
-            { key: "details", label: "Details" },
-            { key: "history", label: `History · ${jobRuns.length}` },
-          ] as const
-        ).map((t) => {
-          const active = tab === t.key;
-          return (
-            <button
-              key={t.key}
-              type="button"
-              onClick={() => setTab(t.key)}
-              className={`-mb-px border-b-2 py-s font-label text-sm transition-colors ${
-                active
-                  ? "border-text-neutral-primary font-medium text-text-neutral-primary"
-                  : "border-transparent font-regular text-text-neutral-tertiary hover:text-text-neutral-secondary"
-              }`}
-            >
-              {t.label}
-            </button>
-          );
-        })}
+      <div className="px-ml pb-s pt-s">
+        <SegmentedTabs<DetailTab>
+          value={tab}
+          onChange={setTab}
+          options={[
+            { value: "details", label: "Details" },
+            {
+              value: "history",
+              labelText: `History (${jobRuns.length})`,
+              label: (
+                <span className="inline-flex items-center gap-xs">
+                  History
+                  <Counter size="md" color="neutral" kind="secondary">
+                    {jobRuns.length}
+                  </Counter>
+                </span>
+              ),
+            },
+          ]}
+          ariaLabel="Cron detail view"
+        />
       </div>
 
       {/* ── Body ── */}
@@ -139,6 +144,7 @@ export function CronDetailTray({
             onTogglePause={() => onToggleEnabled?.(job, !job.enabled)}
             onDelete={onDelete ? () => onDelete(job) : undefined}
             onOpenThread={onOpenThread}
+            mobile={mobile}
           />
         ) : (
           <HistoryPanel runs={jobRuns} onOpenThread={onOpenThread} />
@@ -171,6 +177,7 @@ function DetailsPanel({
   onTogglePause,
   onDelete,
   onOpenThread,
+  mobile,
 }: {
   job: CronJobRecord;
   lastRun: CronRunEntry | undefined;
@@ -182,12 +189,15 @@ function DetailsPanel({
   onTogglePause: () => void;
   onDelete?: () => void;
   onOpenThread?: (threadId: string) => void;
+  mobile?: boolean;
 }) {
+  const actionBtn = mobile ? "h-9 px-m" : "";
   return (
     <div className="flex flex-col gap-xl">
       {/* ── Basic details · list card ── */}
       <ListCard>
         <ListRow
+          mobile={mobile}
           label="Name"
           value={
             <InlineText
@@ -198,6 +208,7 @@ function DetailsPanel({
           }
         />
         <ListRow
+          mobile={mobile}
           label="Status"
           value={
             <Tag size="lg" variant={job.enabled ? "success" : "neutral"}>
@@ -206,6 +217,7 @@ function DetailsPanel({
           }
         />
         <ListRow
+          mobile={mobile}
           label="Schedule"
           value={
             <span className="font-mono text-sm text-text-neutral-primary">
@@ -215,6 +227,7 @@ function DetailsPanel({
           hint={`${humanFrequency(job)}${job.schedule?.tz ? ` · ${job.schedule.tz}` : ""}`}
         />
         <ListRow
+          mobile={mobile}
           label="Last run"
           value={
             lastRun ? (
@@ -245,6 +258,7 @@ function DetailsPanel({
           }
         />
         <ListRow
+          mobile={mobile}
           label="Parent agent"
           value={
             <span className="truncate font-body text-sm text-text-neutral-primary">
@@ -260,7 +274,8 @@ function DetailsPanel({
         />
       </ListCard>
 
-      {/* ── Actions · Run now · Pause · Delete ── */}
+      {/* Actions: Run now / Pause / Delete (kebab covers these on mobile). */}
+      {mobile ? null : (
       <section>
         <h3 className="mb-s font-label text-sm font-medium text-text-neutral-tertiary">
           Actions
@@ -274,23 +289,37 @@ function DetailsPanel({
               <Button
                 variant="secondary"
                 size="md"
+                className={actionBtn}
                 onClick={() => onConfirmDelete(false)}
               >
                 Cancel
               </Button>
-              <Button variant="secondary" size="md" icon={Trash2} onClick={onDelete}>
+              <Button
+                variant="secondary"
+                size="md"
+                className={actionBtn}
+                icon={Trash2}
+                onClick={onDelete}
+              >
                 Delete
               </Button>
             </div>
           </div>
         ) : (
           <div className="flex flex-wrap items-center gap-xs">
-            <Button variant="secondary" size="md" icon={Play} onClick={onRunNow}>
+            <Button
+              variant="secondary"
+              size="md"
+              className={actionBtn}
+              icon={Play}
+              onClick={onRunNow}
+            >
               Run now
             </Button>
             <Button
               variant="secondary"
               size="md"
+              className={actionBtn}
               icon={job.enabled ? Pause : Play}
               onClick={onTogglePause}
             >
@@ -300,6 +329,7 @@ function DetailsPanel({
               <Button
                 variant="secondary"
                 size="md"
+                className={actionBtn}
                 icon={Trash2}
                 onClick={() => onConfirmDelete(true)}
               >
@@ -309,6 +339,7 @@ function DetailsPanel({
           </div>
         )}
       </section>
+      )}
 
       {/* ── Prompt · editable block ── */}
       <section>
@@ -343,14 +374,17 @@ function ListRow({
   hint,
   trailing,
   onClick,
+  mobile,
 }: {
   label: string;
   value: React.ReactNode;
   hint?: string;
   trailing?: React.ReactNode;
   onClick?: () => void;
+  mobile?: boolean;
 }) {
   const interactive = typeof onClick === "function";
+  const padding = mobile ? "px-ml py-m" : "px-m py-s";
   return (
     <div
       role={interactive ? "button" : undefined}
@@ -364,7 +398,7 @@ function ListRow({
         }
       }}
       title={hint}
-      className={`flex items-center gap-m bg-background px-m py-s dark:bg-foreground/60 ${
+      className={`flex items-center gap-m bg-background ${padding} dark:bg-foreground/60 ${
         interactive
           ? "cursor-pointer transition-colors hover:bg-sunk-light/60 dark:hover:bg-foreground"
           : ""

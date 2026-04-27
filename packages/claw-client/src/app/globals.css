@@ -2,7 +2,7 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Cron detail tray slide-in (desktop) */
+/* Cron detail tray slide-in (desktop) and full-page mobile detail slide-in. */
 @keyframes claw-slide-in-right {
   from {
     transform: translateX(100%);
@@ -16,6 +16,49 @@
   animation: claw-slide-in-right 220ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+/* Bottom-sheet / tray slide-up (used by MobileMenuDrawer, MobileSwitcherSheet,
+   MobileNotificationInboxDrawer). Only the inner panel slides — the scrim
+   fades. */
+@keyframes claw-slide-up {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+.claw-slide-up {
+  animation: claw-slide-up 220ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes claw-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.claw-fade-in {
+  animation: claw-fade-in 180ms ease-out;
+}
+
+/* Hamburger / left-edge drawer slide-in (mobile). */
+@keyframes claw-slide-in-left {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+.claw-slide-in-left {
+  animation: claw-slide-in-left 220ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
 /* Hide scrollbars on every scroll container while < 640px (mobile breakpoint).
    Keeps the visible width symmetric so left/right padding matches. Desktop is
    untouched. */
@@ -26,11 +69,13 @@
   * {
     scrollbar-width: none;
   }
-  /* The library's `Shell.ThreadContainer` panel reserves ~15px for a vertical
-     scrollbar that we've hidden — reclaim that space on mobile so left/right
-     padding ends up symmetric. */
+  /* The library's `Shell.ThreadContainer` panel has `min-width:360px` which
+     overflows the 375px viewport once paddings/scrollbar are added. Override
+     to claim full width and let content wrap. */
   .openui-shell-thread-chat-panel {
+    min-width: 0 !important;
     width: 100% !important;
+    visibility: visible !important;
   }
 }
 
