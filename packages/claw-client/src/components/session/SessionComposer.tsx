@@ -12,7 +12,7 @@ import {
 import { wrapContent, wrapContext } from "@/lib/content-parser";
 import type { GatewayCommand } from "@/lib/engines/types";
 import { useSpeechToText } from "@/lib/hooks/useSpeechToText";
-import { pickPreferredDefault, qualifyModel } from "@/lib/models";
+import { qualifyModel } from "@/lib/models";
 import type { LinkedAppContext, ThreadUpload } from "@/lib/session-workspace";
 import { buildThreadContextPayload } from "@/lib/session-workspace";
 import type { ModelChoice } from "@/types/gateway-responses";
@@ -487,15 +487,6 @@ export function SessionComposer({
   const handleSubmit = async () => {
     if (isDisabled) return;
 
-    // If no model is explicitly selected, lock in our preferred client-side
-    // default before sending so the session sticks to a sane model instead of
-    // whatever the gateway's alphabetically-first entry happens to be (Haiku 3
-    // on OpenRouter). User can still pick a different model via the picker.
-    if (!currentModel && onModelChange && models.length > 0) {
-      const pick = pickPreferredDefault(models, agentDefaultModelId ?? gatewayDefaultModelId);
-      if (pick) onModelChange(qualifyModel(pick.id, pick.provider));
-    }
-
     // Slash command path — short-circuit without sending to the LLM.
     if (parsedCommand && commandContext) {
       const context = commandContext();
@@ -761,32 +752,52 @@ export function SessionComposer({
               </span>
             </>
           ) : null}
-          {onModelChange ? (
-            <TextButtonSelect
-              value={currentModel}
-              onChange={onModelChange}
-              title="Model"
-              options={[
-                {
-                  value: "",
-                  // Surface a sensible client-side preferred default rather
-                  // than `models[0]`, which on OpenRouter is alphabetical
-                  // (lands on Haiku 3 — useless). The gateway's actual
-                  // server-side default may differ; if it does, the user can
-                  // pick explicitly to override.
-                  label: (() => {
-                    const pick = pickPreferredDefault(models, agentDefaultModelId ?? gatewayDefaultModelId);
-                    return pick ? `Default (${pick.name})` : "Default";
-                  })(),
-                },
-                ...models.map((m) => ({
-                  value: qualifyModel(m.id, m.provider),
-                  label: m.name,
-                  group: m.provider,
-                })),
-              ]}
-            />
-          ) : null}
+          {onModelChange ? (() => {
+            const hint = agentDefaultModelId ?? gatewayDefaultModelId;
+            const defaultModel = hint
+              ? models.find(
+                  (m) =>
+                    qualifyModel(m.id, m.provider) === hint ||
+                    m.id === hint ||
+                    hint.endsWith(`/${m.id}`),
+                ) ?? null
+              : null;
+            // openclaw's `models.list` can repeat the same qualified id (e.g.
+            // `openrouter/auto` appears once from the provider catalog and
+            // again from the configured alias entry). Dedupe so the picker
+            // doesn't show duplicates or trip React's key-uniqueness check.
+            const seen = new Set<string>();
+            const uniqueModels: typeof models = [];
+            for (const m of models) {
+              const key = qualifyModel(m.id, m.provider);
+              if (seen.has(key)) continue;
+              seen.add(key);
+              uniqueModels.push(m);
+            }
+            return (
+              <TextButtonSelect
+                value={currentModel}
+                onChange={onModelChange}
+                title="Model"
+                options={[
+                  {
+                    value: "",
+                    // When we can identify the resolved default model, label
+                    // the row "Default (Name)". Filter that same model out of
+                    // the list below so it doesn't appear twice.
+                    label: defaultModel ? `Default (${defaultModel.name})` : "Default",
+                  },
+                  ...uniqueModels
+                    .filter((m) => m !== defaultModel)
+                    .map((m) => ({
+                      value: qualifyModel(m.id, m.provider),
+                      label: m.name,
+                      group: m.provider,
+                    })),
+                ]}
+              />
+            );
+          })() : null}
           {onModelChange && onEffortChange ? (
             <span aria-hidden="true" className="text-text-neutral-tertiary/60">
               ·

@@ -131,12 +131,10 @@ export function useGateway({ onAuthFailed }: { onAuthFailed: () => void }) {
           saveSettings(updated);
         },
         onSessionMetaChanged: setSessionMeta,
-        onModelsChanged: (models, defaultId) => {
-          setAvailableModels(models);
-          setGatewayDefaultModelId(defaultId);
-        },
-        onAgentInfoChanged: (map) => {
-          setAgentModelById(new Map(map));
+        onModelsChanged: setAvailableModels,
+        onModelDefaultsChanged: ({ workspaceDefault, byAgent }) => {
+          setGatewayDefaultModelId(workspaceDefault);
+          setAgentModelById(new Map(byAgent));
         },
         onKnownAgentIdsChanged: (ids) => {
           knownAgentIds.current = ids;

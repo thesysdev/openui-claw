@@ -29,11 +29,6 @@ export interface ModelChoice {
 
 export interface ModelsListResult {
   models: ModelChoice[];
-  /** Qualified id (`provider/model`) of the gateway's configured default,
-   *  resolved from `cfg.agents.defaults.model.primary`. Optional because
-   *  older gateways don't return it — the client falls back to a heuristic
-   *  pick (`pickPreferredDefault`) when absent. */
-  defaultId?: string;
 }
 
 export interface SessionsListResult {
@@ -57,11 +52,37 @@ export interface AgentsListResult {
   agents?: Array<{
     id: string;
     identity?: AgentIdentity;
-    /** Per-agent model config. `primary` is a qualified `provider/model`
-     *  ref — surfaced to the picker so "Default" reads as the agent's
-     *  actual configured model rather than a heuristic guess. */
-    model?: { primary?: string; fallbacks?: string[] };
   }>;
+}
+
+/**
+ * Subset of `config.get` we care about — used to read default model refs.
+ * The full snapshot is much larger and redacted; we only narrow the fields
+ * we actually consume.
+ *
+ * Note: `config.get` wraps the parsed config under `resolved` (and also
+ * exposes `parsed`/`config`/`sourceConfig`/`runtimeConfig` views). `resolved`
+ * is the merged effective config — the right one to read.
+ *
+ * Note also: per-agent `model` may appear as either a bare string ref
+ * (`"openrouter/openai/gpt-5.4"`) or as `{primary, fallbacks}`. The defaults
+ * block always uses the object form. We normalize both.
+ */
+export interface ConfigGetResult {
+  resolved?: ConfigSnapshot;
+  parsed?: ConfigSnapshot;
+}
+
+interface ConfigSnapshot {
+  agents?: {
+    defaults?: {
+      model?: { primary?: string };
+    };
+    list?: Array<{
+      id?: string;
+      model?: string | { primary?: string };
+    }>;
+  };
 }
 
 export type ClawThreadListItem = {

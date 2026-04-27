@@ -136,7 +136,7 @@ export class GatewaySocket {
     this.ws.onmessage = (e) => this.handleMessage(e.data as string);
     this.ws.onclose = (e) => this.handleClose(e.code, e.reason);
     this.ws.onerror = (e) => {
-      warn("onerror (close will follow):", e);
+      warn("onerror (close will follow):", JSON.stringify(e));
     };
   }
 
