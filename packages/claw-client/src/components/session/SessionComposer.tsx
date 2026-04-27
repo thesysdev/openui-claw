@@ -12,7 +12,7 @@ import {
 import { wrapContent, wrapContext } from "@/lib/content-parser";
 import type { GatewayCommand } from "@/lib/engines/types";
 import { useSpeechToText } from "@/lib/hooks/useSpeechToText";
-import { qualifyModel } from "@/lib/models";
+import { pickPreferredDefault, qualifyModel } from "@/lib/models";
 import type { LinkedAppContext, ThreadUpload } from "@/lib/session-workspace";
 import { buildThreadContextPayload } from "@/lib/session-workspace";
 import type { ModelChoice } from "@/types/gateway-responses";
@@ -26,8 +26,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 /**
  * Text-button dropdown — renders the current label as a borderless Button; on
- * click, reveals a small panel of options above the trigger (composer sits at
- * the bottom of the page, so the panel opens upward).
+ * click, reveals a panel of options above the trigger (composer sits at the
+ * bottom of the page, so the panel opens upward).
+ *
+ * Includes search, scroll, and keyboard nav for backends with many models
+ * (OpenRouter ships ~200). Search appears once `options.length > 8` so the
+ * effort picker (4 options) stays simple.
  */
 function TextButtonSelect({
   value,
@@ -36,30 +40,94 @@ function TextButtonSelect({
   title,
 }: {
   value: string;
-  options: ReadonlyArray<{ value: string; label: string }>;
+  options: ReadonlyArray<{ value: string; label: string; group?: string }>;
   onChange: (value: string) => void;
   title?: string;
 }) {
   const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [activeIndex, setActiveIndex] = useState(0);
   const ref = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+
+  const showSearch = options.length > 8;
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return options;
+    return options.filter((o) =>
+      o.label.toLowerCase().includes(q) || o.value.toLowerCase().includes(q),
+    );
+  }, [options, query]);
+
+  // Reset state on close so reopening starts fresh; auto-focus the search
+  // input on open so the user can start typing immediately.
+  useEffect(() => {
+    if (!open) {
+      setQuery("");
+      setActiveIndex(0);
+      return;
+    }
+    if (showSearch) {
+      requestAnimationFrame(() => searchRef.current?.focus());
+    }
+  }, [open, showSearch]);
 
   useEffect(() => {
     if (!open) return;
     const onDown = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
     };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
-    };
     document.addEventListener("mousedown", onDown);
-    document.addEventListener("keydown", onKey);
     return () => {
       document.removeEventListener("mousedown", onDown);
-      document.removeEventListener("keydown", onKey);
     };
   }, [open]);
 
+  // Clamp activeIndex when filtered shrinks below the current index.
+  useEffect(() => {
+    if (activeIndex >= filtered.length) {
+      setActiveIndex(Math.max(0, filtered.length - 1));
+    }
+  }, [activeIndex, filtered.length]);
+
+  // Keep the active row scrolled into view as the user navigates.
+  useEffect(() => {
+    if (!open || !listRef.current) return;
+    const el = listRef.current.querySelector<HTMLElement>(`[data-row-index="${activeIndex}"]`);
+    el?.scrollIntoView({ block: "nearest" });
+  }, [activeIndex, open]);
+
   const current = options.find((o) => o.value === value) ?? options[0];
+
+  const commit = (next: string) => {
+    onChange(next);
+    setOpen(false);
+  };
+
+  const onPanelKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      setOpen(false);
+      return;
+    }
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setActiveIndex((idx) => Math.min(filtered.length - 1, idx + 1));
+      return;
+    }
+    if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setActiveIndex((idx) => Math.max(0, idx - 1));
+      return;
+    }
+    if (e.key === "Enter") {
+      e.preventDefault();
+      const chosen = filtered[activeIndex];
+      if (chosen) commit(chosen.value);
+    }
+  };
 
   return (
     <div ref={ref} className="relative">
@@ -73,27 +141,62 @@ function TextButtonSelect({
         {current?.label ?? "Default"}
       </Button>
       {open ? (
-        <div className="absolute bottom-full right-0 z-50 mb-2xs min-w-[160px] rounded-lg border border-border-default bg-popover-background p-3xs shadow-xl dark:bg-elevated">
-          {options.map((opt) => {
-            const isActive = opt.value === value;
-            return (
-              <button
-                key={opt.value}
-                type="button"
-                onClick={() => {
-                  onChange(opt.value);
-                  setOpen(false);
+        <div
+          className="absolute bottom-full right-0 z-50 mb-2xs flex w-[280px] flex-col rounded-lg border border-border-default bg-popover-background shadow-xl dark:bg-elevated"
+          onKeyDown={onPanelKeyDown}
+        >
+          {showSearch ? (
+            <div className="border-b border-border-default/40 p-2xs">
+              <input
+                ref={searchRef}
+                type="text"
+                value={query}
+                onChange={(e) => {
+                  setQuery(e.target.value);
+                  setActiveIndex(0);
                 }}
-                className={`flex w-full items-center rounded-m px-s py-xs text-left font-body text-sm transition-colors ${
-                  isActive
-                    ? "bg-sunk-light text-text-neutral-primary dark:bg-highlight-subtle"
-                    : "text-text-neutral-secondary hover:bg-sunk-light dark:hover:bg-highlight-subtle"
-                }`}
-              >
-                <span className={isActive ? "font-medium" : "font-regular"}>{opt.label}</span>
-              </button>
-            );
-          })}
+                placeholder="Search…"
+                className="w-full rounded-m bg-transparent px-s py-xs font-body text-sm text-text-neutral-primary outline-none placeholder:text-text-neutral-tertiary"
+              />
+            </div>
+          ) : null}
+          <div
+            ref={listRef}
+            className="max-h-[min(60vh,360px)] overflow-y-auto p-3xs"
+          >
+            {filtered.length === 0 ? (
+              <div className="px-s py-m text-center font-body text-sm text-text-neutral-tertiary">
+                No matches
+              </div>
+            ) : null}
+            {filtered.map((opt, idx) => {
+              const isActive = opt.value === value;
+              const isHighlighted = idx === activeIndex;
+              return (
+                <button
+                  key={opt.value}
+                  data-row-index={idx}
+                  type="button"
+                  onClick={() => commit(opt.value)}
+                  onMouseEnter={() => setActiveIndex(idx)}
+                  className={`flex w-full items-center justify-between gap-s rounded-m px-s py-xs text-left font-body text-sm transition-colors ${
+                    isHighlighted
+                      ? "bg-sunk-light text-text-neutral-primary dark:bg-highlight-subtle"
+                      : "text-text-neutral-secondary hover:bg-sunk-light dark:hover:bg-highlight-subtle"
+                  }`}
+                >
+                  <span className={`truncate ${isActive ? "font-medium" : "font-regular"}`}>
+                    {opt.label}
+                  </span>
+                  {opt.group ? (
+                    <span className="shrink-0 text-sm text-text-neutral-tertiary/70">
+                      {opt.group}
+                    </span>
+                  ) : null}
+                </button>
+              );
+            })}
+          </div>
         </div>
       ) : null}
     </div>
@@ -185,6 +288,8 @@ export function SessionComposer({
   gatewayCommands = [],
   onDispatchGatewayCommand,
   models = [],
+  gatewayDefaultModelId = null,
+  agentDefaultModelId = null,
   currentModel = "",
   currentEffort = "",
   onModelChange,
@@ -207,6 +312,15 @@ export function SessionComposer({
   commandContext?: () => CommandContext;
   gatewayCommands?: GatewayCommand[];
   models?: ModelChoice[];
+  /** Gateway's resolved default model id (qualified `provider/model`) when the
+   *  server exposes it via `models.list.defaultId`. May be null on older
+   *  gateways; the picker falls back to a heuristic. */
+  gatewayDefaultModelId?: string | null;
+  /** Per-agent primary model (qualified `provider/model`) from
+   *  `cfg.agents.byId.{id}.model.primary`. When the session has no explicit
+   *  override, this is what the gateway will actually run — surfacing it in
+   *  the picker label keeps the displayed default honest. */
+  agentDefaultModelId?: string | null;
   /** Qualified model id (provider/id) currently selected, or "" for default. */
   currentModel?: string;
   /** Current thinking/effort level, or "" for default. */
@@ -355,6 +469,15 @@ export function SessionComposer({
 
   const handleSubmit = async () => {
     if (isDisabled) return;
+
+    // If no model is explicitly selected, lock in our preferred client-side
+    // default before sending so the session sticks to a sane model instead of
+    // whatever the gateway's alphabetically-first entry happens to be (Haiku 3
+    // on OpenRouter). User can still pick a different model via the picker.
+    if (!currentModel && onModelChange && models.length > 0) {
+      const pick = pickPreferredDefault(models, agentDefaultModelId ?? gatewayDefaultModelId);
+      if (pick) onModelChange(qualifyModel(pick.id, pick.provider));
+    }
 
     // Slash command path — short-circuit without sending to the LLM.
     if (parsedCommand && commandContext) {
@@ -629,14 +752,20 @@ export function SessionComposer({
               options={[
                 {
                   value: "",
-                  // Surface the gateway's resolved default in the label so a
-                  // bare "Default" doesn't read as opaque ("Default · Default"
-                  // — which model is that?).
-                  label: models[0] ? `Default (${models[0].name})` : "Default",
+                  // Surface a sensible client-side preferred default rather
+                  // than `models[0]`, which on OpenRouter is alphabetical
+                  // (lands on Haiku 3 — useless). The gateway's actual
+                  // server-side default may differ; if it does, the user can
+                  // pick explicitly to override.
+                  label: (() => {
+                    const pick = pickPreferredDefault(models, agentDefaultModelId ?? gatewayDefaultModelId);
+                    return pick ? `Default (${pick.name})` : "Default";
+                  })(),
                 },
                 ...models.map((m) => ({
                   value: qualifyModel(m.id, m.provider),
                   label: m.name,
+                  group: m.provider,
                 })),
               ]}
             />

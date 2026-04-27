@@ -21,6 +21,18 @@ export type AssistantTimelineSegment =
       output: string;
       isError?: boolean;
       durationMs?: number;
+    }
+  // Authoritative token usage for the run, emitted by the gateway on
+  // chat:final. Encoded into the message stream so it survives history
+  // re-renders without a side-channel store. Read by AssistantMessage to
+  // replace the char/4 estimate in the timeline header.
+  | {
+      type: "usage";
+      inputTokens: number;
+      outputTokens: number;
+      cacheReadTokens?: number;
+      cacheWriteTokens?: number;
+      totalTokens?: number;
     };
 
 export type AssistantTimelinePart =
@@ -72,6 +84,20 @@ function isTimelineSegment(value: unknown): value is AssistantTimelineSegment {
       typeof candidate.output === "string" &&
       (candidate.isError === undefined || typeof candidate.isError === "boolean") &&
       (candidate.durationMs === undefined || typeof candidate.durationMs === "number")
+    );
+  }
+
+  if (candidate.type === "usage") {
+    const usageCandidate = candidate as {
+      inputTokens?: unknown;
+      outputTokens?: unknown;
+      cacheReadTokens?: unknown;
+      cacheWriteTokens?: unknown;
+      totalTokens?: unknown;
+    };
+    return (
+      typeof usageCandidate.inputTokens === "number" &&
+      typeof usageCandidate.outputTokens === "number"
     );
   }
 
@@ -149,18 +175,34 @@ export function extractAssistantTimeline(raw: string): {
     };
   }
 
-  const lastPart = parts[parts.length - 1];
-  if (lastPart?.kind === "text") {
+  // Find the LAST text part — that's the visible response body. Anything
+  // *after* it is trailing timeline-only metadata (e.g. the `usage` segment
+  // we emit on chat:final, or trailing reasoning some providers like
+  // OpenRouter emit after the answer text). The original implementation only
+  // checked `parts[parts.length - 1]`, which collapsed the entire message
+  // into the ThinkingPanel accordion whenever a non-text part trailed the
+  // response.
+  let lastTextIdx = -1;
+  for (let i = parts.length - 1; i >= 0; i -= 1) {
+    if (parts[i]?.kind === "text") {
+      lastTextIdx = i;
+      break;
+    }
+  }
+
+  if (lastTextIdx === -1) {
     return {
-      visibleText: lastPart.text,
+      visibleText: "",
       timeline,
-      interleavedParts: parts.slice(0, -1),
+      interleavedParts: parts,
     };
   }
 
+  const visibleTextPart = parts[lastTextIdx];
+  const visibleText = visibleTextPart?.kind === "text" ? visibleTextPart.text : "";
   return {
-    visibleText: "",
+    visibleText,
     timeline,
-    interleavedParts: parts,
+    interleavedParts: [...parts.slice(0, lastTextIdx), ...parts.slice(lastTextIdx + 1)],
   };
 }

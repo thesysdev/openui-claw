@@ -29,6 +29,11 @@ export interface ModelChoice {
 
 export interface ModelsListResult {
   models: ModelChoice[];
+  /** Qualified id (`provider/model`) of the gateway's configured default,
+   *  resolved from `cfg.agents.defaults.model.primary`. Optional because
+   *  older gateways don't return it — the client falls back to a heuristic
+   *  pick (`pickPreferredDefault`) when absent. */
+  defaultId?: string;
 }
 
 export interface SessionsListResult {
@@ -49,7 +54,14 @@ export interface AgentIdentity {
 
 export interface AgentsListResult {
   defaultId?: string;
-  agents?: Array<{ id: string; identity?: AgentIdentity }>;
+  agents?: Array<{
+    id: string;
+    identity?: AgentIdentity;
+    /** Per-agent model config. `primary` is a qualified `provider/model`
+     *  ref — surfaced to the picker so "Default" reads as the agent's
+     *  actual configured model rather than a heuristic guess. */
+    model?: { primary?: string; fallbacks?: string[] };
+  }>;
 }
 
 export type ClawThreadListItem = {
