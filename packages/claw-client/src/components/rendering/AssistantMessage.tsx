@@ -13,7 +13,7 @@ import { useThread } from "@openuidev/react-headless";
 import type { ActionEvent } from "@openuidev/react-lang";
 import { Renderer } from "@openuidev/react-lang";
 import { Callout, Shell } from "@openuidev/react-ui";
-import { openuiLibrary } from "@openuidev/react-ui/genui-lib";
+import { openuiChatLibrary } from "@openuidev/react-ui/genui-lib";
 import {
   ArrowDown,
   ArrowUp,
@@ -551,10 +551,11 @@ export function AssistantMessage({ message }: Props) {
     [rawContent],
   );
 
-  const { timelineItems, toolTraceMap } = useMemo(() => {
+  const { timelineItems, toolTraceMap, runUsage } = useMemo(() => {
     const traceMap = new Map<string, ResolvedToolTrace>();
     const items: ResolvedTimelineItem[] = [];
     const orderedToolIds = new Set<string>();
+    let usage: { inputTokens: number; outputTokens: number } | null = null;
 
     const ensureTrace = (toolCallId: string): ResolvedToolTrace => {
       const existing = traceMap.get(toolCallId);
@@ -605,6 +606,14 @@ export function AssistantMessage({ message }: Props) {
             text: segment.text,
           });
         }
+        return;
+      }
+
+      if (segment.type === "usage") {
+        usage = {
+          inputTokens: segment.inputTokens,
+          outputTokens: segment.outputTokens,
+        };
         return;
       }
 
@@ -661,6 +670,7 @@ export function AssistantMessage({ message }: Props) {
     return {
       timelineItems: items,
       toolTraceMap: traceMap,
+      runUsage: usage,
     };
   }, [interleavedParts, isStreaming, toolCallById, toolCalls]);
 
@@ -676,7 +686,7 @@ export function AssistantMessage({ message }: Props) {
     segment.type === "openui" ? (
       <Renderer
         key={`openui-${i}`}
-        library={openuiLibrary}
+        library={openuiChatLibrary}
         response={segment.content}
         isStreaming={isStreaming}
         onAction={handleAction}
@@ -716,9 +726,12 @@ export function AssistantMessage({ message }: Props) {
           )}
           toolCallCount={toolTraceMap.size}
           {...(() => {
-            // Rough estimate: 1 token ≈ 4 chars.
-            // ↓ input = tool outputs fed back to the model.
-            // ↑ output = what the model wrote (message + tool arguments).
+            // Prefer authoritative counts from the gateway's chat:final usage
+            // (encoded as a `usage` timeline segment). Fallback to a char/4
+            // estimate for in-progress runs and historical messages where
+            // the segment isn't present (e.g. older runs, history reload
+            // paths that strip non-visible markers).
+            if (runUsage) return runUsage;
             let inChars = 0;
             let outChars = (message.content ?? "").length;
             toolTraceMap.forEach((t) => {

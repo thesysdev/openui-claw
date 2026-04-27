@@ -44,6 +44,7 @@ function FormDataAccordion({ contextString }: { contextString: string }) {
 function kindIcon(kind: string | undefined) {
   switch (kind) {
     case "code":
+    case "html":
       return FileCode2;
     case "image":
       return FileImage;
@@ -60,8 +61,27 @@ function inferKindFromMime(mimeType: string | undefined): string {
   if (!mimeType) return "file";
   if (mimeType.startsWith("image/")) return "image";
   if (mimeType === "application/pdf") return "pdf";
-  if (mimeType.startsWith("text/")) return "text";
+  if (mimeType === "text/html") return "html";
+  if (
+    mimeType.startsWith("text/") ||
+    mimeType === "application/json" ||
+    mimeType === "application/xml" ||
+    mimeType === "application/javascript"
+  )
+    return "text";
   return "file";
+}
+
+function decodeBase64Text(dataUrl: string): string {
+  try {
+    const base64 = dataUrl.split(",")[1] ?? "";
+    const binary = atob(base64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+    return new TextDecoder("utf-8").decode(bytes);
+  } catch {
+    return "";
+  }
 }
 
 function InlineUploadChip({ remoteId }: { remoteId: string }) {
@@ -110,11 +130,31 @@ function InlineUploadChip({ remoteId }: { remoteId: string }) {
             <X className="h-4 w-4" />
           </button>
         </div>
-        <div className="flex min-h-0 flex-1 items-center justify-center overflow-auto bg-sunk-light p-l dark:bg-sunk-deep">
-          {kind === "image" && dataUrl ? (
-            <img src={dataUrl} alt={name} className="max-h-full max-w-full object-contain" />
+        <div className="flex min-h-0 flex-1 items-stretch justify-stretch overflow-auto bg-sunk-light dark:bg-sunk-deep">
+          {!dataUrl ? (
+            <div className="m-auto p-l text-sm text-text-neutral-tertiary">Loading preview…</div>
+          ) : kind === "image" ? (
+            <div className="m-auto p-l">
+              <img src={dataUrl} alt={name} className="max-h-full max-w-full object-contain" />
+            </div>
+          ) : kind === "pdf" ? (
+            <iframe src={dataUrl} title={name} className="h-full w-full border-0 bg-background" />
+          ) : kind === "html" ? (
+            // Sandbox the iframe so uploaded HTML can't run scripts or
+            // navigate the parent. `srcdoc` is preferred over `src=dataUrl`
+            // because Chrome strips data: URL navigation in some setups.
+            <iframe
+              srcDoc={decodeBase64Text(dataUrl)}
+              title={name}
+              sandbox=""
+              className="h-full w-full border-0 bg-white"
+            />
+          ) : kind === "text" ? (
+            <pre className="m-0 h-full w-full overflow-auto whitespace-pre p-l font-code text-sm leading-body text-text-neutral-primary">
+              {decodeBase64Text(dataUrl)}
+            </pre>
           ) : (
-            <div className="text-sm text-text-neutral-tertiary">
+            <div className="m-auto p-l text-sm text-text-neutral-tertiary">
               {meta?.mimeType ?? "Attachment"} — preview not available
             </div>
           )}

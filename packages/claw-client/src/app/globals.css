@@ -485,6 +485,16 @@ body {
   gap: var(--space-s) !important;
 }
 
+/* react-ui ships these with `overflow: hidden`, which clips long streaming
+   responses when the bubble grows past the viewport. Let the outer thread
+   scroll area handle scrolling instead. Applied as a separate rule so it
+   doesn't accidentally co-opt the parent's margin-top (which carries the
+   8px user → assistant gap defined above). */
+.openui-claw-thread-container .openui-shell-thread-message-assistant,
+.openui-claw-thread-container .openui-shell-thread-message-assistant__content {
+  overflow: visible !important;
+}
+
 /* Hide avatar/logo on both sides — we want a clean, left-aligned chat. */
 .openui-claw-thread-container .openui-shell-thread-message-assistant__logo,
 .openui-claw-thread-container .openui-shell-thread-message-user__avatar,

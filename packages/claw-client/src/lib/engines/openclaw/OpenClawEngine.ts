@@ -122,7 +122,10 @@ export interface OpenClawEngineEvents {
   onAuthFailed: () => void;
   onSettingsChanged: (settings: Settings) => void;
   onSessionMetaChanged: (meta: Map<string, SessionRow>) => void;
-  onModelsChanged: (models: ModelChoice[]) => void;
+  onModelsChanged: (models: ModelChoice[], defaultId: string | null) => void;
+  /** Fired when agents.list responds with each agent's configured primary
+   *  model. Keyed by agentId, value is qualified `provider/model`. */
+  onAgentInfoChanged: (agentModelById: Map<string, string>) => void;
   onKnownAgentIdsChanged: (ids: Set<string>) => void;
   /**
    * Fired when the gateway broadcasts `sessions.changed` for a session we
@@ -164,6 +167,8 @@ export class OpenClawEngine implements Engine {
   private _settings: Settings | null;
   private _sessionMeta = new Map<string, SessionRow>();
   private _availableModels: ModelChoice[] = [];
+  /** agentId → qualified `provider/model` from `cfg.agents.byId.{id}.model.primary`. */
+  private _agentModelById: Map<string, string> = new Map();
   private events: OpenClawEngineEvents;
 
   private _isReady = false;
@@ -556,6 +561,19 @@ export class OpenClawEngine implements Engine {
     }
 
     this._setKnownAgentIds(new Set(agents.map((a) => a.id)));
+
+    // Capture each agent's configured primary model so the picker can show
+    // the agent's actual default ("gpt-5.4") rather than the heuristic guess
+    // ("Opus 4.7") when the session has no explicit model override.
+    const agentModelMap = new Map<string, string>();
+    for (const a of agents) {
+      const primary = a.model?.primary;
+      if (typeof primary === "string" && primary.length > 0) {
+        agentModelMap.set(a.id, primary);
+      }
+    }
+    this._agentModelById = agentModelMap;
+    this.events.onAgentInfoChanged(new Map(agentModelMap));
 
     const items: ClawThreadListItem[] = [];
     const metaUpdates = new Map<string, SessionRow>();
@@ -976,8 +994,11 @@ export class OpenClawEngine implements Engine {
     try {
       const result = await this._request<ModelsListResult>("models.list");
       this._availableModels = result?.models ?? [];
-      this.events.onModelsChanged(this._availableModels);
-      log(`models.list → ${this._availableModels.length} model(s)`);
+      const defaultId = result?.defaultId ?? null;
+      this.events.onModelsChanged(this._availableModels, defaultId);
+      log(
+        `models.list → ${this._availableModels.length} model(s)${defaultId ? `, default=${defaultId}` : ""}`,
+      );
     } catch (e) {
       warn("models.list failed:", e);
     }

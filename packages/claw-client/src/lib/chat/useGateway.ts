@@ -77,6 +77,8 @@ export function useGateway({ onAuthFailed }: { onAuthFailed: () => void }) {
   const [pairingDeviceId, setPairingDeviceId] = useState<string | null>(null);
   const [sessionMeta, setSessionMeta] = useState<Map<string, SessionRow>>(() => new Map());
   const [availableModels, setAvailableModels] = useState<ModelChoice[]>([]);
+  const [gatewayDefaultModelId, setGatewayDefaultModelId] = useState<string | null>(null);
+  const [agentModelById, setAgentModelById] = useState<Map<string, string>>(() => new Map());
   const [artifacts, setArtifacts] = useState<ArtifactStore | undefined>(undefined);
   const [apps, setApps] = useState<AppStore | undefined>(undefined);
   const [uploads, setUploads] = useState<UploadStore | undefined>(undefined);
@@ -129,7 +131,13 @@ export function useGateway({ onAuthFailed }: { onAuthFailed: () => void }) {
           saveSettings(updated);
         },
         onSessionMetaChanged: setSessionMeta,
-        onModelsChanged: setAvailableModels,
+        onModelsChanged: (models, defaultId) => {
+          setAvailableModels(models);
+          setGatewayDefaultModelId(defaultId);
+        },
+        onAgentInfoChanged: (map) => {
+          setAgentModelById(new Map(map));
+        },
         onKnownAgentIdsChanged: (ids) => {
           knownAgentIds.current = ids;
         },
@@ -558,6 +566,8 @@ export function useGateway({ onAuthFailed }: { onAuthFailed: () => void }) {
     reconnect,
     sessionMeta,
     availableModels,
+    gatewayDefaultModelId,
+    agentModelById,
     patchSession,
     knownAgentIds,
     artifacts,

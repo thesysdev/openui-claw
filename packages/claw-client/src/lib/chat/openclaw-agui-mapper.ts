@@ -246,8 +246,32 @@ export function createOpenClawAGUIMapper(
           state: evt.state,
           activeToolCallIds: [...activeToolCallIds],
           stopReason: evt.stopReason,
+          usage: evt.usage,
         });
         ensureMessageStarted(evt.runId);
+        // Encode authoritative token usage into the message timeline so the
+        // ThinkingPanel can display real Anthropic counts instead of a
+        // char/4 estimate. Skipped on `aborted` runs where usage is absent.
+        if (evt.usage) {
+          emitEvent({
+            type: EventType.TEXT_MESSAGE_CONTENT,
+            messageId,
+            delta: encodeAssistantTimelineSegment({
+              type: "usage",
+              inputTokens: evt.usage.input ?? 0,
+              outputTokens: evt.usage.output ?? 0,
+              ...(typeof evt.usage.cacheRead === "number"
+                ? { cacheReadTokens: evt.usage.cacheRead }
+                : {}),
+              ...(typeof evt.usage.cacheWrite === "number"
+                ? { cacheWriteTokens: evt.usage.cacheWrite }
+                : {}),
+              ...(typeof evt.usage.total === "number"
+                ? { totalTokens: evt.usage.total }
+                : {}),
+            }),
+          });
+        }
         emitEvent({ type: EventType.TEXT_MESSAGE_END, messageId });
         emitEvent({ type: EventType.RUN_FINISHED });
         activeToolCallIds.clear();

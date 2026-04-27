@@ -193,6 +193,8 @@ function smartBack(defaultNav: () => void): () => void {
 function ThreadArea({
   sessionMeta,
   availableModels,
+  gatewayDefaultModelId,
+  agentModelById,
   patchSession,
   resetSession,
   compactSession,
@@ -224,6 +226,8 @@ function ThreadArea({
 }: {
   sessionMeta: Map<string, SessionRow>;
   availableModels: ModelChoice[];
+  gatewayDefaultModelId: string | null;
+  agentModelById: Map<string, string>;
   patchSession: (key: string, patch: Record<string, unknown>) => Promise<boolean>;
   resetSession: (sessionKey: string) => Promise<boolean>;
   compactSession: (sessionKey: string) => Promise<boolean>;
@@ -823,6 +827,8 @@ function ThreadArea({
             gatewayCommands={gatewayCommands}
             onDispatchGatewayCommand={dispatchGatewayCommand}
             models={availableModels}
+            gatewayDefaultModelId={gatewayDefaultModelId}
+            agentDefaultModelId={activeAgentId ? agentModelById.get(activeAgentId) ?? null : null}
             currentModel={meta?.model ? qualifyModel(meta.model, meta.modelProvider ?? "") : ""}
             currentEffort={meta?.thinkingLevel ?? ""}
             onModelChange={
@@ -840,15 +846,37 @@ function ThreadArea({
                 : undefined
             }
             {...(() => {
-              const currentModelId = meta?.model
-                ? qualifyModel(meta.model, meta.modelProvider ?? "")
-                : "";
-              const modelInfo = availableModels.find(
-                (m) => qualifyModel(m.id, m.provider) === currentModelId,
-              );
+              // Map openclaw's SessionRow fields onto the ring's
+              // (used, limit) pair. Field semantics confirmed against
+              // openclaw/gateway/session-utils.ts and the test fixture at
+              // server.sessions.gateway-server-sessions-a.test.ts:745-783:
+              //
+              //   contextTokens   → MODEL'S CONTEXT WINDOW (capacity).
+              //                     1_048_576 for Claude 1M, 200_000 for
+              //                     GPT-5, etc. NOT "tokens used."
+              //   totalTokens     → cumulative session usage across all
+              //                     turns. The right "used" signal for a
+              //                     fill ring labeled "Context consumed."
+              //   totalTokensFresh→ false when the value has been
+              //                     invalidated (post-reset, etc.) — fall
+              //                     back to the latest turn's input size.
+              //   inputTokens     → only the fresh (uncached) input of the
+              //                     latest turn. With Anthropic prompt
+              //                     caching this is just the new user msg
+              //                     ("hi" = 3 tokens) — meaningless on
+              //                     its own as a context-fill metric.
+              //
+              // First version of this ring used `contextTokens` as both
+              // numerator and denominator → stuck at 100%. Second version
+              // used bare `inputTokens` → showed `3 of 1.0M`. Third time's
+              // the charm.
+              const totalFresh = meta?.totalTokensFresh !== false;
+              const used = totalFresh
+                ? meta?.totalTokens ?? meta?.inputTokens
+                : meta?.inputTokens;
               return {
-                contextTokens: meta?.contextTokens ?? meta?.totalTokens ?? undefined,
-                contextLimit: modelInfo?.contextWindow,
+                contextTokens: used ?? undefined,
+                contextLimit: meta?.contextTokens ?? undefined,
               };
             })()}
           />
@@ -1187,6 +1215,8 @@ interface ChatAppInnerProps {
   loadThread: (threadId: string) => Promise<Message[]>;
   sessionMeta: Map<string, SessionRow>;
   availableModels: ModelChoice[];
+  gatewayDefaultModelId: string | null;
+  agentModelById: Map<string, string>;
   patchSession: (key: string, patch: Record<string, unknown>) => Promise<boolean>;
   knownAgentIds: React.RefObject<Set<string>>;
   artifacts: ArtifactStore | undefined;
@@ -1244,6 +1274,8 @@ function ChatAppInner({
   loadThread,
   sessionMeta,
   availableModels,
+  gatewayDefaultModelId,
+  agentModelById,
   patchSession,
   knownAgentIds,
   artifacts,
@@ -2000,6 +2032,8 @@ function ChatAppInner({
       <ThreadArea
         sessionMeta={sessionMeta}
         availableModels={availableModels}
+        gatewayDefaultModelId={gatewayDefaultModelId}
+        agentModelById={agentModelById}
         patchSession={patchSession}
         createSession={createSession}
         resetSession={resetSession}
@@ -2193,6 +2227,8 @@ export default function ChatApp() {
     reconnect,
     sessionMeta,
     availableModels,
+    gatewayDefaultModelId,
+    agentModelById,
     patchSession,
     resetSession,
     compactSession,
@@ -2436,6 +2472,8 @@ export default function ChatApp() {
           loadThread={adaptedLoadThread}
           sessionMeta={sessionMeta}
           availableModels={availableModels}
+          gatewayDefaultModelId={gatewayDefaultModelId}
+          agentModelById={agentModelById}
           patchSession={patchSession}
           knownAgentIds={knownAgentIds}
           artifacts={artifacts}
