@@ -23,7 +23,7 @@ import {
 import { ArtifactPanel } from "@openuidev/react-ui";
 import { useEffect, useMemo, useState } from "react";
 
-function UploadPreviewPanel({
+export function UploadPreviewPanel({
   upload,
   uploadStore,
 }: {

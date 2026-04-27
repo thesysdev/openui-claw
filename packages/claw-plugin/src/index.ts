@@ -148,25 +148,18 @@ export default definePluginEntry({
       return uploadStore;
     };
 
-    const resolveDatabasePath = async (sessionKey: string, namespace: string): Promise<string> => {
+    const resolveDatabasePath = async (namespace: string): Promise<string> => {
       const stateDir = api.runtime.state.resolveStateDir();
-      const dbDir = path.join(
-        stateDir,
-        "plugins",
-        "openui-claw",
-        "db",
-        sanitizeDbSegment(sessionKey || "global"),
-      );
+      const dbDir = path.join(stateDir, "plugins", "openui-claw", "db");
       await mkdir(dbDir, { recursive: true });
       return path.join(dbDir, `${namespace}.sqlite`);
     };
 
-    const withSessionDatabase = async <T>(
-      sessionKey: string,
+    const withDatabase = async <T>(
       namespace: string,
       action: (db: DatabaseSync) => T,
     ): Promise<T> => {
-      const dbPath = await resolveDatabasePath(sessionKey, namespace);
+      const dbPath = await resolveDatabasePath(namespace);
       const db = new DatabaseSync(dbPath);
 
       try {
@@ -178,10 +171,7 @@ export default definePluginEntry({
       }
     };
 
-    const invokeDbQueryTool = async (
-      args: Record<string, unknown>,
-      sessionKey: string,
-    ): Promise<unknown> => {
+    const invokeDbQueryTool = async (args: Record<string, unknown>): Promise<unknown> => {
       const sql = typeof args.sql === "string" ? args.sql.trim() : "";
       if (!sql) {
         throw new Error("db_query requires a non-empty 'sql' argument");
@@ -189,7 +179,7 @@ export default definePluginEntry({
       assertReadOnlySql(sql);
 
       const namespace = normalizeSqlNamespace(args.namespace);
-      const rows = await withSessionDatabase(sessionKey, namespace, (db) => {
+      const rows = await withDatabase(namespace, (db) => {
         const statement = db.prepare(sql);
         const result = runStatement<unknown[]>(statement, "all", args.params);
         return Array.isArray(result) ? result : [];
@@ -198,17 +188,14 @@ export default definePluginEntry({
       return { namespace, rows };
     };
 
-    const invokeDbExecuteTool = async (
-      args: Record<string, unknown>,
-      sessionKey: string,
-    ): Promise<unknown> => {
+    const invokeDbExecuteTool = async (args: Record<string, unknown>): Promise<unknown> => {
       const sql = typeof args.sql === "string" ? args.sql.trim() : "";
       if (!sql) {
         throw new Error("db_execute requires a non-empty 'sql' argument");
       }
 
       const namespace = normalizeSqlNamespace(args.namespace);
-      return withSessionDatabase(sessionKey, namespace, (db) => {
+      return withDatabase(namespace, (db) => {
         const normalizedParams = normalizeSqlParams(args.params);
 
         if (
@@ -395,7 +382,7 @@ export default definePluginEntry({
         required: ["sql"],
       },
       execute: async (_callId: string, params: Record<string, unknown>) =>
-        jsonResult(await invokeDbQueryTool(params, ctx.sessionKey ?? "")),
+        jsonResult(await invokeDbQueryTool(params)),
     }));
 
     api.registerTool((ctx: OpenClawPluginToolContext) => ({
@@ -425,7 +412,7 @@ export default definePluginEntry({
         required: ["sql"],
       },
       execute: async (_callId: string, params: Record<string, unknown>) =>
-        jsonResult(await invokeDbExecuteTool(params, ctx.sessionKey ?? "")),
+        jsonResult(await invokeDbExecuteTool(params)),
     }));
 
     // ── App tools — direct storage, no subagent ─────────────────────────────
@@ -953,9 +940,9 @@ export default definePluginEntry({
         case "read":
           return invokeReadTool(toolArgs);
         case "db_query":
-          return invokeDbQueryTool(toolArgs, sessionKey);
+          return invokeDbQueryTool(toolArgs);
         case "db_execute":
-          return invokeDbExecuteTool(toolArgs, sessionKey);
+          return invokeDbExecuteTool(toolArgs);
         default:
           throw new Error(
             `Tool "${toolName}" is not available in app runtime. Supported tools: exec, read, db_query, db_execute.`,
