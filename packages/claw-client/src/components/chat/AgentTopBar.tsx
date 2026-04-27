@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, Cpu, Plus } from "lucide-react";
+import { ArrowLeft, Cpu, PanelRightOpen, Plus } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { IconButton } from "@/components/layout/sidebar/IconButton";
@@ -30,6 +30,14 @@ export interface AgentTopBarProps {
   onSwitchAgent: (agent: AgentTopBarAgent) => void;
   onSelectSession: (threadId: string) => void;
   onNewSession: () => void;
+  /**
+   * When set, renders a workspace-toggle icon button in the actions strip.
+   * Used on mobile (where the workspace pane is a drawer instead of a
+   * permanent right-rail) so the user can open it from the chat header.
+   * On desktop the workspace pane already has its own collapse/expand
+   * affordance, so this stays unset.
+   */
+  onOpenWorkspace?: () => void;
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -278,6 +286,7 @@ export function AgentTopBar({
   onSwitchAgent,
   onSelectSession,
   onNewSession,
+  onOpenWorkspace,
 }: AgentTopBarProps) {
   return (
     <TopBar
@@ -293,9 +302,21 @@ export function AgentTopBar({
         ) : undefined
       }
       actions={
-        <Button variant="tertiary" size="md" icon={Plus} onClick={onNewSession}>
-          New session
-        </Button>
+        <>
+          {onOpenWorkspace ? (
+            <IconButton
+              icon={PanelRightOpen}
+              variant="secondary"
+              size="md"
+              title="Open workspace"
+              aria-label="Open workspace"
+              onClick={onOpenWorkspace}
+            />
+          ) : null}
+          <Button variant="tertiary" size="md" icon={Plus} onClick={onNewSession}>
+            New session
+          </Button>
+        </>
       }
     >
       <div className="flex min-w-0 items-center gap-xs">

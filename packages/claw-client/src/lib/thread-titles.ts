@@ -1,3 +1,5 @@
+import { CLAW_SUFFIX, extractExtraSlotId, isMainSession } from "@/lib/session-keys";
+
 const OPAQUE_UUID_REGEX =
   /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/i;
 const SHORT_OPAQUE_SEGMENT_REGEX = /^[0-9a-f]{8,}$/i;
@@ -16,14 +18,12 @@ function firstNonEmpty(...values: Array<string | null | undefined>): string | nu
 
 export function humanizeSessionKey(value: string): string {
   const trimmed = value.trim();
-  const agentSessionMatch = trimmed.match(
-    /^agent:[^:]+:([0-9a-f-]+):openui-claw$/i,
-  );
-  if (agentSessionMatch?.[1]) {
-    return `Conversation ${agentSessionMatch[1].slice(0, 8)}`;
+  const slot = extractExtraSlotId(trimmed);
+  if (slot) {
+    return `Conversation ${slot.slice(0, 8)}`;
   }
 
-  if (/^agent:[^:]+:main:openui-claw$/i.test(trimmed)) {
+  if (isMainSession(trimmed)) {
     return "Main conversation";
   }
 
@@ -53,7 +53,7 @@ export function isOpaqueSessionTitle(
 
   if (
     trimmed.startsWith("agent:") ||
-    trimmed.endsWith(":openui-claw") ||
+    trimmed.endsWith(CLAW_SUFFIX) ||
     OPAQUE_UUID_REGEX.test(trimmed)
   ) {
     return true;

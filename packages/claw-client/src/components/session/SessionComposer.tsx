@@ -1,5 +1,7 @@
 "use client";
 
+import { IconButton } from "@/components/layout/sidebar/IconButton";
+import { ContextRing, type ContextBreakdownItem } from "@/components/ui/ContextRing";
 import {
   dispatchSlashCommand,
   listCommands,
@@ -9,26 +11,21 @@ import {
 } from "@/lib/commands";
 import { wrapContent, wrapContext } from "@/lib/content-parser";
 import type { GatewayCommand } from "@/lib/engines/types";
+import { useSpeechToText } from "@/lib/hooks/useSpeechToText";
+import { qualifyModel } from "@/lib/models";
 import type { LinkedAppContext, ThreadUpload } from "@/lib/session-workspace";
 import { buildThreadContextPayload } from "@/lib/session-workspace";
-import { useThread } from "@openuidev/react-headless";
-import { CornerDownLeft, Plus, RotateCw, Square, X } from "lucide-react";
-import { IconButton } from "@/components/layout/sidebar/IconButton";
 import type { ModelChoice } from "@/types/gateway-responses";
-import { qualifyModel } from "@/lib/models";
-import { ContextRing, type ContextBreakdownItem } from "@/components/ui/ContextRing";
+import { useThread } from "@openuidev/react-headless";
+import { CornerDownLeft, Mic, Plus, RotateCw, Square, X } from "lucide-react";
+
 import { MobileSwitcherSheet } from "@/components/mobile/MobileSwitcherSheet";
 import { useIsMobile } from "@/lib/hooks/useIsMobile";
 
-const THINKING_LEVELS = [
-  { value: "", label: "Default" },
-  { value: "off", label: "Off" },
-  { value: "minimal", label: "Minimal" },
-  { value: "low", label: "Low" },
-  { value: "medium", label: "Medium" },
-  { value: "high", label: "High" },
-  { value: "xhigh", label: "Extra High" },
-] as const;
+import { Button } from "@/components/ui/Button";
+import { effectiveSendKey, usePreferences } from "@/lib/preferences";
+import { THINKING_LEVELS } from "@/lib/thinking-levels";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 /**
  * Text-button dropdown — renders the current label as a borderless Button; on
@@ -110,13 +107,7 @@ function TextButtonSelect({
                     : "text-text-neutral-secondary hover:bg-sunk-light dark:hover:bg-highlight-subtle"
                 }`}
               >
-                <span
-                  className={
-                    isActive ? "font-medium" : "font-regular"
-                  }
-                >
-                  {opt.label}
-                </span>
+                <span className={isActive ? "font-medium" : "font-regular"}>{opt.label}</span>
               </button>
             );
           })}
@@ -125,8 +116,6 @@ function TextButtonSelect({
     </div>
   );
 }
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Button } from "@/components/ui/Button";
 
 function UploadChip({ label, onRemove }: { label: string; onRemove?: () => void }) {
   return (
@@ -179,9 +168,7 @@ function SlashMenu({
           onClick={() => onSelect(entry)}
           onMouseEnter={() => onHover(index)}
           className={`flex w-full items-start gap-3 px-3 py-2 text-left text-sm transition-colors ${
-            index === activeIndex
-              ? "bg-info-background"
-              : "hover:bg-sunk-light"
+            index === activeIndex ? "bg-info-background" : "hover:bg-sunk-light"
           }`}
         >
           <span className="font-mono text-sm font-semibold text-text-info-primary">
@@ -208,6 +195,7 @@ export function SessionComposer({
   uploads,
   linkedApp,
   onPickFiles,
+  onAddFiles,
   onRemoveUpload,
   onUploadsSent,
   commandContext,
@@ -225,6 +213,12 @@ export function SessionComposer({
   uploads: ThreadUpload[];
   linkedApp: LinkedAppContext | null;
   onPickFiles: () => void;
+  /**
+   * Adds raw `File`s — used by drag-drop and clipboard paste. Optional so the
+   * composer can be embedded in contexts (e.g. read-only previews) where file
+   * attachment isn't relevant.
+   */
+  onAddFiles?: (files: File[]) => void | Promise<void>;
   onRemoveUpload: (uploadId: string) => void;
   onUploadsSent: (uploadIds: string[]) => void;
   commandContext?: () => CommandContext;
@@ -253,8 +247,13 @@ export function SessionComposer({
   const isRunning = useThread((state) => state.isRunning);
   const isLoadingMessages = useThread((state) => state.isLoadingMessages);
   const threadMessages = useThread((state) => state.messages);
+  const prefs = usePreferences();
+  const stt = useSpeechToText();
+  const sttBaselineRef = useRef("");
   const [textContent, setTextContent] = useState("");
   const [slashActiveIndex, setSlashActiveIndex] = useState(0);
+  const [isDragOver, setIsDragOver] = useState(false);
+  const dragDepthRef = useRef(0);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   const pendingUploads = useMemo(
@@ -434,8 +433,70 @@ export function SessionComposer({
     await sendPromise;
   };
 
+  // Drag-drop & clipboard-paste plumbing. Both route through `onAddFiles`,
+  // which mirrors the file-picker path. We use a depth counter for dragenter/
+  // dragleave so nested children inside the composer don't toggle the overlay
+  // off as the cursor moves between them.
+  const handleDragEnter = (e: React.DragEvent) => {
+    if (!onAddFiles) return;
+    if (!Array.from(e.dataTransfer.types).includes("Files")) return;
+    e.preventDefault();
+    dragDepthRef.current += 1;
+    setIsDragOver(true);
+  };
+  const handleDragOver = (e: React.DragEvent) => {
+    if (!onAddFiles) return;
+    if (!Array.from(e.dataTransfer.types).includes("Files")) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "copy";
+  };
+  const handleDragLeave = (e: React.DragEvent) => {
+    if (!onAddFiles) return;
+    if (!Array.from(e.dataTransfer.types).includes("Files")) return;
+    e.preventDefault();
+    dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
+    if (dragDepthRef.current === 0) setIsDragOver(false);
+  };
+  const handleDrop = (e: React.DragEvent) => {
+    if (!onAddFiles) return;
+    e.preventDefault();
+    dragDepthRef.current = 0;
+    setIsDragOver(false);
+    const files = Array.from(e.dataTransfer.files ?? []);
+    if (files.length === 0) return;
+    void onAddFiles(files);
+  };
+  const handlePaste = (e: React.ClipboardEvent) => {
+    if (!onAddFiles) return;
+    const items = Array.from(e.clipboardData?.items ?? []);
+    const files: File[] = [];
+    for (const item of items) {
+      if (item.kind !== "file") continue;
+      const file = item.getAsFile();
+      if (file) files.push(file);
+    }
+    if (files.length === 0) return;
+    e.preventDefault();
+    void onAddFiles(files);
+  };
+
   return (
-    <div className="openui-claw-session-composer mb-1 w-full rounded-xl bg-sunk-light p-[2px] dark:bg-foreground sm:mb-3">
+    <div
+      className={`openui-claw-session-composer relative mb-1 w-full rounded-xl bg-sunk-light p-[2px] dark:bg-foreground sm:mb-3 ${
+        isDragOver ? "ring-2 ring-text-accent-primary ring-offset-2" : ""
+      }`}
+      onDragEnter={handleDragEnter}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
+      {isDragOver && (
+        <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-background/85 dark:bg-foreground/85">
+          <span className="font-label text-sm font-medium text-text-accent-primary">
+            Drop files to attach
+          </span>
+        </div>
+      )}
       {slashMatches.length > 0 && (
         <SlashMenu
           entries={slashMatches}
@@ -465,8 +526,15 @@ export function SessionComposer({
             ref={textareaRef}
             value={textContent}
             onChange={(event) => setTextContent(event.target.value)}
+            onPaste={handlePaste}
             rows={1}
-            placeholder={isCommandInput ? "" : "Type / for commands"}
+            placeholder={
+              isCommandInput
+                ? ""
+                : effectiveSendKey(prefs) === "mod-enter"
+                  ? "Type / for commands · ⌘↵ to send"
+                  : "Type / for commands"
+            }
             className="max-h-48 flex-1 resize-none bg-transparent py-1 text-sm leading-6 text-text-neutral-primary outline-none placeholder:text-text-neutral-tertiary"
             onKeyDown={(event) => {
               if (slashMatches.length > 0) {
@@ -496,6 +564,11 @@ export function SessionComposer({
                 // Enter falls through to submission — literal text wins.
               }
               if (event.key === "Enter" && !event.shiftKey) {
+                const mode = effectiveSendKey(prefs);
+                const wantsMod = mode === "mod-enter";
+                const hasMod = event.metaKey || event.ctrlKey;
+                if (wantsMod && !hasMod) return; // let newline insert
+                if (!wantsMod && hasMod) return; // ⌘↵ ignored in plain mode
                 event.preventDefault();
                 void handleSubmit();
               }
@@ -533,15 +606,33 @@ export function SessionComposer({
             title="Add context / attach files"
             onClick={onPickFiles}
           />
+          {stt.supported ? (
+            <IconButton
+              icon={Mic}
+              variant={stt.listening ? "primary" : "tertiary"}
+              size="md"
+              title={stt.listening ? "Stop dictation" : "Dictate (speech-to-text)"}
+              onClick={() => {
+                if (stt.listening) {
+                  stt.stop();
+                  return;
+                }
+                // Capture the current text once so each interim update
+                // appends to the original baseline rather than
+                // compounding the streaming transcript.
+                sttBaselineRef.current = textContent.replace(/\s+$/, "");
+                stt.start((text) => {
+                  const sep = sttBaselineRef.current ? " " : "";
+                  setTextContent(sttBaselineRef.current + sep + text);
+                });
+              }}
+            />
+          ) : null}
         </div>
         <div className="flex flex-wrap items-center gap-3xs font-body text-sm text-text-neutral-tertiary">
           {contextTokens != null && contextLimit && contextLimit > 0 ? (
             <>
-              <ContextRing
-                used={contextTokens}
-                limit={contextLimit}
-                breakdown={contextBreakdown}
-              />
+              <ContextRing used={contextTokens} limit={contextLimit} breakdown={contextBreakdown} />
               <span aria-hidden="true" className="ml-2xs text-text-neutral-tertiary/60">
                 ·
               </span>
@@ -553,7 +644,13 @@ export function SessionComposer({
               onChange={onModelChange}
               title="Model"
               options={[
-                { value: "", label: "Default" },
+                {
+                  value: "",
+                  // Surface the gateway's resolved default in the label so a
+                  // bare "Default" doesn't read as opaque ("Default · Default"
+                  // — which model is that?).
+                  label: models[0] ? `Default (${models[0].name})` : "Default",
+                },
                 ...models.map((m) => ({
                   value: qualifyModel(m.id, m.provider),
                   label: m.name,

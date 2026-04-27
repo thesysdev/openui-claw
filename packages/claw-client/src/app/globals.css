@@ -565,3 +565,120 @@ body {
     max-width: 100%;
   }
 }
+
+/* react-ui's `.openui-shell-thread-chat-panel` is sized assuming an artifact
+   panel sibling (min-width: 360px, flex-shrink: 0, no grow). Our chat view
+   uses `ClawThreadContainer` which renders no artifact panel, so make the
+   chat panel actually fill the row. Scoped to our container class so other
+   Shell.ThreadContainer usages (home/apps/artifacts views) are untouched. */
+.openui-claw-thread-container .openui-shell-thread-chat-panel {
+  flex: 1 1 100%;
+  min-width: 0;
+}
+
+/* ── Streaming loader (Shell.MessageLoading) ──────────────────────────────
+   react-ui ships a thin-bordered 32px pill with three tiny dots. Re-skin it
+   so it visually reads as the in-flight assistant bubble: left-aligned in
+   the message column, rounded-3xl, soft background, larger dots. */
+.openui-claw-thread-container .openui-shell-thread-message-loading {
+  display: flex;
+  justify-content: flex-start;
+  padding-left: 0;
+  padding-right: 0;
+  margin-top: var(--space-s);
+  margin-bottom: 40px;
+}
+
+.openui-claw-thread-container .openui-shell-thread-message-loading
+  .openui-message-loading-container {
+  height: auto;
+  padding: var(--space-m) var(--space-ml);
+  border-radius: 1.5rem;
+  border-color: rgb(var(--color-border-default) / 0.4);
+  background: rgb(var(--color-background));
+  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.04);
+}
+
+.dark
+  .openui-claw-thread-container
+  .openui-shell-thread-message-loading
+  .openui-message-loading-container {
+  border-color: rgb(var(--color-border-default) / 0.2);
+  background: rgb(var(--color-sunk-deep));
+}
+
+.openui-claw-thread-container .openui-shell-thread-message-loading
+  .openui-message-loading {
+  width: 32px;
+  aspect-ratio: 5;
+}
+
+/* ────────────────────────────────────────────────────────────────────────── */
+/* User preferences — font scale, sidebar density, accent skins              */
+/*                                                                            */
+/* Toggled via data-attributes on <html> (`data-claw-font-size`,              */
+/* `data-claw-density`, `data-claw-skin`) which are written by                */
+/* `lib/preferences.ts::apply()`. Defaults match `md`, `comfortable`, and     */
+/* `default` so first paint with no preferences set is unchanged.            */
+/* ────────────────────────────────────────────────────────────────────────── */
+
+html[data-claw-font-size="sm"] {
+  font-size: 14.5px;
+}
+html[data-claw-font-size="lg"] {
+  font-size: 17.5px;
+}
+
+/* Accent skins. Each overrides the small set of accent tokens used by
+   info/accent CSS; the rest of the palette stays as base (light/dark). */
+html[data-claw-skin="ocean"] {
+  --color-text-info-primary: #0E7490;
+  --color-info-background: #E0F2FE;
+  --color-text-accent-primary: 8 145 178;
+  --color-text-accent-secondary: 14 116 144;
+}
+html[data-claw-skin="ocean"].dark {
+  --color-text-info-primary: #67E8F9;
+  --color-info-background: #0C2A35;
+  --color-text-accent-primary: 103 232 249;
+  --color-text-accent-secondary: 34 211 238;
+}
+
+html[data-claw-skin="sunset"] {
+  --color-text-info-primary: #C2410C;
+  --color-info-background: #FFEDD5;
+  --color-text-accent-primary: 234 88 12;
+  --color-text-accent-secondary: 194 65 12;
+}
+html[data-claw-skin="sunset"].dark {
+  --color-text-info-primary: #FDBA74;
+  --color-info-background: #2B1A0E;
+  --color-text-accent-primary: 253 186 116;
+  --color-text-accent-secondary: 251 146 60;
+}
+
+html[data-claw-skin="forest"] {
+  --color-text-info-primary: #15803D;
+  --color-info-background: #DCFCE7;
+  --color-text-accent-primary: 22 163 74;
+  --color-text-accent-secondary: 21 128 61;
+}
+html[data-claw-skin="forest"].dark {
+  --color-text-info-primary: #86EFAC;
+  --color-info-background: #0F2A1A;
+  --color-text-accent-primary: 134 239 172;
+  --color-text-accent-secondary: 74 222 128;
+}
+
+html[data-claw-skin="mono"] {
+  --color-text-info-primary: #404040;
+  --color-info-background: #F4F4F5;
+  --color-text-accent-primary: 64 64 64;
+  --color-text-accent-secondary: 82 82 82;
+}
+html[data-claw-skin="mono"].dark {
+  --color-text-info-primary: #D4D4D4;
+  --color-info-background: #1F1F1F;
+  --color-text-accent-primary: 212 212 212;
+  --color-text-accent-secondary: 163 163 163;
+}

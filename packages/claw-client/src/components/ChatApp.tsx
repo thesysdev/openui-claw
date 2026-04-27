@@ -1,45 +1,45 @@
 "use client";
 
-import {
-  AppDetail,
-  type AppContinueConversationHandler,
-} from "@/components/apps/AppDetail";
+import { AgentsView } from "@/components/agents/AgentsView";
+import { AppDetail, type AppContinueConversationHandler } from "@/components/apps/AppDetail";
+import { AppsView } from "@/components/apps/AppsView";
 import { ArtifactDetail } from "@/components/artifacts/ArtifactDetail";
 import { ArtifactsView } from "@/components/artifacts/ArtifactsView";
+import { AgentTopBar } from "@/components/chat/AgentTopBar";
+import { EmptyChatWelcome } from "@/components/chat/EmptyChatWelcome";
+import { TopBar } from "@/components/chat/TopBar";
 import { CommandPalette } from "@/components/CommandPalette";
-import { AgentsView } from "@/components/agents/AgentsView";
-import { AppsView } from "@/components/apps/AppsView";
 import { CronsView } from "@/components/crons/CronsView";
 import { HomeView } from "@/components/home/HomeView";
 import { AppSidebar } from "@/components/layout/AppSidebar";
-import { MobileShell } from "@/components/layout/MobileShell";
+import { ClawThreadContainer } from "@/components/layout/ClawThreadContainer";
 import { DetailTopBar } from "@/components/layout/DetailTopBar";
-import {
-  NotificationInboxDrawer,
-  NotificationInboxPane,
-} from "@/components/notifications/NotificationInbox";
-import { AgentTopBar } from "@/components/chat/AgentTopBar";
-import { RefineTray } from "@/components/chat/RefineTray";
-import { TopBar } from "@/components/chat/TopBar";
+import { MobileShell } from "@/components/layout/MobileShell";
 import { IconButton } from "@/components/layout/sidebar/IconButton";
 import { CategoryTile, TextTile } from "@/components/layout/sidebar/Tile";
-import {
-  buildAppSiblings,
-  buildArtifactSiblings,
-  makeAgentNameResolver,
-} from "@/lib/siblings";
-import { useRefineTrayDrag } from "@/lib/hooks/useRefineTrayDrag";
+import { MobileAgentsView } from "@/components/mobile/MobileAgentsView";
+import { MobileAgentTopBar } from "@/components/mobile/MobileAgentTopBar";
+import { MobileAppDetail } from "@/components/mobile/MobileAppDetail";
+import { MobileAppsView } from "@/components/mobile/MobileAppsView";
+import { MobileArtifactDetail } from "@/components/mobile/MobileArtifactDetail";
+import { MobileArtifactsView } from "@/components/mobile/MobileArtifactsView";
+import { MobileCommandPalette } from "@/components/mobile/MobileCommandPalette";
+import { MobileCronsView } from "@/components/mobile/MobileCronsView";
+import { MobileHomeView } from "@/components/mobile/MobileHomeView";
+import { MobileNotificationInboxDrawer } from "@/components/mobile/MobileNotificationInboxDrawer";
+import { MobileSettingsDialog } from "@/components/mobile/MobileSettingsDialog";
+import { MobileWorkspaceDrawer } from "@/components/mobile/MobileWorkspaceDrawer";
 import { AssistantMessage } from "@/components/rendering/AssistantMessage";
 import { UserMessage } from "@/components/rendering/UserMessage";
 import { SessionComposer } from "@/components/session/SessionComposer";
-import { qualifyModel } from "@/lib/models";
 import { UploadPreviewPanel } from "@/components/session/SessionPreviewPanels";
 import {
   SessionWorkspaceDrawer,
   SessionWorkspacePane,
 } from "@/components/session/SessionWorkspacePane";
 import { SettingsDialog } from "@/components/settings/SettingsDialog";
-import { bootstrapThemeFromStorage } from "@/lib/hooks/useTheme";
+import { SettingsView } from "@/components/settings/SettingsView";
+import { SkillsView } from "@/components/skills/SkillsView";
 import { loadPinnedAppIds, savePinnedAppIds } from "@/lib/app-pins";
 import { openClawAdapter } from "@/lib/chat/openClawAdapter";
 import { serializeAssistantTimelineContent } from "@/lib/chat/timeline";
@@ -48,6 +48,7 @@ import {
   sessionRouteIdFromSessionKey,
   useGateway,
 } from "@/lib/chat/useGateway";
+import { isTabHidden, playCompletionChime } from "@/lib/chime";
 import type { CommandContext, CommandMessageSnapshot } from "@/lib/commands";
 import type { CronJobRecord, CronRunEntry, CronStatusRecord } from "@/lib/cron";
 import type {
@@ -63,33 +64,10 @@ import type {
 import { ConnectionState } from "@/lib/gateway/types";
 import { navigate, useHashRoute } from "@/lib/hooks/useHashRoute";
 import { useIsMobile } from "@/lib/hooks/useIsMobile";
-import { MobileAgentsView } from "@/components/mobile/MobileAgentsView";
-import { MobileAppsView } from "@/components/mobile/MobileAppsView";
-import { MobileArtifactsView } from "@/components/mobile/MobileArtifactsView";
-import { MobileCommandPalette } from "@/components/mobile/MobileCommandPalette";
-import { MobileCronsView } from "@/components/mobile/MobileCronsView";
-import { MobileHomeView } from "@/components/mobile/MobileHomeView";
-import { MobileAgentTopBar } from "@/components/mobile/MobileAgentTopBar";
-import { MobileAppDetail } from "@/components/mobile/MobileAppDetail";
-import { MobileArtifactDetail } from "@/components/mobile/MobileArtifactDetail";
-import { MobileNotificationInboxDrawer } from "@/components/mobile/MobileNotificationInboxDrawer";
-import { MobileSettingsDialog } from "@/components/mobile/MobileSettingsDialog";
-import { MobileWorkspaceDrawer } from "@/components/mobile/MobileWorkspaceDrawer";
+import { bootstrapThemeFromStorage } from "@/lib/hooks/useTheme";
+import { qualifyModel } from "@/lib/models";
 import type { NotificationRecord } from "@/lib/notifications";
-import {
-  MOCK_APPS,
-  MOCK_APP_STORE,
-  MOCK_ARTIFACTS,
-  MOCK_ARTIFACT_STORE,
-  MOCK_AVAILABLE_MODELS,
-  MOCK_CRON_JOBS,
-  MOCK_CRON_RUNS,
-  MOCK_MESSAGES,
-  MOCK_NOTIFICATIONS,
-  MOCK_SESSION_META,
-  MOCK_THREAD_LIST,
-  USE_MOCK_DATA,
-} from "@/lib/mock-data";
+import { apply as applyPreferences, getPreferences } from "@/lib/preferences";
 import {
   EMPTY_THREAD_WORKSPACE,
   deriveThreadWorkspaceFromMessages,
@@ -101,7 +79,8 @@ import {
   type ThreadUpload,
   type ThreadWorkspaceState,
 } from "@/lib/session-workspace";
-import { getSettings } from "@/lib/storage";
+import { buildAppSiblings, buildArtifactSiblings, makeAgentNameResolver } from "@/lib/siblings";
+import { getSettings, type Settings } from "@/lib/storage";
 import { UploadsProvider, type UploadsSeed } from "@/lib/uploads-context";
 import type { ClawThread } from "@/types/claw-thread";
 import type { ClawThreadListItem, ModelChoice, SessionRow } from "@/types/gateway-responses";
@@ -113,8 +92,17 @@ import {
   useThread,
   useThreadList,
 } from "@openuidev/react-headless";
-import { Shell, ThemeProvider } from "@openuidev/react-ui";
-import { BellRing, Database, FileText, LayoutGrid, PanelRightOpen, Plus, X } from "lucide-react";
+import { ArtifactPanel, ArtifactPortalTarget, Shell, ThemeProvider } from "@openuidev/react-ui";
+import {
+  ArrowLeft,
+  BellRing,
+  Database,
+  FileText,
+  LayoutGrid,
+  PanelRightOpen,
+  Plus,
+  X,
+} from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 // Same default used by FullScreen — swap for a custom Claw logo later.
@@ -227,6 +215,7 @@ function ThreadArea({
   pendingPreviewOpen,
   onConsumePendingPreview,
   onRefineApp,
+  onRefineArtifact,
   onAppContinueConversation,
   workspacePaneCollapsed,
   onToggleWorkspacePaneCollapsed,
@@ -260,6 +249,7 @@ function ThreadArea({
   pendingPreviewOpen: { threadId: string; previewId: string } | null;
   onConsumePendingPreview: () => void;
   onRefineApp: (record: AppRecord) => void | Promise<void>;
+  onRefineArtifact: (record: ArtifactRecord) => void | Promise<void>;
   onAppContinueConversation: AppContinueConversationHandler;
   workspacePaneCollapsed: boolean;
   onToggleWorkspacePaneCollapsed: (collapsed: boolean) => void;
@@ -272,34 +262,20 @@ function ThreadArea({
   const setThreadMessages = useThread((state) => state.setMessages);
   const artifactStore = useArtifactStore();
 
-  // Mock mode: load messages directly on thread selection since the
-  // gateway-driven `onSessionChanged` event never fires.
-  useEffect(() => {
-    if (!USE_MOCK_DATA || !selectedThreadId) return;
-    void loadThread(selectedThreadId).then(setThreadMessages);
-  }, [selectedThreadId, loadThread, setThreadMessages]);
   const { activeArtifactId } = useActiveArtifact();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Close the fullscreen artifact preview on Escape.
+  useEffect(() => {
+    if (!activeArtifactId) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") artifactStore.getState().closeArtifact(activeArtifactId);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [activeArtifactId, artifactStore]);
   const previousRunningRef = useRef(false);
   const isMobile = useIsMobile();
-  // Embed mode — rendered inside the refine tray iframe. URL carries `?embed=1`.
-  const isEmbed =
-    typeof window !== "undefined" &&
-    new URLSearchParams(window.location.search).get("embed") === "1";
-  // Sync the iframe's dark-class with its parent so the embedded chat picks
-  // up the active theme. Same-origin → we can reach into window.parent safely.
-  useEffect(() => {
-    if (!isEmbed) return;
-    try {
-      const parentIsDark =
-        window.parent?.document?.documentElement?.classList?.contains("dark") ??
-        false;
-      if (parentIsDark) document.documentElement.classList.add("dark");
-      else document.documentElement.classList.remove("dark");
-    } catch {
-      // cross-origin: nothing we can do — parent is expected to be same-origin.
-    }
-  }, [isEmbed]);
   const [commandToast, setCommandToast] = useState<{
     message: string;
     kind: "info" | "success" | "error";
@@ -323,23 +299,6 @@ function ThreadArea({
   } | null>(null);
   const [mobileWorkspaceOpen, setMobileWorkspaceOpen] = useState(false);
 
-  // Listen for workspace-open messages from the refine tray's parent
-  // (when this page is loaded inside the refine tray iframe with `?embed=1`).
-  useEffect(() => {
-    if (!isEmbed) return;
-    const onMessage = (e: MessageEvent) => {
-      if (e.data?.type === "claw:toggle-workspace")
-        setMobileWorkspaceOpen((o) => !o);
-      if (e.data?.type === "claw:open-workspace") setMobileWorkspaceOpen(true);
-    };
-    window.addEventListener("message", onMessage);
-    return () => window.removeEventListener("message", onMessage);
-  }, [isEmbed]);
-
-  // Refine tray — slides in from the left of the full-screen preview modal
-  // showing the parent agent's chat. Resizable via drag handle on the right.
-  const refineTray = useRefineTrayDrag();
-
   const sessionKey = useMemo(() => {
     if (!selectedThreadId) return null;
     return resolveChatSessionKey(selectedThreadId, knownAgentIds.current);
@@ -350,60 +309,45 @@ function ThreadArea({
     (selectedThreadId ? workspaceByThread[selectedThreadId] : undefined) ?? EMPTY_THREAD_WORKSPACE;
 
   /**
-   * Agent id for the current thread. The workspace pane shows everything
-   * scoped to the agent (across all its sessions), not just the active
-   * thread, so we key off this.
+   * Agent id for the current thread. Used for cross-session lookups (e.g. the
+   * uploads aggregation below) but NOT for apps/artifacts — those are scoped
+   * per-session.
    */
   const activeAgentId = useMemo(() => {
     if (!selectedThreadId) return null;
-    const t = (allThreadsRaw as unknown as ClawThread[]).find(
-      (x) => x.id === selectedThreadId,
-    );
+    const t = (allThreadsRaw as unknown as ClawThread[]).find((x) => x.id === selectedThreadId);
     return t?.clawAgentId ?? t?.id ?? null;
   }, [allThreadsRaw, selectedThreadId]);
 
+  /** Display name for the agent owning the current thread (the `clawKind:
+   *  "main"` thread's title). Used by the empty-chat welcome screen. */
+  const activeAgentName = useMemo(() => {
+    if (!activeAgentId) return undefined;
+    const main = (allThreadsRaw as unknown as ClawThread[]).find(
+      (t) => (t.clawAgentId ?? t.id) === activeAgentId && t.clawKind === "main",
+    );
+    return main?.title;
+  }, [allThreadsRaw, activeAgentId]);
+
   const sessionApps = useMemo(
-    () => (activeAgentId ? appList.filter((app) => app.agentId === activeAgentId) : []),
-    [appList, activeAgentId],
+    () => (sessionKey ? appList.filter((app) => app.sessionKey === sessionKey) : []),
+    [appList, sessionKey],
   );
 
   const sessionArtifacts = useMemo(
     () =>
-      activeAgentId
-        ? artifactList.filter((artifact) => artifact.source.agentId === activeAgentId)
-        : [],
-    [artifactList, activeAgentId],
+      sessionKey ? artifactList.filter((artifact) => artifact.source.sessionId === sessionKey) : [],
+    [artifactList, sessionKey],
   );
 
   const paneApps = sessionApps;
   const paneArtifacts = sessionArtifacts;
-  /**
-   * Context (uploads) aggregated across every thread belonging to the
-   * current agent, deduped by upload id. Mirrors the apps/artifacts
-   * behavior where the pane shows everything scoped to the agent, not
-   * just the active thread.
-   */
-  const paneUploads = useMemo(() => {
-    if (!activeAgentId) return workspace.uploads;
-    const agentThreadIds = (allThreadsRaw as unknown as ClawThread[])
-      .filter((t) => (t.clawAgentId ?? t.id) === activeAgentId)
-      .map((t) => t.id);
-    const seen = new Set<string>();
-    const all: typeof workspace.uploads = [];
-    for (const tid of agentThreadIds) {
-      const uploads = workspaceByThread[tid]?.uploads ?? [];
-      for (const u of uploads) {
-        if (seen.has(u.id)) continue;
-        seen.add(u.id);
-        all.push(u);
-      }
-    }
-    return all;
-  }, [activeAgentId, allThreadsRaw, workspace.uploads, workspaceByThread]);
+  // Uploads scoped to the active thread only — mirrors the per-session
+  // filtering we apply to apps/artifacts above.
+  const paneUploads = workspace.uploads;
   const paneLinkedApp = workspace.linkedApp;
 
   const workspaceCount = paneUploads.length + (paneLinkedApp ? 1 : 0);
-
 
   useEffect(() => {
     const wasRunning = previousRunningRef.current;
@@ -420,6 +364,12 @@ function ThreadArea({
 
     if (wasRunning && !isRunning) {
       onRefreshSummaries();
+      // Soft chime when the assistant finishes while the user is on another
+      // tab/window. Pref-gated; checking inside the callback (not at mount)
+      // means toggling the pref takes effect on the very next completion.
+      if (getPreferences().notificationSound && isTabHidden()) {
+        playCompletionChime();
+      }
     }
 
     previousRunningRef.current = isRunning;
@@ -498,18 +448,15 @@ function ThreadArea({
     }
   }, [artifactStore, onConsumePendingPreview, pendingPreviewOpen, selectedThreadId]);
 
-  const handleFilesSelected = useCallback(
-    async (event: React.ChangeEvent<HTMLInputElement>) => {
-      if (!selectedThreadId) return;
-      const files = Array.from(event.target.files ?? []);
-      if (files.length === 0) return;
+  const addFiles = useCallback(
+    async (files: File[]) => {
+      if (!selectedThreadId || files.length === 0) return;
 
       const nextUploads = await Promise.all(files.map((file) => fileToThreadUpload(file)));
       onUpdateThreadWorkspace(selectedThreadId, (current) => ({
         ...current,
         uploads: [...current.uploads, ...nextUploads],
       }));
-      event.target.value = "";
 
       // Persist bytes to the plugin's UploadStore so previews survive reload
       // after OpenClaw's 2-minute media TTL expires. Use the resolved session
@@ -551,6 +498,15 @@ function ThreadArea({
       }
     },
     [onUpdateThreadWorkspace, selectedThreadId, sessionKey, uploads],
+  );
+
+  const handleFilesSelected = useCallback(
+    async (event: React.ChangeEvent<HTMLInputElement>) => {
+      const files = Array.from(event.target.files ?? []);
+      event.target.value = "";
+      await addFiles(files);
+    },
+    [addFiles],
   );
 
   const openFilePicker = useCallback(() => {
@@ -606,15 +562,7 @@ function ThreadArea({
       toast: (message, kind = "info") => setCommandToast({ message, kind }),
       downloadBlob,
     };
-  }, [
-    apps,
-    artifacts,
-    downloadBlob,
-    meta,
-    selectedThreadId,
-    threadMessages,
-    uploads,
-  ]);
+  }, [apps, artifacts, downloadBlob, meta, selectedThreadId, threadMessages, uploads]);
 
   // Gateway commands that map 1:1 to a dedicated RPC. Dispatching these
   // through `chat.send` doesn't trigger the gateway's command handler for the
@@ -693,16 +641,43 @@ function ThreadArea({
           onChange={handleFilesSelected}
         />
 
-        <Shell.ThreadContainer className="openui-claw-thread-container min-w-0 flex-1">
-          {isEmbed || isMobile ? null : <Shell.MobileHeader />}
+        <ClawThreadContainer className="openui-claw-thread-container min-w-0 flex-1">
+          {/* `Shell.MobileHeader` was previously rendered here. It stacked
+              on top of `AgentTopBar` on mobile and its buttons routed to
+              react-headless / Shell's own sidebar, neither of which we
+              use — the hamburger went nowhere useful and its "+" called
+              `switchToNewThread` instead of our `createSession` flow.
+              Dropped so AgentTopBar is the sole chat header on mobile. */}
           {(() => {
             // Derive the top-bar data from the current thread list. Scoped
             // into an IIFE so we don't leak locals elsewhere.
             const allThreads = allThreadsRaw as unknown as ClawThread[];
-            const currentThread = allThreads.find(
-              (t) => t.id === selectedThreadId,
-            );
-            if (!currentThread) return null;
+            const currentThread = allThreads.find((t) => t.id === selectedThreadId);
+            // Fresh-session race: createSession resolves and we navigate to
+            // the new thread id before `loadThreads` has pushed it into the
+            // thread list. Rather than render a blank header (which the user
+            // reads as "broken"), render a minimal placeholder bar with a
+            // back affordance so the chat surface still has a chrome.
+            if (!currentThread) {
+              return (
+                <TopBar
+                  leading={
+                    <button
+                      type="button"
+                      onClick={() => navigate({ view: isMobile ? "agents" : "home" })}
+                      className="flex h-8 w-8 items-center justify-center rounded-m text-text-neutral-secondary hover:bg-foreground"
+                      aria-label="Back"
+                    >
+                      <ArrowLeft size={16} />
+                    </button>
+                  }
+                >
+                  <span className="font-heading text-md font-medium text-text-neutral-primary">
+                    New chat
+                  </span>
+                </TopBar>
+              );
+            }
             const currentAgentId = currentThread.clawAgentId ?? currentThread.id;
             // Map of agentId → main thread title (or first thread title as fallback).
             const agentNameMap = new Map<string, string>();
@@ -787,17 +762,42 @@ function ThreadArea({
                     allThreads.find(
                       (t) => (t.clawAgentId ?? t.id) === a.id && t.clawKind === "main",
                     ) ?? allThreads.find((t) => (t.clawAgentId ?? t.id) === a.id);
-                  if (target)
-                    navigate({ view: "chat", sessionId: target.id });
+                  if (target) navigate({ view: "chat", sessionId: target.id });
                 }}
                 onSelectSession={(threadId) =>
                   navigate({ view: "chat", sessionId: threadId })
                 }
                 onNewSession={onNewSession}
+                // On mobile, the workspace pane is a drawer instead of the
+                // permanent right-rail. Surface a toggle in the chat header
+                // since the desktop expand-rail doesn't exist here.
+                onOpenWorkspace={isMobile ? () => setMobileWorkspaceOpen(true) : undefined}
               />
             );
           })()}
+          {workspace.linkedApp ? (
+            <div className="sticky top-0 z-20 flex items-center justify-between gap-3 border-b border-border-default/40 bg-info-background px-ml py-2 text-sm dark:border-border-default/16">
+              <div className="flex min-w-0 items-center gap-2">
+                <span className="font-medium text-text-info-primary">Refining</span>
+                <span className="truncate text-text-info-primary">{workspace.linkedApp.title}</span>
+              </div>
+              <button
+                type="button"
+                className="shrink-0 text-sm font-medium text-text-info-primary underline underline-offset-2 hover:opacity-80"
+                onClick={() => {
+                  if (!selectedThreadId) return;
+                  onUpdateThreadWorkspace(selectedThreadId, (current) => ({
+                    ...current,
+                    linkedApp: null,
+                  }));
+                }}
+              >
+                Cancel refine
+              </button>
+            </div>
+          ) : null}
           <Shell.ScrollArea>
+            <EmptyChatWelcome agentName={activeAgentName} />
             {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
             <Shell.Messages
               assistantMessage={AssistantMessage}
@@ -809,6 +809,7 @@ function ThreadArea({
             uploads={workspace.uploads}
             linkedApp={workspace.linkedApp}
             onPickFiles={openFilePicker}
+            onAddFiles={addFiles}
             onRemoveUpload={(uploadId) => {
               if (!selectedThreadId) return;
               onRemoveUpload(selectedThreadId, uploadId);
@@ -822,11 +823,7 @@ function ThreadArea({
             gatewayCommands={gatewayCommands}
             onDispatchGatewayCommand={dispatchGatewayCommand}
             models={availableModels}
-            currentModel={
-              meta?.model
-                ? qualifyModel(meta.model, meta.modelProvider ?? "")
-                : ""
-            }
+            currentModel={meta?.model ? qualifyModel(meta.model, meta.modelProvider ?? "") : ""}
             currentEffort={meta?.thinkingLevel ?? ""}
             onModelChange={
               sessionKey
@@ -870,113 +867,107 @@ function ThreadArea({
               </div>
             </div>
           )}
-        </Shell.ThreadContainer>
+        </ClawThreadContainer>
 
-        {activeArtifactId ? (() => {
-          const appMatch = activeArtifactId.startsWith("session-app:")
-            ? activeArtifactId.slice("session-app:".length)
-            : null;
-          const artifactMatch = activeArtifactId.startsWith("session-artifact:")
-            ? activeArtifactId.slice("session-artifact:".length)
-            : null;
-          const uploadMatch = activeArtifactId.startsWith("session-upload:")
-            ? activeArtifactId.slice("session-upload:".length)
-            : null;
-          const app = appMatch ? paneApps.find((a) => a.id === appMatch) : null;
-          const artifact = artifactMatch
-            ? paneArtifacts.find((a) => a.id === artifactMatch)
-            : null;
-          const upload = uploadMatch
-            ? paneUploads.find((u) => u.id === uploadMatch)
-            : null;
-          const handleClose = () =>
-            artifactStore.getState().closeArtifact(activeArtifactId);
-          if (!app && !artifact && !upload) return null;
-          if (upload) {
-            return (
-              <div className="fixed inset-0 z-[60] flex flex-col bg-background dark:bg-sunk">
-                <DetailTopBar title={upload.name} onClose={handleClose} />
-                <div className="min-h-0 flex-1 overflow-auto bg-sunk-light dark:bg-sunk-deep">
-                  <UploadPreviewPanel upload={upload} uploadStore={uploads} />
-                </div>
-              </div>
-            );
-          }
+        {(() => {
+          // Fullscreen artifact preview surface. We register one
+          // <ArtifactPanel> per known app/artifact below; whichever is active
+          // (per the artifact store) portals its content into our
+          // <ArtifactPortalTarget>. No <ArtifactPanel> = no portal = nothing
+          // renders — so there's no empty side-pane animation while data
+          // loads, and our own modal layer is gone.
           const threadsAll = allThreadsRaw as unknown as ClawThread[];
           const agentNameFor = makeAgentNameResolver(threadsAll);
-          const resolveRefineThreadId = (sessionKey: string | undefined) =>
-            sessionKey
-              ? sessionRouteIdFromSessionKey(sessionKey, knownAgentIds.current)
-              : null;
-          // Open the refine tray instead of navigating away — lets the user
-          // see the parent agent's chat alongside the live app modal.
-          const handleRefineApp = (record: AppRecord) => {
-            const id = resolveRefineThreadId(record.sessionKey);
-            if (id) refineTray.openFor(id);
-          };
-          const handleRefineArtifact = (record: ArtifactRecord) => {
-            const id = resolveRefineThreadId(record.source?.sessionId);
-            if (id) refineTray.openFor(id);
+          const handleClose = () => {
+            if (activeArtifactId) artifactStore.getState().closeArtifact(activeArtifactId);
           };
           const appSiblings = buildAppSiblings(appList, agentNameFor);
           const artifactSiblings = buildArtifactSiblings(artifactList, agentNameFor);
-          const trayAgentId = refineTray.threadId
-            ? threadsAll.find((t) => t.id === refineTray.threadId)?.clawAgentId ??
-              threadsAll.find((t) => t.id === refineTray.threadId)?.id ??
-              "agent"
-            : "agent";
           return (
-            <div className="absolute inset-0 z-[60] flex bg-background dark:bg-sunk">
-              <RefineTray
-                threadId={refineTray.threadId}
-                agentName={agentNameFor(trayAgentId)}
-                width={refineTray.width}
-                onDragStart={refineTray.onDragStart}
-                onClose={refineTray.close}
-              />
-
-              <div className="flex min-w-0 flex-1 flex-col">
-                {app && apps ? (
-                  <AppDetail
-                    appId={app.id}
-                    apps={apps}
-                    updatedAt={app.updatedAt}
-                    mode="panel"
-                    isPinned={pinnedAppIds.has(app.id)}
-                    onTogglePinned={onTogglePinned}
-                    onRefine={handleRefineApp}
-                    onContinueConversation={onAppContinueConversation}
-                    onDeleted={onRefreshSummaries}
-                    onClose={handleClose}
-                    siblings={appSiblings}
-                    onSwitch={(nextAppId) =>
-                      artifactStore
-                        .getState()
-                        .openArtifact(sessionAppPreviewId(nextAppId))
-                    }
-                  />
-                ) : null}
-                {artifact && artifacts ? (
-                  <ArtifactDetail
-                    artifactId={artifact.id}
-                    artifacts={artifacts}
-                    updatedAt={artifact.updatedAt}
-                    mode="panel"
-                    onDeleted={onRefreshSummaries}
-                    onClose={handleClose}
-                    onRefine={handleRefineArtifact}
-                    siblings={artifactSiblings}
-                    onSwitch={(nextArtId) =>
-                      artifactStore
-                        .getState()
-                        .openArtifact(sessionArtifactPreviewId(nextArtId))
-                    }
-                  />
-                ) : null}
+            <>
+              <div
+                className={
+                  activeArtifactId
+                    ? "absolute inset-0 z-[60] flex bg-background dark:bg-sunk"
+                    : "hidden"
+                }
+              >
+                <div className="flex min-w-0 flex-1 flex-col">
+                  <ArtifactPortalTarget className="h-full w-full" />
+                </div>
               </div>
-            </div>
+
+              {paneApps.map((app) => (
+                <ArtifactPanel
+                  key={`${app.id}:${app.updatedAt}`}
+                  artifactId={sessionAppPreviewId(app.id)}
+                  title={app.title}
+                  header={false}
+                >
+                  {apps ? (
+                    <AppDetail
+                      appId={app.id}
+                      apps={apps}
+                      updatedAt={app.updatedAt}
+                      mode="panel"
+                      isPinned={pinnedAppIds.has(app.id)}
+                      onTogglePinned={onTogglePinned}
+                      onRefine={onRefineApp}
+                      onContinueConversation={onAppContinueConversation}
+                      onDeleted={onRefreshSummaries}
+                      onClose={handleClose}
+                      siblings={appSiblings}
+                      onSwitch={(nextAppId) =>
+                        artifactStore.getState().openArtifact(sessionAppPreviewId(nextAppId))
+                      }
+                    />
+                  ) : null}
+                </ArtifactPanel>
+              ))}
+
+              {paneArtifacts.map((artifact) => (
+                <ArtifactPanel
+                  key={`${artifact.id}:${artifact.updatedAt}`}
+                  artifactId={sessionArtifactPreviewId(artifact.id)}
+                  title={artifact.title}
+                  header={false}
+                >
+                  {artifacts ? (
+                    <ArtifactDetail
+                      artifactId={artifact.id}
+                      artifacts={artifacts}
+                      updatedAt={artifact.updatedAt}
+                      mode="panel"
+                      onDeleted={onRefreshSummaries}
+                      onClose={handleClose}
+                      onRefine={onRefineArtifact}
+                      siblings={artifactSiblings}
+                      onSwitch={(nextArtId) =>
+                        artifactStore.getState().openArtifact(sessionArtifactPreviewId(nextArtId))
+                      }
+                    />
+                  ) : null}
+                </ArtifactPanel>
+              ))}
+
+              {paneUploads.map((upload) => (
+                <ArtifactPanel
+                  key={upload.id}
+                  artifactId={sessionUploadPreviewId(upload.id)}
+                  title={upload.name}
+                  header={false}
+                >
+                  <div className="flex h-full flex-col">
+                    <DetailTopBar title={upload.name} onClose={handleClose} />
+                    <div className="min-h-0 flex-1 overflow-auto bg-sunk-light dark:bg-sunk-deep">
+                      <UploadPreviewPanel upload={upload} uploadStore={uploads} />
+                    </div>
+                  </div>
+                </ArtifactPanel>
+              ))}
+            </>
           );
-        })() : null}
+        })()}
 
         {isMobile ? (
           <MobileWorkspaceDrawer
@@ -1036,7 +1027,7 @@ function ThreadArea({
           />
         )}
 
-        {isEmbed ? null : workspacePaneCollapsed ? (
+        {workspacePaneCollapsed ? (
           <aside className="hidden h-full w-12 shrink-0 flex-col items-center overflow-y-auto border-l border-border-default/50 bg-transparent dark:border-border-default/16 lg:flex">
             <div className="flex min-h-[48px] w-full items-center justify-center border-b border-border-default px-2xs dark:border-border-default/16">
               <IconButton
@@ -1064,7 +1055,11 @@ function ThreadArea({
                     }
                     className="rounded-m p-2xs transition-colors hover:bg-sunk-light dark:hover:bg-highlight-subtle"
                   >
-                    <TextTile label={app.title} category={isActive ? "apps" : null} active={isActive} />
+                    <TextTile
+                      label={app.title}
+                      category={isActive ? "apps" : null}
+                      active={isActive}
+                    />
                   </button>
                 );
               })}
@@ -1076,17 +1071,14 @@ function ThreadArea({
             <div className="flex w-full flex-col items-center gap-2xs py-m">
               <CategoryTile icon={FileText} category="artifacts" subtle />
               {paneArtifacts.map((art) => {
-                const isActive =
-                  activeArtifactId === sessionArtifactPreviewId(art.id);
+                const isActive = activeArtifactId === sessionArtifactPreviewId(art.id);
                 return (
                   <button
                     key={art.id}
                     type="button"
                     title={art.title}
                     onClick={() =>
-                      artifactStore
-                        .getState()
-                        .openArtifact(sessionArtifactPreviewId(art.id))
+                      artifactStore.getState().openArtifact(sessionArtifactPreviewId(art.id))
                     }
                     className="rounded-m p-2xs transition-colors hover:bg-sunk-light dark:hover:bg-highlight-subtle"
                   >
@@ -1105,41 +1097,38 @@ function ThreadArea({
             {/* Context */}
             <div className="flex w-full flex-col items-center gap-2xs py-m">
               <CategoryTile icon={Database} category="home" subtle />
-              {paneLinkedApp ? (() => {
-                const isActive =
-                  activeArtifactId ===
-                  sessionAppPreviewId(paneLinkedApp.appId);
-                return (
-                  <button
-                    type="button"
-                    title={paneLinkedApp.title}
-                    onClick={() =>
-                      artifactStore
-                        .getState()
-                        .openArtifact(sessionAppPreviewId(paneLinkedApp.appId))
-                    }
-                    className="rounded-m p-2xs transition-colors hover:bg-sunk-light dark:hover:bg-highlight-subtle"
-                  >
-                    <TextTile
-                      label={paneLinkedApp.title}
-                      category={isActive ? "apps" : null}
-                      active={isActive}
-                    />
-                  </button>
-                );
-              })() : null}
+              {paneLinkedApp
+                ? (() => {
+                    const isActive = activeArtifactId === sessionAppPreviewId(paneLinkedApp.appId);
+                    return (
+                      <button
+                        type="button"
+                        title={paneLinkedApp.title}
+                        onClick={() =>
+                          artifactStore
+                            .getState()
+                            .openArtifact(sessionAppPreviewId(paneLinkedApp.appId))
+                        }
+                        className="rounded-m p-2xs transition-colors hover:bg-sunk-light dark:hover:bg-highlight-subtle"
+                      >
+                        <TextTile
+                          label={paneLinkedApp.title}
+                          category={isActive ? "apps" : null}
+                          active={isActive}
+                        />
+                      </button>
+                    );
+                  })()
+                : null}
               {paneUploads.map((upload) => {
-                const isActive =
-                  activeArtifactId === sessionUploadPreviewId(upload.id);
+                const isActive = activeArtifactId === sessionUploadPreviewId(upload.id);
                 return (
                   <button
                     key={upload.id}
                     type="button"
                     title={upload.name}
                     onClick={() =>
-                      artifactStore
-                        .getState()
-                        .openArtifact(sessionUploadPreviewId(upload.id))
+                      artifactStore.getState().openArtifact(sessionUploadPreviewId(upload.id))
                     }
                     className="rounded-m p-2xs transition-colors hover:bg-sunk-light dark:hover:bg-highlight-subtle"
                   >
@@ -1188,6 +1177,7 @@ function ThreadArea({
 interface ChatAppInnerProps {
   connectionState: ConnectionState;
   onSettingsClick: () => void;
+  onSettingsSave: (settings: Settings) => void;
   createSession: (agentId: string) => Promise<string | null>;
   renameSession: (threadId: string, label: string) => Promise<boolean>;
   deleteSession: (threadId: string) => Promise<boolean>;
@@ -1233,12 +1223,18 @@ interface ChatAppInnerProps {
     runs: CronRunEntry[];
     status: CronStatusRecord | null;
   }>;
+  onUpdateCronJob: (id: string, patch: Record<string, unknown>) => Promise<boolean>;
+  onRunCronJob: (id: string, mode?: "force" | "due") => Promise<boolean>;
+  onRemoveCronJob: (id: string) => Promise<boolean>;
   gatewayCommands: GatewayCommand[];
+  listSkills: (agentId?: string) => Promise<import("@/lib/engines/types").SkillStatusEntry[]>;
+  setSkillEnabled: (skillKey: string, enabled: boolean) => Promise<boolean>;
 }
 
 function ChatAppInner({
   connectionState,
   onSettingsClick,
+  onSettingsSave,
   createSession,
   renameSession,
   deleteSession,
@@ -1275,7 +1271,12 @@ function ChatAppInner({
   cronRuns,
   cronStatus,
   onRefreshCronData,
+  onUpdateCronJob,
+  onRunCronJob,
+  onRemoveCronJob,
   gatewayCommands,
+  listSkills,
+  setSkillEnabled,
 }: ChatAppInnerProps) {
   // Extra (non-destructured-above) props that flow through ChatAppInner.
   // Using `arguments` would be noisy; re-grab via a local re-assignment.
@@ -1285,21 +1286,10 @@ function ChatAppInner({
   const selectedThreadIsRunning = useThread((state) => state.isRunning);
   const dispatchChatProcessMessage = useThread((state) => state.processMessage);
 
-  // Mock mode bootstraps the thread list immediately since there's no gateway
-  // connection to drive the auto-fetch.
-  useEffect(() => {
-    if (USE_MOCK_DATA) loadThreads();
-  }, [loadThreads]);
-
   const [mobileNotificationInboxOpen, setMobileNotificationInboxOpen] = useState(false);
   const [notificationPaneCollapsed, setNotificationPaneCollapsed] = useState(false);
   const [workspacePaneCollapsed, setWorkspacePaneCollapsed] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
-  // Refine tray for the standalone app/artifact route views — same hook used
-  // by the in-chat modal, separate instance since the two views are mutually
-  // exclusive.
-  const routeRefineTray = useRefineTrayDrag();
-
 
   useEffect(() => {
     const listener = (event: KeyboardEvent) => {
@@ -1313,7 +1303,13 @@ function ChatAppInner({
   }, []);
   const [toastNotices, setToastNotices] = useState<NotificationToastNotice[]>([]);
   const notificationIdsRef = useRef<Set<string>>(new Set());
-  const notificationsPrimedRef = useRef(false);
+  // Anchor "what counts as new" to page-load time, not to the first render.
+  // The first render lands before `engine.listNotifications()` resolves, so a
+  // primer-set-based check would treat the entire async-loaded list as new
+  // on every reload and pop a toast for each one. Anything with `createdAt`
+  // earlier than this timestamp is a pre-existing notification, not a new
+  // one to surface.
+  const notificationLoadTimeRef = useRef<number>(Date.now());
   const unreadNotificationCount = useMemo(
     () => notifications.filter((notification) => notification.unread).length,
     [notifications],
@@ -1524,38 +1520,108 @@ function ChatAppInner({
     }
   }, [connectionState, route, selectedThreadId, selectThread]);
 
-  const handleRefineApp = useCallback(
-    async (record: AppRecord) => {
-      const nextThreadId = record.sessionKey
-        ? sessionRouteIdFromSessionKey(record.sessionKey, knownAgentIds.current)
-        : await createSession(record.agentId);
+  /**
+   * Resolve where a refine click should land:
+   *   1. originating session (sessionKey → routed thread id)
+   *   2. agent's `clawKind === "main"` thread, if the originating one is gone
+   *   3. fresh session under the agent, as a last resort
+   * Returns `null` only if we have no agent to attach to either.
+   */
+  const resolveRefineThreadId = useCallback(
+    async (sessionKey: string | undefined, agentId: string | undefined) => {
+      if (sessionKey) {
+        const candidate = sessionRouteIdFromSessionKey(sessionKey, knownAgentIds.current);
+        const exists = (threads as unknown as ClawThread[]).some((t) => t.id === candidate);
+        if (exists) return candidate;
+      }
+      if (agentId) {
+        const main = (threads as unknown as ClawThread[]).find(
+          (t) => (t.clawAgentId ?? t.id) === agentId && t.clawKind === "main",
+        );
+        if (main) return main.id;
+        return await createSession(agentId);
+      }
+      return null;
+    },
+    [createSession, knownAgentIds, threads],
+  );
+
+  /**
+   * Drop the user back into the chat thread that produced an app/artifact and
+   * prefill the composer with a refine instruction. Replaces the old iframe
+   * iframe RefineTray flow — same gateway, same store, no embed mode.
+   *
+   * Composer prefill is delivered via a window event the SessionComposer
+   * listens for in a useEffect. We dispatch on the next animation frame so
+   * the composer has had a chance to mount when navigating from a route
+   * that doesn't render it (e.g. /apps/<id> → /chat/<threadId>).
+   */
+  const refineInChat = useCallback(
+    async (
+      target: { kind: "app"; record: AppRecord } | { kind: "artifact"; record: ArtifactRecord },
+    ) => {
+      const sessionKey =
+        target.kind === "app" ? target.record.sessionKey : target.record.source?.sessionId;
+      const agentId = target.kind === "app" ? target.record.agentId : target.record.source?.agentId;
+      const nextThreadId = await resolveRefineThreadId(sessionKey, agentId);
       if (!nextThreadId) return;
 
-      onUpdateThreadWorkspace(nextThreadId, (current) => ({
-        ...current,
-        linkedApp: {
-          appId: record.id,
-          title: record.title,
-          agentId: record.agentId,
-          sessionKey: record.sessionKey,
-        },
-      }));
-      onSetPendingPreviewOpen({
-        threadId: nextThreadId,
-        previewId: sessionAppPreviewId(record.id),
-      });
+      if (target.kind === "app") {
+        // Link the app to the thread so the workspace pane "Refining ..." chip
+        // shows up. We deliberately do NOT auto-open the artifact panel here:
+        // when the user clicked Refine from the standalone `/apps/<id>` page,
+        // they were already looking at the app full-screen, and re-opening it
+        // as an artifact panel in the new chat covers the composer
+        // ("the chat hides"). Artifact refine has the same shape and works
+        // fine because it doesn't auto-open. If the user wants the preview
+        // visible alongside the chat, the workspace pane already exposes it.
+        onUpdateThreadWorkspace(nextThreadId, (current) => ({
+          ...current,
+          linkedApp: {
+            appId: target.record.id,
+            title: target.record.title,
+            agentId: target.record.agentId,
+            sessionKey: target.record.sessionKey,
+          },
+        }));
+      }
+
       loadThreads();
       selectThread(nextThreadId);
       navigate({ view: "chat", sessionId: nextThreadId });
+
+      // Prime the composer on the next two animation frames so the chat
+      // view (and its composer) has committed and the listener is live.
+      // One RAF fires after navigate's commit; a second guarantees the
+      // useEffect that registers the listener has run.
+      const prefill =
+        target.kind === "app"
+          ? `Refine app "${target.record.title}" (id: ${target.record.id}): `
+          : `Refine artifact "${target.record.title}" (id: ${target.record.id}): `;
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          window.dispatchEvent(
+            new CustomEvent("openui-claw:prime-composer", { detail: { text: prefill } }),
+          );
+        });
+      });
     },
     [
-      createSession,
-      knownAgentIds,
       loadThreads,
       onSetPendingPreviewOpen,
       onUpdateThreadWorkspace,
+      resolveRefineThreadId,
       selectThread,
     ],
+  );
+
+  const handleRefineApp = useCallback(
+    (record: AppRecord) => refineInChat({ kind: "app", record }),
+    [refineInChat],
+  );
+  const handleRefineArtifact = useCallback(
+    (record: ArtifactRecord) => refineInChat({ kind: "artifact", record }),
+    [refineInChat],
   );
 
   /**
@@ -1568,10 +1634,7 @@ function ChatAppInner({
    * than silently dropping the user's click.
    */
   const handleAppContinueConversation = useCallback(
-    async (payload: {
-      message: { role: "user"; content: string };
-      appRecord: AppRecord;
-    }) => {
+    async (payload: { message: { role: "user"; content: string }; appRecord: AppRecord }) => {
       const { appRecord, message } = payload;
       const nextThreadId = appRecord.sessionKey
         ? sessionRouteIdFromSessionKey(appRecord.sessionKey, knownAgentIds.current)
@@ -1617,19 +1680,39 @@ function ChatAppInner({
 
   const openNotification = useCallback(
     async (notification: NotificationRecord) => {
-      switch (notification.target.view) {
-        case "chat":
-          navigate({ view: "chat", sessionId: notification.target.sessionId });
-          break;
-        case "app":
-          navigate({ view: "app", appId: notification.target.appId });
-          break;
-        case "artifact":
-          navigate({ view: "artifact", artifactId: notification.target.artifactId });
-          break;
-        default:
-          navigate({ view: "home" });
-          break;
+      // Backwards-compat: legacy cron notifications were stored with
+      // `target: { view: "chat", sessionId: <synthetic-cron-run-key> }` which
+      // routed to a non-existent thread (blank page). Detect via
+      // `source.cronId` and redirect to the crons view.
+      const isLegacyCronTarget =
+        notification.target.view === "chat" &&
+        typeof notification.source?.cronId === "string" &&
+        notification.target.sessionId.includes(":cron:");
+
+      if (isLegacyCronTarget && notification.source?.cronId) {
+        navigate({ view: "crons", selectedId: notification.source.cronId });
+      } else {
+        switch (notification.target.view) {
+          case "chat":
+            navigate({ view: "chat", sessionId: notification.target.sessionId });
+            break;
+          case "app":
+            navigate({ view: "app", appId: notification.target.appId });
+            break;
+          case "artifact":
+            navigate({ view: "artifact", artifactId: notification.target.artifactId });
+            break;
+          case "crons":
+            navigate(
+              notification.target.jobId
+                ? { view: "crons", selectedId: notification.target.jobId }
+                : { view: "crons" },
+            );
+            break;
+          default:
+            navigate({ view: "home" });
+            break;
+        }
       }
 
       if (notification.unread) {
@@ -1640,19 +1723,22 @@ function ChatAppInner({
   );
 
   useEffect(() => {
-    if (!notificationsPrimedRef.current) {
-      notificationsPrimedRef.current = true;
-      notificationIdsRef.current = new Set(notifications.map((notification) => notification.id));
-      return;
-    }
-
     const nextIds = new Set(notifications.map((notification) => notification.id));
-    const newUnreadNotifications = notifications.filter(
-      (notification) =>
-        notification.unread &&
-        !notificationIdsRef.current.has(notification.id) &&
-        !notificationMatchesRoute(notification),
-    );
+    const loadTime = notificationLoadTimeRef.current;
+    const newUnreadNotifications = notifications.filter((notification) => {
+      if (!notification.unread) return false;
+      if (notificationIdsRef.current.has(notification.id)) return false;
+      if (notificationMatchesRoute(notification)) return false;
+      // Only toast notifications whose underlying event happened during this
+      // page session. Prefer `metadata.runAtMs` (the actual cron run time)
+      // over the server-set `createdAt`, which can drift on every upsert and
+      // make hours-old runs look brand-new on reload.
+      const runAtMs =
+        typeof notification.metadata?.runAtMs === "number" ? notification.metadata.runAtMs : null;
+      const eventTime = runAtMs ?? Date.parse(notification.createdAt);
+      if (Number.isFinite(eventTime) && eventTime < loadTime) return false;
+      return true;
+    });
 
     if (newUnreadNotifications.length > 0) {
       setToastNotices((current) => {
@@ -1719,6 +1805,9 @@ function ChatAppInner({
       },
       onMarkNotifRead: (notifId: string) => {
         void onMarkNotificationsRead([notifId]);
+      },
+      onMarkAllNotifsRead: async () => {
+        await onMarkNotificationsRead();
       },
     };
     mainContent = (
@@ -1791,6 +1880,26 @@ function ChatAppInner({
         )}
       </Shell.ThreadContainer>
     );
+  } else if (route.view === "settings") {
+    mainContent = (
+      <div className="flex h-full min-w-0 flex-1 overflow-hidden">
+        <SettingsView
+          currentSettings={getSettings()}
+          section={route.section}
+          onSave={(newSettings) => onSettingsSave(newSettings)}
+        />
+      </div>
+    );
+  } else if (route.view === "skills") {
+    mainContent = (
+      <div className="flex h-full min-w-0 flex-1 overflow-hidden">
+        <SkillsView
+          loadSkills={listSkills}
+          setEnabled={setSkillEnabled}
+          connectionState={connectionState}
+        />
+      </div>
+    );
   } else if (route.view === "crons") {
     const cronsProps = {
       cronJobs,
@@ -1798,6 +1907,10 @@ function ChatAppInner({
       threads,
       initialSelectedId: route.selectedId,
       onOpenThread: (threadId: string) => navigate({ view: "chat", sessionId: threadId }),
+      onUpdateCronJob,
+      onRunCronJob,
+      onRemoveCronJob,
+      onRefreshCronData,
     };
     mainContent = (
       <Shell.ThreadContainer>
@@ -1812,23 +1925,6 @@ function ChatAppInner({
     const agentNameFor = makeAgentNameResolver(routeThreads);
     const appSiblings = buildAppSiblings(appList, agentNameFor);
     const artifactSiblings = buildArtifactSiblings(artifactList, agentNameFor);
-    const openRefineFromSessionKey = (sessionKey: string | undefined) => {
-      const id = sessionKey
-        ? sessionRouteIdFromSessionKey(sessionKey, knownAgentIds.current)
-        : null;
-      if (id) routeRefineTray.openFor(id);
-    };
-    const trayAgentId = routeRefineTray.threadId
-      ? routeThreads.find((t) => t.id === routeRefineTray.threadId)?.clawAgentId ??
-        routeThreads.find((t) => t.id === routeRefineTray.threadId)?.id ??
-        "agent"
-      : "agent";
-    const refineNavigateToChat = (sessionKey: string | undefined) => {
-      const id = sessionKey
-        ? sessionRouteIdFromSessionKey(sessionKey, knownAgentIds.current)
-        : null;
-      if (id) navigate({ view: "chat", sessionId: id });
-    };
     if (isMobile && route.view === "app" && apps) {
       mainContent = (
         <MobileAppDetail
@@ -1836,7 +1932,7 @@ function ChatAppInner({
           apps={apps}
           updatedAt={activeAppUpdatedAt}
           onContinueConversation={handleAppContinueConversation}
-          onRefine={(record) => refineNavigateToChat(record.sessionKey)}
+          onRefine={handleRefineApp}
           onDeleted={onRefreshApps}
           onClose={smartBack(() => navigate({ view: "apps" }))}
           siblings={appSiblings}
@@ -1849,7 +1945,7 @@ function ChatAppInner({
           artifactId={route.artifactId}
           artifacts={artifacts}
           updatedAt={activeArtifactUpdatedAt}
-          onRefine={(record) => refineNavigateToChat(record.source?.sessionId)}
+          onRefine={handleRefineArtifact}
           onDeleted={onRefreshArtifacts}
           onClose={smartBack(() => navigate({ view: "artifacts" }))}
           siblings={artifactSiblings}
@@ -1859,14 +1955,6 @@ function ChatAppInner({
     } else {
       mainContent = (
         <div className="relative flex h-full min-w-0 flex-1 bg-background dark:bg-sunk">
-          <RefineTray
-            threadId={routeRefineTray.threadId}
-            agentName={agentNameFor(trayAgentId)}
-            width={routeRefineTray.width}
-            onDragStart={routeRefineTray.onDragStart}
-            onClose={routeRefineTray.close}
-          />
-
           <div className="flex min-w-0 flex-1 flex-col">
             {route.view === "app" && apps ? (
               <AppDetail
@@ -1876,7 +1964,7 @@ function ChatAppInner({
                 mode="panel"
                 isPinned={pinnedAppIds.has(route.appId)}
                 onTogglePinned={onTogglePinned}
-                onRefine={(record) => openRefineFromSessionKey(record.sessionKey)}
+                onRefine={handleRefineApp}
                 onContinueConversation={handleAppContinueConversation}
                 onDeleted={() => {
                   onRefreshApps();
@@ -1893,13 +1981,14 @@ function ChatAppInner({
                 artifacts={artifacts}
                 updatedAt={activeArtifactUpdatedAt}
                 mode="panel"
-                onDeleted={onRefreshArtifacts}
+                onDeleted={() => {
+                  onRefreshArtifacts();
+                  navigate({ view: "home" });
+                }}
                 onClose={() => navigate({ view: "home" })}
-                onRefine={(record) => openRefineFromSessionKey(record.source?.sessionId)}
+                onRefine={handleRefineArtifact}
                 siblings={artifactSiblings}
-                onSwitch={(nextArtId) =>
-                  navigate({ view: "artifact", artifactId: nextArtId })
-                }
+                onSwitch={(nextArtId) => navigate({ view: "artifact", artifactId: nextArtId })}
               />
             ) : null}
           </div>
@@ -1942,6 +2031,7 @@ function ChatAppInner({
         pendingPreviewOpen={pendingPreviewOpen}
         onConsumePendingPreview={onConsumePendingPreview}
         onRefineApp={handleRefineApp}
+        onRefineArtifact={handleRefineArtifact}
         onAppContinueConversation={handleAppContinueConversation}
         workspacePaneCollapsed={workspacePaneCollapsed}
         onToggleWorkspacePaneCollapsed={setWorkspacePaneCollapsed}
@@ -1950,13 +2040,7 @@ function ChatAppInner({
     );
   }
 
-  // Embed mode: when the URL carries `?embed=1` (used by the refine
-  // tray's iframe), hide the navigation rails so only the thread UI renders.
-  const isEmbed =
-    typeof window !== "undefined" &&
-    new URLSearchParams(window.location.search).get("embed") === "1";
-
-  if (isMobile && !isEmbed) {
+  if (isMobile) {
     return (
       <Shell.Container agentName="Claw" logoUrl={LOGO_URL}>
         <MobileShell
@@ -2025,21 +2109,19 @@ function ChatAppInner({
 
   return (
     <Shell.Container agentName="Claw" logoUrl={LOGO_URL}>
-      {isEmbed ? null : (
-        <AppSidebar
-          connectionState={connectionState}
-          onSettingsClick={onSettingsClick}
-          createSession={createSession}
-          renameSession={renameSession}
-          deleteSession={deleteSession}
-          apps={appList}
-          artifacts={artifactList}
-          unreadNotificationCount={unreadNotificationCount}
-          hiddenThreadIds={hiddenRefinementThreadIds}
-          pinnedAppIds={pinnedAppIds}
-          onOpenCommandPalette={() => setPaletteOpen(true)}
-        />
-      )}
+      <AppSidebar
+        connectionState={connectionState}
+        onSettingsClick={onSettingsClick}
+        createSession={createSession}
+        renameSession={renameSession}
+        deleteSession={deleteSession}
+        apps={appList}
+        artifacts={artifactList}
+        unreadNotificationCount={unreadNotificationCount}
+        hiddenThreadIds={hiddenRefinementThreadIds}
+        pinnedAppIds={pinnedAppIds}
+        onOpenCommandPalette={() => setPaletteOpen(true)}
+      />
       {mainContent}
       <NotificationToastViewport
         toasts={toastNotices}
@@ -2085,6 +2167,7 @@ export default function ChatApp() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   useEffect(() => {
     bootstrapThemeFromStorage();
+    applyPreferences();
   }, []);
   const [appList, setAppList] = useState<AppSummary[]>([]);
   const [artifactList, setArtifactList] = useState<ArtifactSummary[]>([]);
@@ -2125,8 +2208,13 @@ export default function ChatApp() {
     cronRuns,
     cronStatus,
     refreshCronData,
+    updateCronJob,
+    runCronJob,
+    removeCronJob,
     gatewayCommands,
     onSessionChanged,
+    listSkills,
+    setSkillEnabled,
   } = useGateway({ onAuthFailed: () => setSettingsOpen(true) });
 
   const refreshAppList = useCallback(async () => {
@@ -2186,9 +2274,6 @@ export default function ChatApp() {
   const adaptedFetchThreadList = useCallback(async (): Promise<{
     threads: Thread[];
   }> => {
-    if (USE_MOCK_DATA) {
-      return { threads: MOCK_THREAD_LIST.map(toThreadRow) };
-    }
     const rows = await fetchThreadList();
     return {
       threads: rows.map(toThreadRow),
@@ -2204,9 +2289,7 @@ export default function ChatApp() {
 
   const adaptedLoadThread = useCallback(
     async (threadId: string): Promise<Message[]> => {
-      const msgs = USE_MOCK_DATA
-        ? MOCK_MESSAGES[threadId] ?? []
-        : await loadThread(threadId);
+      const msgs = await loadThread(threadId);
       const historyWorkspace = deriveThreadWorkspaceFromMessages(msgs);
 
       // Hydrate sent uploads from the plugin (server-authoritative). Resolve
@@ -2339,7 +2422,11 @@ export default function ChatApp() {
       >
         <ChatAppInner
           connectionState={connectionState}
-          onSettingsClick={() => setSettingsOpen(true)}
+          onSettingsClick={() => navigate({ view: "settings" })}
+          onSettingsSave={(newSettings) => {
+            reconnect(newSettings);
+            setSettingsOpen(false);
+          }}
           createSession={createSession}
           renameSession={renameSession}
           deleteSession={deleteSession}
@@ -2347,19 +2434,15 @@ export default function ChatApp() {
           compactSession={compactSession}
           onSessionChanged={onSessionChanged}
           loadThread={adaptedLoadThread}
-          sessionMeta={
-            USE_MOCK_DATA
-              ? new Map(MOCK_SESSION_META.map((row) => [row.key, row]))
-              : sessionMeta
-          }
-          availableModels={USE_MOCK_DATA ? MOCK_AVAILABLE_MODELS : availableModels}
+          sessionMeta={sessionMeta}
+          availableModels={availableModels}
           patchSession={patchSession}
           knownAgentIds={knownAgentIds}
-          artifacts={USE_MOCK_DATA ? MOCK_ARTIFACT_STORE : artifacts}
-          apps={USE_MOCK_DATA ? MOCK_APP_STORE : apps}
+          artifacts={artifacts}
+          apps={apps}
           uploads={uploads}
-          appList={USE_MOCK_DATA ? MOCK_APPS : appList}
-          artifactList={USE_MOCK_DATA ? MOCK_ARTIFACTS : artifactList}
+          appList={appList}
+          artifactList={artifactList}
           pinnedAppIds={pinnedAppIds}
           onTogglePinned={togglePinnedApp}
           workspaceByThread={workspaceByThread}
@@ -2372,15 +2455,20 @@ export default function ChatApp() {
           onDeleteApp={handleDeleteApp}
           onRefreshApps={refreshAppList}
           onRefreshArtifacts={refreshArtifactList}
-          notifications={USE_MOCK_DATA ? MOCK_NOTIFICATIONS : notifications}
+          notifications={notifications}
           onMarkNotificationsRead={markNotificationsRead}
           onRefreshNotifications={refreshNotifications}
           onUpsertNotification={upsertNotification}
-          cronJobs={USE_MOCK_DATA ? MOCK_CRON_JOBS : cronJobs}
-          cronRuns={USE_MOCK_DATA ? MOCK_CRON_RUNS : cronRuns}
+          cronJobs={cronJobs}
+          cronRuns={cronRuns}
           cronStatus={cronStatus}
           onRefreshCronData={refreshCronData}
+          onUpdateCronJob={updateCronJob}
+          onRunCronJob={runCronJob}
+          onRemoveCronJob={removeCronJob}
           gatewayCommands={gatewayCommands}
+          listSkills={listSkills}
+          setSkillEnabled={setSkillEnabled}
         />
 
         {isMobile ? (

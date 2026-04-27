@@ -14,6 +14,7 @@ import type {
 import { ConnectionState } from "@/lib/gateway/types";
 import { normalizeSessionPatch } from "@/lib/models";
 import type { NotificationRecord } from "@/lib/notifications";
+import { encodeExtra, encodeMain, hasClawSuffix } from "@/lib/session-keys";
 import type { Settings } from "@/lib/storage";
 import {
   clearAuthCredentials,
@@ -49,6 +50,8 @@ import type {
   ModelInfo,
   OpenClawEngineConfig,
   SessionInfo,
+  SkillsStore,
+  SkillStatusEntry,
   StoredMessage,
   UploadMeta,
   UploadRecord,
@@ -58,7 +61,6 @@ import type {
 const log = (...args: unknown[]) => console.log("[claw:openclaw-engine]", ...args);
 const warn = (...args: unknown[]) => console.warn("[claw:openclaw-engine]", ...args);
 
-const CLAW_SUFFIX = ":openui-claw";
 const FULL_VERBOSE_LEVEL = "full";
 
 function sessionRowTitle(
@@ -73,7 +75,7 @@ function sessionRowTitle(
 }
 
 export function agentMainSessionKey(agentId: string): string {
-  return `agent:${agentId}:main${CLAW_SUFFIX}`;
+  return encodeMain(agentId);
 }
 
 export function resolveChatSessionKey(threadId: string, agentIds: Set<string>): string {
@@ -129,6 +131,12 @@ export interface OpenClawEngineEvents {
    * even after the active run listener has been torn down.
    */
   onSessionChanged: (sessionKey: string) => void;
+  /**
+   * Fired when the gateway broadcasts `event cron` (a job started, completed,
+   * was added, or removed). The UI uses this to refresh cron rows + post-run
+   * notifications immediately, instead of waiting for the next 30 s poll.
+   */
+  onCronChanged: () => void;
 }
 
 export class OpenClawEngine implements Engine {
@@ -196,9 +204,6 @@ export class OpenClawEngine implements Engine {
     deleteSession: (sessionId) => this._deleteSessionRecord(sessionId),
     renameSession: (sessionId, title) => this._renameSessionRecord(sessionId, title),
     loadHistory: (sessionId) => this._loadHistory(sessionId),
-    appendMessage: async () => {
-      /* server persists messages via chat.send — no-op */
-    },
     getSessionConfig: (sessionId) => this._getSessionConfig(sessionId),
     setSessionConfig: (sessionId, key, value) => this._setSessionConfig(sessionId, key, value),
   };
@@ -311,6 +316,29 @@ export class OpenClawEngine implements Engine {
         await this._request("uploads.delete", { id });
       } catch (error) {
         warn("uploads.delete failed:", error);
+      }
+    },
+  };
+
+  readonly skills: SkillsStore = {
+    status: async (agentId?: string): Promise<SkillStatusEntry[]> => {
+      try {
+        const params = agentId ? { agentId } : {};
+        const result = await this._request<{ skills: SkillStatusEntry[] }>("skills.status", params);
+        return result?.skills ?? [];
+      } catch (error) {
+        warn("skills.status failed:", error);
+        return [];
+      }
+    },
+
+    setEnabled: async (skillKey: string, enabled: boolean): Promise<boolean> => {
+      try {
+        await this._request("skills.update", { skillKey, enabled });
+        return true;
+      } catch (error) {
+        warn("skills.update failed:", error);
+        return false;
       }
     },
   };
@@ -502,38 +530,7 @@ export class OpenClawEngine implements Engine {
     await this.socket?.request("chat.abort", { sessionKey }).catch(() => {});
   }
 
-  // ── Store-forwarding convenience methods ──────────────────────────────────
-
-  async createSession(agentId: string, title?: string): Promise<SessionInfo> {
-    return this.conversations.createSession(agentId, title);
-  }
-
-  async loadHistory(sessionId: string): Promise<StoredMessage[]> {
-    return this.conversations.loadHistory(sessionId);
-  }
-
-  async listSessions(agentId?: string): Promise<SessionInfo[]> {
-    return this.conversations.listSessions(agentId);
-  }
-
-  async deleteSession(sessionId: string): Promise<boolean> {
-    try {
-      await this.conversations.deleteSession(sessionId);
-      return true;
-    } catch {
-      return false;
-    }
-  }
-
-  async getSessionConfig(sessionId: string): Promise<Record<string, string>> {
-    return this.conversations.getSessionConfig(sessionId);
-  }
-
-  async setSessionConfig(sessionId: string, key: string, value: string): Promise<void> {
-    return this.conversations.setSessionConfig(sessionId, key, value);
-  }
-
-  // ── Legacy methods (kept for useGateway backward compat, removed with useEngines) ──
+  // ── Engine-internal helpers used by useGateway ────────────────────────────
 
   async fetchThreadList(): Promise<ClawThreadListItem[]> {
     let agents: NonNullable<AgentsListResult["agents"]> = [];
@@ -581,7 +578,7 @@ export class OpenClawEngine implements Engine {
         const seen = new Set<string>();
         for (const row of result?.sessions ?? []) {
           metaUpdates.set(row.key, row);
-          if (!row.key.endsWith(CLAW_SUFFIX) || row.key === mainKey || seen.has(row.key)) continue;
+          if (!hasClawSuffix(row.key) || row.key === mainKey || seen.has(row.key)) continue;
           seen.add(row.key);
           items.push({
             id: row.key,
@@ -721,6 +718,44 @@ export class OpenClawEngine implements Engine {
     }
   }
 
+  async updateCronJob(id: string, patch: Record<string, unknown>): Promise<boolean> {
+    try {
+      await this._request("cron.update", { id, patch });
+      return true;
+    } catch (e) {
+      warn("cron.update failed:", e);
+      return false;
+    }
+  }
+
+  /**
+   * Triggers an ad-hoc run of a cron job.
+   * - "force" (default) runs immediately even if the job is paused (disabled).
+   *   This matches what the user means when they hit "Run now" on a paused
+   *   row in the UI.
+   * - "due" only runs if the schedule says it's currently due — useful for
+   *   testing the dispatcher; not surfaced in the UI today.
+   */
+  async runCronJob(id: string, mode: "force" | "due" = "force"): Promise<boolean> {
+    try {
+      await this._request("cron.run", { id, mode });
+      return true;
+    } catch (e) {
+      warn("cron.run failed:", e);
+      return false;
+    }
+  }
+
+  async removeCronJob(id: string): Promise<boolean> {
+    try {
+      await this._request("cron.remove", { id });
+      return true;
+    } catch (e) {
+      warn("cron.remove failed:", e);
+      return false;
+    }
+  }
+
   // ── Public state accessors ────────────────────────────────────────────────
 
   get connectionState(): ConnectionState {
@@ -798,6 +833,14 @@ export class OpenClawEngine implements Engine {
       } else {
         warn("sessions.changed frame missing sessionKey:", frame);
       }
+      return;
+    }
+
+    // Cron broadcasts (`event:"cron"`) carry job-id / phase metadata, but the
+    // UI just needs "something changed — refetch". Coalescing the refetch is
+    // the consumer's job (cf. useGateway's debounced `refreshCronData`).
+    if (frame.event === "cron") {
+      this.events.onCronChanged();
       return;
     }
 
@@ -1007,14 +1050,19 @@ export class OpenClawEngine implements Engine {
     }
   }
 
-  private async _createSessionRecord(agentId: string, _title?: string): Promise<SessionInfo> {
-    const key = `agent:${agentId}:${crypto.randomUUID()}${CLAW_SUFFIX}`;
-    log("createSession", agentId, key);
+  private async _createSessionRecord(agentId: string, title?: string): Promise<SessionInfo> {
+    const key = encodeExtra(agentId);
+    log("createSession", agentId, key, title ? `"${title}"` : "");
     try {
       await this._request("sessions.create", {
         agentId,
         key,
         verboseLevel: FULL_VERBOSE_LEVEL,
+        // `label` is the gateway field that backs the session title in
+        // `sessions.list`; passing it here means callers who supply a title
+        // at create time get a labelled session immediately, with no
+        // separate `sessions.patch` round-trip.
+        ...(title ? { label: title } : {}),
       });
     } catch (e) {
       warn("sessions.create failed:", e);

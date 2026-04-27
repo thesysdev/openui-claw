@@ -1,0 +1,19 @@
+{
+  "name": "OpenClaw",
+  "short_name": "Claw",
+  "description": "Generative UI client for OpenClaw — chat with agents, build apps, run cron jobs.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "theme_color": "#0E0E0E",
+  "background_color": "#FFFFFF",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

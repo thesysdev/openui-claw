@@ -1,9 +1,11 @@
 "use client";
 
-import { MoreVertical, Pause, Play, Trash2 } from "lucide-react";
 import type { Thread } from "@openuidev/react-headless";
+import { Clock3, MoreVertical, Pause, Play, Trash2, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { CronDetailTray, type CronJobEdits } from "@/components/crons/CronDetailTray";
+import { cronOwnerLabel, humanFrequency } from "@/components/crons/format";
 import { SectionHeader } from "@/components/home/SectionHeader";
 import { HeaderIconButton } from "@/components/layout/HeaderIconButton";
 import { MobileCronRow } from "@/components/mobile/MobileCronRow";
@@ -11,9 +13,8 @@ import { MobileDetailHeader } from "@/components/mobile/MobileDetailHeader";
 import { MobileListCard } from "@/components/mobile/MobileListRow";
 import { MobileMenuDrawer } from "@/components/mobile/MobileMenuDrawer";
 import { SortButton } from "@/components/ui/SortButton";
-import { CronDetailTray, type CronJobEdits } from "@/components/crons/CronDetailTray";
-import { useBodyScrollLock } from "@/lib/hooks/useBodyScrollLock";
 import type { CronJobRecord, CronRunEntry } from "@/lib/cron";
+import { useBodyScrollLock } from "@/lib/hooks/useBodyScrollLock";
 
 type Sort = "recent" | "a-z";
 
@@ -23,6 +24,10 @@ export interface CronsViewProps {
   threads: Thread[];
   initialSelectedId?: string;
   onOpenThread: (threadId: string) => void;
+  onUpdateCronJob?: (id: string, patch: Record<string, unknown>) => Promise<boolean>;
+  onRunCronJob?: (id: string, mode?: "force" | "due") => Promise<boolean>;
+  onRemoveCronJob?: (id: string) => Promise<boolean>;
+  onRefreshCronData?: () => Promise<unknown>;
 }
 
 export function MobileCronsView({
@@ -31,6 +36,10 @@ export function MobileCronsView({
   threads,
   initialSelectedId,
   onOpenThread,
+  onUpdateCronJob,
+  onRunCronJob,
+  onRemoveCronJob,
+  onRefreshCronData,
 }: CronsViewProps) {
   const [sort, setSort] = useState<Sort>("recent");
   const [overlay, setOverlay] = useState<Record<string, Partial<CronJobRecord>>>({});
@@ -50,8 +59,7 @@ export function MobileCronsView({
     if (sort === "a-z") arr.sort((a, b) => a.name.localeCompare(b.name));
     else
       arr.sort(
-        (a, b) =>
-          (b.updatedAtMs ?? b.createdAtMs ?? 0) - (a.updatedAtMs ?? a.createdAtMs ?? 0),
+        (a, b) => (b.updatedAtMs ?? b.createdAtMs ?? 0) - (a.updatedAtMs ?? a.createdAtMs ?? 0),
       );
     return arr;
   }, [mergedJobs, sort]);
@@ -69,21 +77,32 @@ export function MobileCronsView({
   }, []);
 
   const handleRunNow = useCallback(
-    (job: CronJobRecord) => {
+    async (job: CronJobRecord) => {
       patch(job.id, { updatedAtMs: Date.now() });
+      if (onRunCronJob) {
+        const ok = await onRunCronJob(job.id, "force");
+        if (ok && onRefreshCronData) await onRefreshCronData();
+      }
     },
-    [patch],
+    [patch, onRunCronJob, onRefreshCronData],
   );
 
   const handleToggleEnabled = useCallback(
-    (job: CronJobRecord, nextEnabled: boolean) => {
+    async (job: CronJobRecord, nextEnabled: boolean) => {
       patch(job.id, { enabled: nextEnabled });
+      if (!onUpdateCronJob) return;
+      const ok = await onUpdateCronJob(job.id, { enabled: nextEnabled });
+      if (!ok) {
+        patch(job.id, { enabled: !nextEnabled });
+        return;
+      }
+      if (onRefreshCronData) await onRefreshCronData();
     },
-    [patch],
+    [patch, onUpdateCronJob, onRefreshCronData],
   );
 
   const handleSaveEdits = useCallback(
-    (job: CronJobRecord, edits: CronJobEdits) => {
+    async (job: CronJobRecord, edits: CronJobEdits) => {
       const nextSchedule =
         edits.scheduleExpr && edits.scheduleExpr !== job.schedule?.expr
           ? { ...(job.schedule ?? { kind: "cron" }), kind: "cron", expr: edits.scheduleExpr }
@@ -93,14 +112,40 @@ export function MobileCronsView({
         description: edits.prompt ?? job.description,
         schedule: nextSchedule,
       });
+      if (!onUpdateCronJob) return;
+      const serverPatch: Record<string, unknown> = {};
+      if (edits.name !== undefined) serverPatch.name = edits.name;
+      if (edits.prompt !== undefined) {
+        serverPatch.payload = { ...(job.payload ?? {}), message: edits.prompt };
+      }
+      if (edits.scheduleExpr && edits.scheduleExpr !== job.schedule?.expr) {
+        serverPatch.schedule = nextSchedule;
+      }
+      if (Object.keys(serverPatch).length === 0) return;
+      const ok = await onUpdateCronJob(job.id, serverPatch);
+      if (ok && onRefreshCronData) await onRefreshCronData();
     },
-    [patch],
+    [patch, onUpdateCronJob, onRefreshCronData],
   );
 
-  const handleDelete = useCallback((job: CronJobRecord) => {
-    setDeletedIds((curr) => new Set([...curr, job.id]));
-    setSelectedId(null);
-  }, []);
+  const handleDelete = useCallback(
+    async (job: CronJobRecord) => {
+      setDeletedIds((curr) => new Set([...curr, job.id]));
+      setSelectedId(null);
+      if (!onRemoveCronJob) return;
+      const ok = await onRemoveCronJob(job.id);
+      if (!ok) {
+        setDeletedIds((curr) => {
+          const next = new Set(curr);
+          next.delete(job.id);
+          return next;
+        });
+        return;
+      }
+      if (onRefreshCronData) await onRefreshCronData();
+    },
+    [onRemoveCronJob, onRefreshCronData],
+  );
 
   const handleDuplicate = useCallback((job: CronJobRecord) => {
     const id = `${job.id}-copy-${Date.now()}`;
@@ -188,10 +233,10 @@ function MobileCronDetailOverlay({
   runs: CronRunEntry[];
   threads: Thread[];
   onClose: () => void;
-  onRunNow: (job: CronJobRecord) => void;
-  onToggleEnabled: (job: CronJobRecord, next: boolean) => void;
-  onSaveEdits: (job: CronJobRecord, edits: CronJobEdits) => void;
-  onDelete: (job: CronJobRecord) => void;
+  onRunNow: (job: CronJobRecord) => void | Promise<void>;
+  onToggleEnabled: (job: CronJobRecord, next: boolean) => void | Promise<void>;
+  onSaveEdits: (job: CronJobRecord, edits: CronJobEdits) => void | Promise<void>;
+  onDelete: (job: CronJobRecord) => void | Promise<void>;
   onDuplicate: (job: CronJobRecord) => void;
   onOpenThread: (threadId: string) => void;
 }) {

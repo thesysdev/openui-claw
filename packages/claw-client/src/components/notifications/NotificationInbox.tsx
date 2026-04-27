@@ -9,19 +9,17 @@ import {
   PanelRightOpen,
   X,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import type { NotificationRecord } from "@/lib/notifications";
 
-type InboxTab = "all" | "tasks" | "needs_input" | "alerts";
+/**
+ * Per-card category tag — kept (visual scanning aid on the card itself) but
+ * the four-tab filter strip at the top of the inbox is gone. Same call as
+ * the home `NotifPanel`: users want one flat list sorted by recency.
+ */
+type NotificationCategory = "tasks" | "needs_input" | "alerts";
 
-const TAB_ORDER: Array<{ id: InboxTab; label: string }> = [
-  { id: "all", label: "All" },
-  { id: "tasks", label: "Tasks" },
-  { id: "needs_input", label: "Needs Input" },
-  { id: "alerts", label: "Alerts" },
-];
-
-function notificationCategory(notification: NotificationRecord): Exclude<InboxTab, "all"> {
+function notificationCategory(notification: NotificationRecord): NotificationCategory {
   const kind = notification.kind.toLowerCase();
 
   if (kind.includes("needs_input") || kind.includes("approval")) {
@@ -60,8 +58,8 @@ function formatRelativeTime(value: string): string {
   });
 }
 
-function badgeClasses(tab: Exclude<InboxTab, "all">): string {
-  switch (tab) {
+function badgeClasses(category: NotificationCategory): string {
+  switch (category) {
     case "needs_input":
       return "border-border-alert bg-alert-background text-text-alert-primary";
     case "alerts":
@@ -71,8 +69,8 @@ function badgeClasses(tab: Exclude<InboxTab, "all">): string {
   }
 }
 
-function badgeLabel(tab: Exclude<InboxTab, "all">): string {
-  switch (tab) {
+function badgeLabel(category: NotificationCategory): string {
+  switch (category) {
     case "needs_input":
       return "Needs input";
     case "alerts":
@@ -90,6 +88,8 @@ function actionLabel(notification: NotificationRecord): string {
       return "Open artifact";
     case "chat":
       return notificationCategory(notification) === "needs_input" ? "Review thread" : "Open thread";
+    case "crons":
+      return "Open cron";
     default:
       return "Open";
   }
@@ -97,6 +97,7 @@ function actionLabel(notification: NotificationRecord): string {
 
 function sourceLabel(notification: NotificationRecord): string {
   if (notification.kind === "thread_reply") return "Conversation reply";
+  if (notification.kind.startsWith("cron_")) return "Scheduled run";
   if (notification.source?.agentId) return notification.source.agentId;
   switch (notification.target.view) {
     case "app":
@@ -105,6 +106,8 @@ function sourceLabel(notification: NotificationRecord): string {
       return "Workspace artifact";
     case "chat":
       return "Conversation";
+    case "crons":
+      return "Scheduled run";
     default:
       return "Workspace";
   }
@@ -181,43 +184,19 @@ function NotificationInboxContent({
   onMarkAllRead?: () => void | Promise<void>;
   onCollapse?: () => void;
 }) {
-  const [activeTab, setActiveTab] = useState<InboxTab>("all");
-
   const unreadCount = useMemo(
     () => notifications.filter((notification) => notification.unread).length,
     [notifications],
   );
 
-  const counts = useMemo(
+  const visibleNotifications = useMemo(
     () =>
-      TAB_ORDER.reduce<Record<InboxTab, number>>(
-        (result, tab) => {
-          result[tab.id] =
-            tab.id === "all"
-              ? notifications.length
-              : notifications.filter(
-                  (notification) => notificationCategory(notification) === tab.id,
-                ).length;
-          return result;
-        },
-        { all: 0, tasks: 0, needs_input: 0, alerts: 0 },
-      ),
+      [...notifications].sort((left, right) => {
+        if (left.unread !== right.unread) return left.unread ? -1 : 1;
+        return right.updatedAt.localeCompare(left.updatedAt);
+      }),
     [notifications],
   );
-
-  const visibleNotifications = useMemo(() => {
-    const items =
-      activeTab === "all"
-        ? notifications
-        : notifications.filter(
-            (notification) => notificationCategory(notification) === activeTab,
-          );
-
-    return [...items].sort((left, right) => {
-      if (left.unread !== right.unread) return left.unread ? -1 : 1;
-      return right.updatedAt.localeCompare(left.updatedAt);
-    });
-  }, [activeTab, notifications]);
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -265,22 +244,6 @@ function NotificationInboxContent({
           </div>
         </div>
 
-        <div className="mt-ml flex flex-wrap gap-s">
-          {TAB_ORDER.map((tab) => (
-            <button
-              key={tab.id}
-              type="button"
-              className={`rounded-full px-m py-xs text-xs font-medium transition-colors ${
-                activeTab === tab.id
-                  ? "bg-text-neutral-primary text-background"
-                  : "bg-sunk-light text-text-neutral-secondary hover:bg-sunk"
-              }`}
-              onClick={() => setActiveTab(tab.id)}
-            >
-              {tab.label} {counts[tab.id]}
-            </button>
-          ))}
-        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto px-ml py-ml">

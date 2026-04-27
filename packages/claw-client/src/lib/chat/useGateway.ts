@@ -98,6 +98,12 @@ export function useGateway({ onAuthFailed }: { onAuthFailed: () => void }) {
   // Subscribers for `sessions.changed` broadcasts — populated by consumers
   // via `onSessionChanged(...)` and drained when the gateway fires an event.
   const sessionChangedListenersRef = useRef<Set<(sessionKey: string) => void>>(new Set());
+  // Cron-event refresh plumbing. The engine fires `onCronChanged` from
+  // `_handleEvent`, which schedules a debounced refetch. We can't reference
+  // `refreshCronData` directly inside the engine callback (it isn't defined
+  // yet), so a ref is the connector.
+  const cronRefreshFnRef = useRef<(() => Promise<unknown>) | null>(null);
+  const cronRefreshTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     sessionMetaRef.current = sessionMeta;
@@ -135,6 +141,18 @@ export function useGateway({ onAuthFailed }: { onAuthFailed: () => void }) {
               console.warn("[claw] onSessionChanged listener threw:", err);
             }
           }
+        },
+        // Coalesce bursts: cron events can arrive in pairs (started → completed
+        // within milliseconds). A short trailing debounce keeps refetch traffic
+        // sane while still feeling instant in the UI.
+        onCronChanged: () => {
+          if (cronRefreshTimerRef.current !== null) return;
+          cronRefreshTimerRef.current = window.setTimeout(() => {
+            cronRefreshTimerRef.current = null;
+            void cronRefreshFnRef.current?.().catch((err) => {
+              console.warn("[claw] cron refresh after event failed:", err);
+            });
+          }, 150);
         },
       },
     );
@@ -197,8 +215,18 @@ export function useGateway({ onAuthFailed }: { onAuthFailed: () => void }) {
             !labelAlreadyUsed &&
             attemptedAutoTitlesRef.current.get(sessionKey) !== derivedTitle
           ) {
+            // Mark optimistically *before* awaiting so we don't fire two
+            // patches in parallel for the same title; clear on failure so a
+            // retry isn't permanently blocked (B27 — was fire-and-forget).
             attemptedAutoTitlesRef.current.set(sessionKey, derivedTitle);
-            void engineRef.current.patchSession(sessionKey, { label: derivedTitle });
+            engineRef.current
+              .patchSession(sessionKey, { label: derivedTitle })
+              .then((ok) => {
+                if (!ok) attemptedAutoTitlesRef.current.delete(sessionKey);
+              })
+              .catch(() => {
+                attemptedAutoTitlesRef.current.delete(sessionKey);
+              });
           }
         }
       }
@@ -215,20 +243,32 @@ export function useGateway({ onAuthFailed }: { onAuthFailed: () => void }) {
 
   const loadThread = useCallback(
     async (threadId: string): Promise<StoredMessage[]> =>
-      engineRef.current?.loadHistory(threadId) ?? [],
+      engineRef.current?.conversations.loadHistory(threadId) ?? [],
     [],
   );
 
   const createSession = useCallback(async (agentId: string): Promise<string | null> => {
-    const session = await engineRef.current?.createSession(agentId);
+    const session = await engineRef.current?.conversations.createSession(agentId);
     return session?.id ?? null;
   }, []);
 
-  const deleteSession = useCallback(
-    async (threadId: string): Promise<boolean> =>
-      engineRef.current?.deleteSession(threadId) ?? false,
-    [],
-  );
+  const deleteSession = useCallback(async (threadId: string): Promise<boolean> => {
+    // `ConversationStore.deleteSession` returns `Promise<void>` and throws on
+    // failure. Map to a boolean here for callers that branch on it.
+    const store = engineRef.current?.conversations;
+    if (!store) return false;
+    try {
+      await store.deleteSession(threadId);
+      // Drop any auto-title dedup entry for this session so a future session
+      // reusing the same key (rare, but the gateway has no global ban) can
+      // re-derive its title (B25 — was leaking forever).
+      const sessionKey = resolveChatSessionKey(threadId, knownAgentIds.current);
+      attemptedAutoTitlesRef.current.delete(sessionKey);
+      return true;
+    } catch {
+      return false;
+    }
+  }, []);
 
   const renameSession = useCallback(async (threadId: string, label: string): Promise<boolean> => {
     try {
@@ -317,12 +357,6 @@ export function useGateway({ onAuthFailed }: { onAuthFailed: () => void }) {
           return;
         }
 
-        const threadId =
-          run.threadId ??
-          (run.sessionKey
-            ? sessionRouteIdFromSessionKey(run.sessionKey, knownAgentIds.current)
-            : undefined);
-
         const message =
           run.status === "error"
             ? (run.error ?? "Scheduled run failed.")
@@ -335,7 +369,10 @@ export function useGateway({ onAuthFailed }: { onAuthFailed: () => void }) {
           kind: run.status === "ok" ? "cron_completed" : "cron_attention",
           title: run.jobName ?? run.jobId,
           message,
-          target: threadId ? { view: "chat", sessionId: threadId } : { view: "home" },
+          // Route to the crons view (focused on this job) instead of a
+          // synthetic chat sessionId — cron runs don't have a real chat
+          // thread to open.
+          target: { view: "crons", jobId: run.jobId },
           source: {
             cronId: run.jobId,
             sessionKey: run.sessionKey,
@@ -401,6 +438,11 @@ export function useGateway({ onAuthFailed }: { onAuthFailed: () => void }) {
       status,
     };
   }, [refreshNotifications, syncCronNotifications]);
+
+  // Keep the engine-side cron callback pointing at the latest closure.
+  useEffect(() => {
+    cronRefreshFnRef.current = refreshCronData;
+  }, [refreshCronData]);
 
   useEffect(() => {
     if (connectionState !== ConnectionState.CONNECTED) return;
@@ -476,6 +518,31 @@ export function useGateway({ onAuthFailed }: { onAuthFailed: () => void }) {
     };
   }, []);
 
+  const listSkills = useCallback(
+    async (agentId?: string) => engineRef.current?.skills?.status(agentId) ?? [],
+    [],
+  );
+  const setSkillEnabled = useCallback(
+    async (skillKey: string, enabled: boolean) =>
+      engineRef.current?.skills?.setEnabled(skillKey, enabled) ?? false,
+    [],
+  );
+
+  const updateCronJob = useCallback(
+    async (id: string, patch: Record<string, unknown>) =>
+      engineRef.current?.updateCronJob(id, patch) ?? false,
+    [],
+  );
+  const runCronJob = useCallback(
+    async (id: string, mode: "force" | "due" = "force") =>
+      engineRef.current?.runCronJob(id, mode) ?? false,
+    [],
+  );
+  const removeCronJob = useCallback(
+    async (id: string) => engineRef.current?.removeCronJob(id) ?? false,
+    [],
+  );
+
   return {
     connectionState,
     pairingDeviceId,
@@ -504,7 +571,12 @@ export function useGateway({ onAuthFailed }: { onAuthFailed: () => void }) {
     cronRuns,
     cronStatus,
     refreshCronData,
+    updateCronJob,
+    runCronJob,
+    removeCronJob,
     gatewayCommands,
     onSessionChanged,
+    listSkills,
+    setSkillEnabled,
   };
 }
