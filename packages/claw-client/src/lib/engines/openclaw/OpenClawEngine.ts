@@ -123,13 +123,16 @@ export interface OpenClawEngineEvents {
   onSessionMetaChanged: (meta: Map<string, SessionRow>) => void;
   onModelsChanged: (models: ModelChoice[]) => void;
   /** Fired when `config.get` resolves on connect. Carries the workspace
-   *  default model (`cfg.agents.defaults.model.primary`) and any per-agent
-   *  overrides (`cfg.agents.list[].model.primary`). Both are qualified
-   *  `provider/model` refs. Used so the picker can show "Default (X)"
-   *  before the first message is sent. */
+   *  default model (`cfg.agents.defaults.model.primary`), any per-agent
+   *  overrides (`cfg.agents.list[].model.primary`), and the default agent
+   *  id (first entry in `cfg.agents.list`, falling back to "main"). Model
+   *  refs are qualified `provider/model`. Used so the picker can show
+   *  "Default (X)" pre-thread (where no `activeAgentId` exists yet) by
+   *  resolving against `defaultAgentId`. */
   onModelDefaultsChanged: (defaults: {
     workspaceDefault: string | null;
     byAgent: Map<string, string>;
+    defaultAgentId: string | null;
   }) => void;
   onKnownAgentIdsChanged: (ids: Set<string>) => void;
   /**
@@ -1010,7 +1013,8 @@ export class OpenClawEngine implements Engine {
       const cfg = result?.resolved ?? result?.parsed;
       const workspaceDefault = cfg?.agents?.defaults?.model?.primary?.trim() || null;
       const byAgent = new Map<string, string>();
-      for (const entry of cfg?.agents?.list ?? []) {
+      const list = cfg?.agents?.list ?? [];
+      for (const entry of list) {
         const id = entry?.id?.trim();
         if (!id) continue;
         const rawModel = entry.model;
@@ -1020,9 +1024,14 @@ export class OpenClawEngine implements Engine {
             : rawModel?.primary?.trim() ?? "";
         if (primary) byAgent.set(id, primary);
       }
-      this.events.onModelDefaultsChanged({ workspaceDefault, byAgent });
+      // Mirror openclaw's `resolveDefaultAgentId`: first configured agent,
+      // or the implicit "main" when the list is empty. This is the agent
+      // any pre-thread composer would route to, so the picker uses its
+      // override as the default before a thread is selected.
+      const defaultAgentId = list[0]?.id?.trim() || "main";
+      this.events.onModelDefaultsChanged({ workspaceDefault, byAgent, defaultAgentId });
       log(
-        `config.get → workspaceDefault=${workspaceDefault ?? "(none)"}, perAgentOverrides=${byAgent.size}`,
+        `config.get → workspaceDefault=${workspaceDefault ?? "(none)"}, perAgentOverrides=${byAgent.size}, defaultAgentId=${defaultAgentId}`,
       );
     } catch (e) {
       warn("config.get failed:", e);

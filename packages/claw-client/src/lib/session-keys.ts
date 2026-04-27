@@ -19,6 +19,7 @@ export const CLAW_SUFFIX = ":openui-claw";
 
 const MAIN_KEY_REGEX = /^agent:[^:]+:main:openui-claw$/i;
 const EXTRA_KEY_REGEX = /^agent:[^:]+:([0-9a-f-]+):openui-claw$/i;
+const AGENT_ID_KEY_REGEX = /^agent:([^:]+):[^:]+:openui-claw$/i;
 
 /** `agent:<agentId>:main:openui-claw` — the agent's primary thread key. */
 export function encodeMain(agentId: string): string {
@@ -46,5 +47,15 @@ export function isMainSession(key: string): boolean {
  */
 export function extractExtraSlotId(key: string): string | null {
   const match = key.trim().match(EXTRA_KEY_REGEX);
+  return match?.[1] ?? null;
+}
+
+/**
+ * Pull the agent id out of any Claw session key (main or extra). Returns
+ * `null` if the input doesn't match the `agent:<id>:<slot>:openui-claw`
+ * shape — useful when callers receive a bare agent id or a non-Claw key.
+ */
+export function extractAgentIdFromKey(key: string): string | null {
+  const match = key.trim().match(AGENT_ID_KEY_REGEX);
   return match?.[1] ?? null;
 }

@@ -77,6 +77,7 @@ import {
   type ThreadUpload,
   type ThreadWorkspaceState,
 } from "@/lib/session-workspace";
+import { extractAgentIdFromKey } from "@/lib/session-keys";
 import { buildAppSiblings, buildArtifactSiblings, makeAgentNameResolver } from "@/lib/siblings";
 import { getSettings, type Settings } from "@/lib/storage";
 import { UploadsProvider, type UploadsSeed } from "@/lib/uploads-context";
@@ -193,6 +194,7 @@ function ThreadArea({
   availableModels,
   gatewayDefaultModelId,
   agentModelById,
+  defaultAgentId,
   patchSession,
   resetSession,
   compactSession,
@@ -227,6 +229,7 @@ function ThreadArea({
   availableModels: ModelChoice[];
   gatewayDefaultModelId: string | null;
   agentModelById: Map<string, string>;
+  defaultAgentId: string | null;
   patchSession: (key: string, patch: Record<string, unknown>) => Promise<boolean>;
   resetSession: (sessionKey: string) => Promise<boolean>;
   compactSession: (sessionKey: string) => Promise<boolean>;
@@ -316,12 +319,22 @@ function ThreadArea({
    * Agent id for the current thread. Used for cross-session lookups (e.g. the
    * uploads aggregation below) but NOT for apps/artifacts — those are scoped
    * per-session.
+   *
+   * Resolution order:
+   *  1. Parse `agent:<id>:<slot>:openui-claw` directly from the route key
+   *     — works pre-fetch (URL is the source of truth, no race vs. threads
+   *     loading).
+   *  2. Bare agent id stored on the synthetic main-thread item (`a.id`).
+   *  3. Lookup in the threads list (for any unusual id shape).
    */
   const activeAgentId = useMemo(() => {
     if (!selectedThreadId) return null;
+    const fromKey = extractAgentIdFromKey(selectedThreadId);
+    if (fromKey) return fromKey;
+    if (knownAgentIds.current?.has(selectedThreadId)) return selectedThreadId;
     const t = (allThreadsRaw as unknown as ClawThread[]).find((x) => x.id === selectedThreadId);
     return t?.clawAgentId ?? t?.id ?? null;
-  }, [allThreadsRaw, selectedThreadId]);
+  }, [allThreadsRaw, knownAgentIds, selectedThreadId]);
 
   /** Display name for the agent owning the current thread (the `clawKind:
    *  "main"` thread's title). Used by the empty-chat welcome screen. */
@@ -838,7 +851,14 @@ function ThreadArea({
             onDispatchGatewayCommand={dispatchGatewayCommand}
             models={availableModels}
             gatewayDefaultModelId={gatewayDefaultModelId}
-            agentDefaultModelId={activeAgentId ? agentModelById.get(activeAgentId) ?? null : null}
+            agentDefaultModelId={(() => {
+              // Per-agent override wins over the workspace default. When no
+              // thread is selected (home/welcome composer) fall back to the
+              // configured default agent so a single-agent setup still
+              // surfaces its model as `Default (X)`.
+              const targetAgentId = activeAgentId ?? defaultAgentId;
+              return targetAgentId ? agentModelById.get(targetAgentId) ?? null : null;
+            })()}
             currentModel={meta?.model ? qualifyModel(meta.model, meta.modelProvider ?? "") : ""}
             currentEffort={meta?.thinkingLevel ?? ""}
             onModelChange={
@@ -1226,6 +1246,7 @@ interface ChatAppInnerProps {
   availableModels: ModelChoice[];
   gatewayDefaultModelId: string | null;
   agentModelById: Map<string, string>;
+  defaultAgentId: string | null;
   patchSession: (key: string, patch: Record<string, unknown>) => Promise<boolean>;
   knownAgentIds: React.RefObject<Set<string>>;
   artifacts: ArtifactStore | undefined;
@@ -1281,6 +1302,7 @@ function ChatAppInner({
   loadThread,
   sessionMeta,
   availableModels,
+  defaultAgentId,
   gatewayDefaultModelId,
   agentModelById,
   patchSession,
@@ -2027,6 +2049,7 @@ function ChatAppInner({
         availableModels={availableModels}
         gatewayDefaultModelId={gatewayDefaultModelId}
         agentModelById={agentModelById}
+        defaultAgentId={defaultAgentId}
         patchSession={patchSession}
         createSession={createSession}
         deleteSession={deleteSession}
@@ -2260,6 +2283,7 @@ export default function ChatApp() {
     availableModels,
     gatewayDefaultModelId,
     agentModelById,
+    defaultAgentId,
     patchSession,
     resetSession,
     compactSession,
@@ -2503,6 +2527,7 @@ export default function ChatApp() {
           availableModels={availableModels}
           gatewayDefaultModelId={gatewayDefaultModelId}
           agentModelById={agentModelById}
+          defaultAgentId={defaultAgentId}
           patchSession={patchSession}
           knownAgentIds={knownAgentIds}
           artifacts={artifacts}
