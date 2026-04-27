@@ -13,7 +13,7 @@ import { useThread } from "@openuidev/react-headless";
 import type { ActionEvent } from "@openuidev/react-lang";
 import { Renderer } from "@openuidev/react-lang";
 import { Callout, Shell } from "@openuidev/react-ui";
-import { openuiLibrary } from "@openuidev/react-ui/genui-lib";
+import { openuiChatLibrary } from "@openuidev/react-ui/genui-lib";
 import {
   ArrowDown,
   ArrowUp,
@@ -686,7 +686,7 @@ export function AssistantMessage({ message }: Props) {
     segment.type === "openui" ? (
       <Renderer
         key={`openui-${i}`}
-        library={openuiLibrary}
+        library={openuiChatLibrary}
         response={segment.content}
         isStreaming={isStreaming}
         onAction={handleAction}
