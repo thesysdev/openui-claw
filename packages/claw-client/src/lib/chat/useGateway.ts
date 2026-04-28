@@ -79,6 +79,7 @@ export function useGateway({ onAuthFailed }: { onAuthFailed: () => void }) {
   const [availableModels, setAvailableModels] = useState<ModelChoice[]>([]);
   const [gatewayDefaultModelId, setGatewayDefaultModelId] = useState<string | null>(null);
   const [agentModelById, setAgentModelById] = useState<Map<string, string>>(() => new Map());
+  const [defaultAgentId, setDefaultAgentId] = useState<string | null>(null);
   const [artifacts, setArtifacts] = useState<ArtifactStore | undefined>(undefined);
   const [apps, setApps] = useState<AppStore | undefined>(undefined);
   const [uploads, setUploads] = useState<UploadStore | undefined>(undefined);
@@ -131,12 +132,11 @@ export function useGateway({ onAuthFailed }: { onAuthFailed: () => void }) {
           saveSettings(updated);
         },
         onSessionMetaChanged: setSessionMeta,
-        onModelsChanged: (models, defaultId) => {
-          setAvailableModels(models);
-          setGatewayDefaultModelId(defaultId);
-        },
-        onAgentInfoChanged: (map) => {
-          setAgentModelById(new Map(map));
+        onModelsChanged: setAvailableModels,
+        onModelDefaultsChanged: ({ workspaceDefault, byAgent, defaultAgentId: nextDefault }) => {
+          setGatewayDefaultModelId(workspaceDefault);
+          setAgentModelById(new Map(byAgent));
+          setDefaultAgentId(nextDefault);
         },
         onKnownAgentIdsChanged: (ids) => {
           knownAgentIds.current = ids;
@@ -526,16 +526,6 @@ export function useGateway({ onAuthFailed }: { onAuthFailed: () => void }) {
     };
   }, []);
 
-  const listSkills = useCallback(
-    async (agentId?: string) => engineRef.current?.skills?.status(agentId) ?? [],
-    [],
-  );
-  const setSkillEnabled = useCallback(
-    async (skillKey: string, enabled: boolean) =>
-      engineRef.current?.skills?.setEnabled(skillKey, enabled) ?? false,
-    [],
-  );
-
   const updateCronJob = useCallback(
     async (id: string, patch: Record<string, unknown>) =>
       engineRef.current?.updateCronJob(id, patch) ?? false,
@@ -568,6 +558,7 @@ export function useGateway({ onAuthFailed }: { onAuthFailed: () => void }) {
     availableModels,
     gatewayDefaultModelId,
     agentModelById,
+    defaultAgentId,
     patchSession,
     knownAgentIds,
     artifacts,
@@ -586,7 +577,5 @@ export function useGateway({ onAuthFailed }: { onAuthFailed: () => void }) {
     removeCronJob,
     gatewayCommands,
     onSessionChanged,
-    listSkills,
-    setSkillEnabled,
   };
 }

@@ -195,33 +195,15 @@ export interface UploadStore {
   deleteUpload(id: string): Promise<void>;
 }
 
-// ── Skills ────────────────────────────────────────────────────────────────────
-
-/**
- * Mirrors the gateway's `SkillStatusEntry` shape — see openclaw
- * `src/agents/skills-status.ts`. Only fields the UI cares about are
- * declared explicitly; everything else stays opaque.
- */
-export interface SkillStatusEntry {
-  name: string;
-  description: string;
-  source: string;
-  bundled: boolean;
-  skillKey: string;
-  emoji?: string;
-  homepage?: string;
-  always: boolean;
-  disabled: boolean;
-  blockedByAllowlist: boolean;
-  eligible: boolean;
-}
-
-export interface SkillsStore {
-  /** Returns the gateway-resolved skill list for the active agent. */
-  status(agentId?: string): Promise<SkillStatusEntry[]>;
-  /** Toggles a skill's enabled state via `skills.update`. */
-  setEnabled(skillKey: string, enabled: boolean): Promise<boolean>;
-}
+// ── Skills ─ feature removed ───────────────────────────────────────────────
+//
+// The Skills browser UI was removed; the SkillStatusEntry / SkillsStore
+// types and the gateway's skills.status / skills.update RPCs are no longer
+// surfaced through the engine. The original definitions are kept commented
+// here for reference if the feature is restored.
+//
+// export interface SkillStatusEntry { ... }
+// export interface SkillsStore { ... }
 
 // ── Engine capabilities ───────────────────────────────────────────────────────
 
@@ -245,7 +227,6 @@ export interface Engine {
   readonly artifacts?: ArtifactStore; // present when capabilities.artifacts
   readonly apps?: AppStore; // present when capabilities.apps
   readonly uploads?: UploadStore; // present when capabilities.uploads
-  readonly skills?: SkillsStore; // present when the gateway exposes skills.status
 
   // Lifecycle
   connect(): Promise<void>;

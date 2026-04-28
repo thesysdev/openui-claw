@@ -20,7 +20,6 @@ import { MobileCronRow } from "@/components/mobile/MobileCronRow";
 import { MobileListCard, MobileListRow } from "@/components/mobile/MobileListRow";
 import { Button } from "@/components/ui/Button";
 import { Counter } from "@/components/ui/Counter";
-import { navigate } from "@/lib/hooks/useHashRoute";
 import type { ClawThread } from "@/types/claw-thread";
 
 const ARTIFACT_ICON: Record<string, typeof FileText> = {
@@ -75,6 +74,7 @@ export function MobileHomeView({
   onOpenThread,
   onOpenApp,
   onOpenArtifact,
+  onOpenCron,
 }: HomeViewProps) {
   const agents = useMemo(() => buildAgents(threads as ClawThread[]), [threads]);
   const recentApps = useMemo(
@@ -208,7 +208,7 @@ export function MobileHomeView({
                     key={job.id}
                     job={job}
                     threads={threads}
-                    onClick={() => navigate({ view: "crons", selectedId: job.id })}
+                    onClick={() => onOpenCron?.(job.id)}
                   />
                 ))}
               </MobileListCard>

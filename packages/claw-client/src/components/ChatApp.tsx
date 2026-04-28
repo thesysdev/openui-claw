@@ -11,6 +11,7 @@ import { EmptyChatWelcome } from "@/components/chat/EmptyChatWelcome";
 import { TopBar } from "@/components/chat/TopBar";
 import { CommandPalette } from "@/components/CommandPalette";
 import { CronsView } from "@/components/crons/CronsView";
+import { CronTrayHost } from "@/components/crons/CronTrayHost";
 import { HomeView } from "@/components/home/HomeView";
 import { AppSidebar } from "@/components/layout/AppSidebar";
 import { ClawThreadContainer } from "@/components/layout/ClawThreadContainer";
@@ -24,7 +25,6 @@ import { MobileAppDetail } from "@/components/mobile/MobileAppDetail";
 import { MobileAppsView } from "@/components/mobile/MobileAppsView";
 import { MobileArtifactDetail } from "@/components/mobile/MobileArtifactDetail";
 import { MobileArtifactsView } from "@/components/mobile/MobileArtifactsView";
-import { MobileCommandPalette } from "@/components/mobile/MobileCommandPalette";
 import { MobileCronsView } from "@/components/mobile/MobileCronsView";
 import { MobileHomeView } from "@/components/mobile/MobileHomeView";
 import { MobileNotificationInboxDrawer } from "@/components/mobile/MobileNotificationInboxDrawer";
@@ -39,8 +39,6 @@ import {
   SessionWorkspacePane,
 } from "@/components/session/SessionWorkspacePane";
 import { SettingsDialog } from "@/components/settings/SettingsDialog";
-import { SettingsView } from "@/components/settings/SettingsView";
-import { SkillsView } from "@/components/skills/SkillsView";
 import { loadPinnedAppIds, savePinnedAppIds } from "@/lib/app-pins";
 import { openClawAdapter } from "@/lib/chat/openClawAdapter";
 import { serializeAssistantTimelineContent } from "@/lib/chat/timeline";
@@ -65,7 +63,6 @@ import type {
 import { ConnectionState } from "@/lib/gateway/types";
 import { navigate, useHashRoute } from "@/lib/hooks/useHashRoute";
 import { useIsMobile } from "@/lib/hooks/useIsMobile";
-import { bootstrapThemeFromStorage } from "@/lib/hooks/useTheme";
 import { qualifyModel } from "@/lib/models";
 import type { NotificationRecord } from "@/lib/notifications";
 import { apply as applyPreferences, getPreferences } from "@/lib/preferences";
@@ -80,6 +77,7 @@ import {
   type ThreadUpload,
   type ThreadWorkspaceState,
 } from "@/lib/session-workspace";
+import { extractAgentIdFromKey } from "@/lib/session-keys";
 import { buildAppSiblings, buildArtifactSiblings, makeAgentNameResolver } from "@/lib/siblings";
 import { getSettings, type Settings } from "@/lib/storage";
 import { UploadsProvider, type UploadsSeed } from "@/lib/uploads-context";
@@ -93,7 +91,7 @@ import {
   useThread,
   useThreadList,
 } from "@openuidev/react-headless";
-import { ArtifactPanel, ArtifactPortalTarget, Shell, ThemeProvider } from "@openuidev/react-ui";
+import { ArtifactPanel, Shell, ThemeProvider } from "@openuidev/react-ui";
 import {
   ArrowLeft,
   BellRing,
@@ -196,6 +194,7 @@ function ThreadArea({
   availableModels,
   gatewayDefaultModelId,
   agentModelById,
+  defaultAgentId,
   patchSession,
   resetSession,
   compactSession,
@@ -224,11 +223,13 @@ function ThreadArea({
   onToggleWorkspacePaneCollapsed,
   gatewayCommands,
   createSession,
+  deleteSession,
 }: {
   sessionMeta: Map<string, SessionRow>;
   availableModels: ModelChoice[];
   gatewayDefaultModelId: string | null;
   agentModelById: Map<string, string>;
+  defaultAgentId: string | null;
   patchSession: (key: string, patch: Record<string, unknown>) => Promise<boolean>;
   resetSession: (sessionKey: string) => Promise<boolean>;
   compactSession: (sessionKey: string) => Promise<boolean>;
@@ -260,6 +261,7 @@ function ThreadArea({
   onToggleWorkspacePaneCollapsed: (collapsed: boolean) => void;
   gatewayCommands: GatewayCommand[];
   createSession: (agentId: string) => Promise<string | null>;
+  deleteSession: (threadId: string) => Promise<boolean>;
 }) {
   const { threads: allThreadsRaw, selectedThreadId } = useThreadList();
   const isRunning = useThread((state) => state.isRunning);
@@ -317,12 +319,22 @@ function ThreadArea({
    * Agent id for the current thread. Used for cross-session lookups (e.g. the
    * uploads aggregation below) but NOT for apps/artifacts — those are scoped
    * per-session.
+   *
+   * Resolution order:
+   *  1. Parse `agent:<id>:<slot>:openui-claw` directly from the route key
+   *     — works pre-fetch (URL is the source of truth, no race vs. threads
+   *     loading).
+   *  2. Bare agent id stored on the synthetic main-thread item (`a.id`).
+   *  3. Lookup in the threads list (for any unusual id shape).
    */
   const activeAgentId = useMemo(() => {
     if (!selectedThreadId) return null;
+    const fromKey = extractAgentIdFromKey(selectedThreadId);
+    if (fromKey) return fromKey;
+    if (knownAgentIds.current?.has(selectedThreadId)) return selectedThreadId;
     const t = (allThreadsRaw as unknown as ClawThread[]).find((x) => x.id === selectedThreadId);
     return t?.clawAgentId ?? t?.id ?? null;
-  }, [allThreadsRaw, selectedThreadId]);
+  }, [allThreadsRaw, knownAgentIds, selectedThreadId]);
 
   /** Display name for the agent owning the current thread (the `clawKind:
    *  "main"` thread's title). Used by the empty-chat welcome screen. */
@@ -345,14 +357,33 @@ function ThreadArea({
     [artifactList, sessionKey],
   );
 
-  const paneApps = sessionApps;
-  const paneArtifacts = sessionArtifacts;
-  // Uploads scoped to the active thread only — mirrors the per-session
-  // filtering we apply to apps/artifacts above.
   const paneUploads = workspace.uploads;
   const paneLinkedApp = workspace.linkedApp;
+  const paneLinkedArtifact = workspace.linkedArtifact;
 
-  const workspaceCount = paneUploads.length + (paneLinkedApp ? 1 : 0);
+  // The refined `linkedApp` may live in a different session than the current
+  // thread (e.g. refining from /apps/<id> can land on the agent's main thread
+  // if the app's origin session no longer exists). Without this, the app
+  // isn't in `sessionApps` → no <ArtifactPanel> registers for it → the
+  // auto-opened side pane portal target stays empty. Append the linkedApp
+  // record (looked up from the global appList) when it's not already there.
+  const paneApps = useMemo(() => {
+    if (!paneLinkedApp) return sessionApps;
+    if (sessionApps.some((a) => a.id === paneLinkedApp.appId)) return sessionApps;
+    const found = appList.find((a) => a.id === paneLinkedApp.appId);
+    return found ? [...sessionApps, found] : sessionApps;
+  }, [sessionApps, paneLinkedApp, appList]);
+  // Same merge for linkedArtifact — needed when the artifact's origin session
+  // differs from the active thread.
+  const paneArtifacts = useMemo(() => {
+    if (!paneLinkedArtifact) return sessionArtifacts;
+    if (sessionArtifacts.some((a) => a.id === paneLinkedArtifact.artifactId)) return sessionArtifacts;
+    const found = artifactList.find((a) => a.id === paneLinkedArtifact.artifactId);
+    return found ? [...sessionArtifacts, found] : sessionArtifacts;
+  }, [sessionArtifacts, paneLinkedArtifact, artifactList]);
+
+  const workspaceCount =
+    paneUploads.length + (paneLinkedApp ? 1 : 0) + (paneLinkedArtifact ? 1 : 0);
 
   useEffect(() => {
     const wasRunning = previousRunningRef.current;
@@ -448,10 +479,17 @@ function ThreadArea({
       selectedThreadId &&
       pendingPreviewOpen.threadId === selectedThreadId
     ) {
-      artifactStore.getState().openArtifact(pendingPreviewOpen.previewId);
+      // On mobile during a chat, the artifact overlay is suppressed (chat owns
+      // the screen during refine), so opening the artifact would be a no-op
+      // render but still mutate store state. Skip the auto-open and just
+      // consume the pending request — the chip in the composer is the
+      // mobile-side indicator that refine context is attached.
+      if (!isMobile) {
+        artifactStore.getState().openArtifact(pendingPreviewOpen.previewId);
+      }
       onConsumePendingPreview();
     }
-  }, [artifactStore, onConsumePendingPreview, pendingPreviewOpen, selectedThreadId]);
+  }, [artifactStore, isMobile, onConsumePendingPreview, pendingPreviewOpen, selectedThreadId]);
 
   const addFiles = useCallback(
     async (files: File[]) => {
@@ -780,11 +818,13 @@ function ThreadArea({
               />
             );
           })()}
-          {workspace.linkedApp ? (
+          {workspace.linkedApp || workspace.linkedArtifact ? (
             <div className="sticky top-0 z-20 flex items-center justify-between gap-3 border-b border-border-default/40 bg-info-background px-ml py-2 text-sm dark:border-border-default/16">
               <div className="flex min-w-0 items-center gap-2">
                 <span className="font-medium text-text-info-primary">Refining</span>
-                <span className="truncate text-text-info-primary">{workspace.linkedApp.title}</span>
+                <span className="truncate text-text-info-primary">
+                  {workspace.linkedApp?.title ?? workspace.linkedArtifact?.title}
+                </span>
               </div>
               <button
                 type="button"
@@ -794,6 +834,7 @@ function ThreadArea({
                   onUpdateThreadWorkspace(selectedThreadId, (current) => ({
                     ...current,
                     linkedApp: null,
+                    linkedArtifact: null,
                   }));
                 }}
               >
@@ -806,6 +847,7 @@ function ThreadArea({
               <SessionComposer
                 uploads={workspace.uploads}
                 linkedApp={workspace.linkedApp}
+                linkedArtifact={workspace.linkedArtifact}
                 onPickFiles={openFilePicker}
                 onAddFiles={addFiles}
                 onRemoveUpload={(uploadId) => {
@@ -822,9 +864,14 @@ function ThreadArea({
                 onDispatchGatewayCommand={dispatchGatewayCommand}
                 models={availableModels}
                 gatewayDefaultModelId={gatewayDefaultModelId}
-                agentDefaultModelId={
-                  activeAgentId ? agentModelById.get(activeAgentId) ?? null : null
-                }
+                agentDefaultModelId={(() => {
+                  // Per-agent override wins over the workspace default. When no
+                  // thread is selected (home/welcome composer) fall back to the
+                  // configured default agent so a single-agent setup still
+                  // surfaces its model as `Default (X)`.
+                  const targetAgentId = activeAgentId ?? defaultAgentId;
+                  return targetAgentId ? agentModelById.get(targetAgentId) ?? null : null;
+                })()}
                 currentModel={
                   meta?.model ? qualifyModel(meta.model, meta.modelProvider ?? "") : ""
                 }
@@ -899,12 +946,16 @@ function ThreadArea({
         </ClawThreadContainer>
 
         {(() => {
-          // Fullscreen artifact preview surface. We register one
-          // <ArtifactPanel> per known app/artifact below; whichever is active
-          // (per the artifact store) portals its content into our
-          // <ArtifactPortalTarget>. No <ArtifactPanel> = no portal = nothing
-          // renders — so there's no empty side-pane animation while data
-          // loads, and our own modal layer is gone.
+          // Register one <ArtifactPanel> per known app/artifact/upload.
+          // Each panel portals into the <ArtifactPortalTarget> mounted by
+          // ClawThreadContainer's right pane. The panels themselves render
+          // no DOM until activated, so iterating the FULL `appList`/
+          // `artifactList` (not session-filtered `paneApps`/`paneArtifacts`)
+          // is essentially free and guarantees that any cross-session
+          // refine target has a panel ready to portal — without this,
+          // auto-opening a linkedApp from the agent's main thread would
+          // activate an id with no registered panel and the side pane
+          // would render empty.
           const threadsAll = allThreadsRaw as unknown as ClawThread[];
           const agentNameFor = makeAgentNameResolver(threadsAll);
           const handleClose = () => {
@@ -914,19 +965,7 @@ function ThreadArea({
           const artifactSiblings = buildArtifactSiblings(artifactList, agentNameFor);
           return (
             <>
-              <div
-                className={
-                  activeArtifactId
-                    ? "absolute inset-0 z-[60] flex bg-background dark:bg-sunk"
-                    : "hidden"
-                }
-              >
-                <div className="flex min-w-0 flex-1 flex-col">
-                  <ArtifactPortalTarget className="h-full w-full" />
-                </div>
-              </div>
-
-              {paneApps.map((app) => (
+              {appList.map((app) => (
                 <ArtifactPanel
                   key={`${app.id}:${app.updatedAt}`}
                   artifactId={sessionAppPreviewId(app.id)}
@@ -941,7 +980,9 @@ function ThreadArea({
                       mode="panel"
                       isPinned={pinnedAppIds.has(app.id)}
                       onTogglePinned={onTogglePinned}
-                      onRefine={onRefineApp}
+                      // In-chat panel: omit onRefine so the Refine action
+                      // hides — the user is already in the refine session
+                      // (composer is primed and `linkedApp` is set).
                       onContinueConversation={onAppContinueConversation}
                       onDeleted={onRefreshSummaries}
                       onClose={handleClose}
@@ -954,7 +995,7 @@ function ThreadArea({
                 </ArtifactPanel>
               ))}
 
-              {paneArtifacts.map((artifact) => (
+              {artifactList.map((artifact) => (
                 <ArtifactPanel
                   key={`${artifact.id}:${artifact.updatedAt}`}
                   artifactId={sessionArtifactPreviewId(artifact.id)}
@@ -969,7 +1010,8 @@ function ThreadArea({
                       mode="panel"
                       onDeleted={onRefreshSummaries}
                       onClose={handleClose}
-                      onRefine={onRefineArtifact}
+                      // In-chat panel: omit onRefine — see comment on
+                      // <AppDetail> above.
                       siblings={artifactSiblings}
                       onSwitch={(nextArtId) =>
                         artifactStore.getState().openArtifact(sessionArtifactPreviewId(nextArtId))
@@ -1009,12 +1051,15 @@ function ThreadArea({
             pinnedAppIds={pinnedAppIds}
             activePreviewId={activeArtifactId}
             onOpenApp={(appId) => {
-              artifactStore.getState().openArtifact(sessionAppPreviewId(appId));
+              // On mobile, route to /apps/<id> instead of toggling the
+              // artifact store — the chat-route overlay is suppressed so the
+              // store-based open would render nothing.
               setMobileWorkspaceOpen(false);
+              navigate({ view: "app", appId });
             }}
             onOpenArtifact={(artifactId) => {
-              artifactStore.getState().openArtifact(sessionArtifactPreviewId(artifactId));
               setMobileWorkspaceOpen(false);
+              navigate({ view: "artifact", artifactId });
             }}
             onOpenUpload={(uploadId) => {
               artifactStore.getState().openArtifact(sessionUploadPreviewId(uploadId));
@@ -1056,7 +1101,11 @@ function ThreadArea({
           />
         )}
 
-        {workspacePaneCollapsed ? (
+        {/* When an artifact panel is open, force the workspace rail into its
+            collapsed icon-strip variant so users keep the per-thread context
+            tiles within reach without the full pane competing for the right
+            edge that the artifact slide-in claims. */}
+        {activeArtifactId || workspacePaneCollapsed ? (
           <aside className="hidden h-full w-12 shrink-0 flex-col items-center overflow-y-auto border-l border-border-default/50 bg-transparent dark:border-border-default/16 lg:flex">
             <div className="flex min-h-[48px] w-full items-center justify-center border-b border-border-default px-2xs dark:border-border-default/16">
               <IconButton
@@ -1218,6 +1267,7 @@ interface ChatAppInnerProps {
   availableModels: ModelChoice[];
   gatewayDefaultModelId: string | null;
   agentModelById: Map<string, string>;
+  defaultAgentId: string | null;
   patchSession: (key: string, patch: Record<string, unknown>) => Promise<boolean>;
   knownAgentIds: React.RefObject<Set<string>>;
   artifacts: ArtifactStore | undefined;
@@ -1258,8 +1308,8 @@ interface ChatAppInnerProps {
   onRunCronJob: (id: string, mode?: "force" | "due") => Promise<boolean>;
   onRemoveCronJob: (id: string) => Promise<boolean>;
   gatewayCommands: GatewayCommand[];
-  listSkills: (agentId?: string) => Promise<import("@/lib/engines/types").SkillStatusEntry[]>;
-  setSkillEnabled: (skillKey: string, enabled: boolean) => Promise<boolean>;
+  themeMode: "light" | "dark";
+  onToggleThemeMode: () => void;
 }
 
 function ChatAppInner({
@@ -1275,6 +1325,7 @@ function ChatAppInner({
   loadThread,
   sessionMeta,
   availableModels,
+  defaultAgentId,
   gatewayDefaultModelId,
   agentModelById,
   patchSession,
@@ -1308,8 +1359,8 @@ function ChatAppInner({
   onRunCronJob,
   onRemoveCronJob,
   gatewayCommands,
-  listSkills,
-  setSkillEnabled,
+  themeMode,
+  onToggleThemeMode,
 }: ChatAppInnerProps) {
   // Extra (non-destructured-above) props that flow through ChatAppInner.
   // Using `arguments` would be noisy; re-grab via a local re-assignment.
@@ -1323,6 +1374,7 @@ function ChatAppInner({
   const [notificationPaneCollapsed, setNotificationPaneCollapsed] = useState(false);
   const [workspacePaneCollapsed, setWorkspacePaneCollapsed] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [cronTrayJobId, setCronTrayJobId] = useState<string | null>(null);
 
   useEffect(() => {
     const listener = (event: KeyboardEvent) => {
@@ -1393,11 +1445,12 @@ function ChatAppInner({
     const hidden = new Set<string>();
 
     Object.entries(workspaceByThread).forEach(([threadId, workspace]) => {
-      const linkedAppSessionKey = workspace.linkedApp?.sessionKey;
-      if (!linkedAppSessionKey) return;
+      const sourceSessionKey =
+        workspace.linkedApp?.sessionKey ?? workspace.linkedArtifact?.sessionKey;
+      if (!sourceSessionKey) return;
 
       const sourceThreadId = sessionRouteIdFromSessionKey(
-        linkedAppSessionKey,
+        sourceSessionKey,
         knownAgentIds.current,
       );
 
@@ -1424,6 +1477,7 @@ function ChatAppInner({
         return {
           uploads: [...remoteUploads, ...existingPending],
           linkedApp: current.linkedApp,
+          linkedArtifact: current.linkedArtifact,
         };
       });
     });
@@ -1553,6 +1607,12 @@ function ChatAppInner({
     }
   }, [connectionState, route, selectedThreadId, selectThread]);
 
+  useEffect(() => {
+    if (connectionState === ConnectionState.CONNECTED) {
+      loadThreads();
+    }
+  }, [connectionState, loadThreads]);
+
   /**
    * Resolve where a refine click should land:
    *   1. originating session (sessionKey → routed thread id)
@@ -1600,16 +1660,15 @@ function ChatAppInner({
       if (!nextThreadId) return;
 
       if (target.kind === "app") {
-        // Link the app to the thread so the workspace pane "Refining ..." chip
-        // shows up. We deliberately do NOT auto-open the artifact panel here:
-        // when the user clicked Refine from the standalone `/apps/<id>` page,
-        // they were already looking at the app full-screen, and re-opening it
-        // as an artifact panel in the new chat covers the composer
-        // ("the chat hides"). Artifact refine has the same shape and works
-        // fine because it doesn't auto-open. If the user wants the preview
-        // visible alongside the chat, the workspace pane already exposes it.
+        // Link the app to the thread so the "Refining ..." chip shows up,
+        // and queue the app's artifact preview to auto-open. With the split-
+        // pane Shell.ThreadContainer, the chat stays visible on the left
+        // while the app pins on the right — so opening the preview no longer
+        // hides the composer. Clear `linkedArtifact` so a previous artifact
+        // refine doesn't leak both contexts into the next user message.
         onUpdateThreadWorkspace(nextThreadId, (current) => ({
           ...current,
+          linkedArtifact: null,
           linkedApp: {
             appId: target.record.id,
             title: target.record.title,
@@ -1617,27 +1676,38 @@ function ChatAppInner({
             sessionKey: target.record.sessionKey,
           },
         }));
+        onSetPendingPreviewOpen({
+          threadId: nextThreadId,
+          previewId: sessionAppPreviewId(target.record.id),
+        });
+      } else {
+        // Same parity as `linkedApp`: stamp `linkedArtifact` so the chip shows
+        // and the model gets context, then auto-open the artifact preview on
+        // desktop (mobile suppresses the overlay during chat — see effect at
+        // ~line 467).
+        const artifactSessionKey = target.record.source?.sessionId ?? "";
+        const artifactAgentId = target.record.source?.agentId ?? "";
+        // Clear `linkedApp` so a previous app refine doesn't leak both
+        // contexts into the next user message.
+        onUpdateThreadWorkspace(nextThreadId, (current) => ({
+          ...current,
+          linkedApp: null,
+          linkedArtifact: {
+            artifactId: target.record.id,
+            title: target.record.title,
+            agentId: artifactAgentId,
+            sessionKey: artifactSessionKey,
+          },
+        }));
+        onSetPendingPreviewOpen({
+          threadId: nextThreadId,
+          previewId: sessionArtifactPreviewId(target.record.id),
+        });
       }
 
       loadThreads();
       selectThread(nextThreadId);
       navigate({ view: "chat", sessionId: nextThreadId });
-
-      // Prime the composer on the next two animation frames so the chat
-      // view (and its composer) has committed and the listener is live.
-      // One RAF fires after navigate's commit; a second guarantees the
-      // useEffect that registers the listener has run.
-      const prefill =
-        target.kind === "app"
-          ? `Refine app "${target.record.title}" (id: ${target.record.id}): `
-          : `Refine artifact "${target.record.title}" (id: ${target.record.id}): `;
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          window.dispatchEvent(
-            new CustomEvent("openui-claw:prime-composer", { detail: { text: prefill } }),
-          );
-        });
-      });
     },
     [
       loadThreads,
@@ -1723,7 +1793,7 @@ function ChatAppInner({
         notification.target.sessionId.includes(":cron:");
 
       if (isLegacyCronTarget && notification.source?.cronId) {
-        navigate({ view: "crons", selectedId: notification.source.cronId });
+        setCronTrayJobId(notification.source.cronId);
       } else {
         switch (notification.target.view) {
           case "chat":
@@ -1736,11 +1806,11 @@ function ChatAppInner({
             navigate({ view: "artifact", artifactId: notification.target.artifactId });
             break;
           case "crons":
-            navigate(
-              notification.target.jobId
-                ? { view: "crons", selectedId: notification.target.jobId }
-                : { view: "crons" },
-            );
+            if (notification.target.jobId) {
+              setCronTrayJobId(notification.target.jobId);
+            } else {
+              navigate({ view: "crons" });
+            }
             break;
           default:
             navigate({ view: "home" });
@@ -1842,6 +1912,7 @@ function ChatAppInner({
       onMarkAllNotifsRead: async () => {
         await onMarkNotificationsRead();
       },
+      onOpenCron: (jobId: string) => setCronTrayJobId(jobId),
     };
     mainContent = (
       <div className="flex h-full min-w-0 flex-1 overflow-hidden">
@@ -1912,26 +1983,6 @@ function ChatAppInner({
           />
         )}
       </Shell.ThreadContainer>
-    );
-  } else if (route.view === "settings") {
-    mainContent = (
-      <div className="flex h-full min-w-0 flex-1 overflow-hidden">
-        <SettingsView
-          currentSettings={getSettings()}
-          section={route.section}
-          onSave={(newSettings) => onSettingsSave(newSettings)}
-        />
-      </div>
-    );
-  } else if (route.view === "skills") {
-    mainContent = (
-      <div className="flex h-full min-w-0 flex-1 overflow-hidden">
-        <SkillsView
-          loadSkills={listSkills}
-          setEnabled={setSkillEnabled}
-          connectionState={connectionState}
-        />
-      </div>
     );
   } else if (route.view === "crons") {
     const cronsProps = {
@@ -2035,8 +2086,10 @@ function ChatAppInner({
         availableModels={availableModels}
         gatewayDefaultModelId={gatewayDefaultModelId}
         agentModelById={agentModelById}
+        defaultAgentId={defaultAgentId}
         patchSession={patchSession}
         createSession={createSession}
+        deleteSession={deleteSession}
         resetSession={resetSession}
         compactSession={compactSession}
         onSessionChanged={onSessionChanged}
@@ -2085,6 +2138,8 @@ function ChatAppInner({
           onOpenSearch={() => setPaletteOpen(true)}
           onOpenNotifications={() => setMobileNotificationInboxOpen(true)}
           onOpenSettings={onSettingsClick}
+          themeMode={themeMode}
+          onToggleThemeMode={onToggleThemeMode}
           chromeless={
             route.view === "chat" ||
             route.view === "app" ||
@@ -2116,7 +2171,7 @@ function ChatAppInner({
             void openNotification(notification);
           }}
         />
-        <MobileCommandPalette
+        <CommandPalette
           open={paletteOpen}
           onClose={() => setPaletteOpen(false)}
           threads={threads as unknown as ClawThreadListItem[]}
@@ -2138,12 +2193,31 @@ function ChatAppInner({
             }
           }}
         />
+        {cronTrayJobId ? (
+          <CronTrayHost
+            jobId={cronTrayJobId}
+            cronJobs={cronJobs}
+            runs={cronRuns}
+            threads={threads}
+            isMobile
+            onClose={() => setCronTrayJobId(null)}
+            onOpenThread={(threadId) => {
+              setCronTrayJobId(null);
+              navigate({ view: "chat", sessionId: threadId });
+            }}
+            onUpdateCronJob={onUpdateCronJob}
+            onRunCronJob={onRunCronJob}
+            onRemoveCronJob={onRemoveCronJob}
+            onRefreshCronData={onRefreshCronData}
+          />
+        ) : null}
       </Shell.Container>
     );
   }
 
   return (
     <Shell.Container agentName="Claw" logoUrl={LOGO_URL}>
+      <RouteSidebarSync collapse={route.view === "app" || route.view === "artifact"} />
       <AppSidebar
         connectionState={connectionState}
         onSettingsClick={onSettingsClick}
@@ -2156,6 +2230,8 @@ function ChatAppInner({
         hiddenThreadIds={hiddenRefinementThreadIds}
         pinnedAppIds={pinnedAppIds}
         onOpenCommandPalette={() => setPaletteOpen(true)}
+        themeMode={themeMode}
+        onToggleThemeMode={onToggleThemeMode}
       />
       {mainContent}
       <NotificationToastViewport
@@ -2193,20 +2269,62 @@ function ChatAppInner({
           }
         }}
       />
+      {cronTrayJobId ? (
+        <CronTrayHost
+          jobId={cronTrayJobId}
+          cronJobs={cronJobs}
+          runs={cronRuns}
+          threads={threads}
+          isMobile={false}
+          onClose={() => setCronTrayJobId(null)}
+          onOpenThread={(threadId) => {
+            setCronTrayJobId(null);
+            navigate({ view: "chat", sessionId: threadId });
+          }}
+          onUpdateCronJob={onUpdateCronJob}
+          onRunCronJob={onRunCronJob}
+          onRemoveCronJob={onRemoveCronJob}
+          onRefreshCronData={onRefreshCronData}
+        />
+      ) : null}
     </Shell.Container>
   );
 }
+
+const THEME_STORAGE_KEY = "claw:theme";
 
 export default function ChatApp() {
   const isMobile = useIsMobile();
   const [settingsOpen, setSettingsOpen] = useState(false);
   useEffect(() => {
-    bootstrapThemeFromStorage();
     applyPreferences();
   }, []);
   const [appList, setAppList] = useState<AppSummary[]>([]);
   const [artifactList, setArtifactList] = useState<ArtifactSummary[]>([]);
   const [pinnedAppIds, setPinnedAppIds] = useState<Set<string>>(new Set());
+
+  // Single source of truth for color scheme. Drives:
+  //  1. the Tailwind chrome via `.dark` on <html>
+  //  2. the openui ThemeProvider's `mode` prop (CSS vars)
+  //  3. localStorage so the choice survives reload
+  // Anything else that wants to read/write theme should consume these props,
+  // not mutate <html> or localStorage directly.
+  const [themeMode, setThemeMode] = useState<"light" | "dark">(() => {
+    if (typeof window === "undefined") return "light";
+    const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
+    if (stored === "dark" || stored === "light") return stored;
+    return document.documentElement.classList.contains("dark") ? "dark" : "light";
+  });
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    document.documentElement.classList.toggle("dark", themeMode === "dark");
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(THEME_STORAGE_KEY, themeMode);
+    }
+  }, [themeMode]);
+  const toggleThemeMode = useCallback(() => {
+    setThemeMode((prev) => (prev === "dark" ? "light" : "dark"));
+  }, []);
   const [workspaceByThread, setWorkspaceByThread] = useState<Record<string, ThreadWorkspaceState>>(
     {},
   );
@@ -2230,6 +2348,7 @@ export default function ChatApp() {
     availableModels,
     gatewayDefaultModelId,
     agentModelById,
+    defaultAgentId,
     patchSession,
     resetSession,
     compactSession,
@@ -2250,8 +2369,6 @@ export default function ChatApp() {
     removeCronJob,
     gatewayCommands,
     onSessionChanged,
-    listSkills,
-    setSkillEnabled,
   } = useGateway({ onAuthFailed: () => setSettingsOpen(true) });
 
   const refreshAppList = useCallback(async () => {
@@ -2277,19 +2394,27 @@ export default function ChatApp() {
   }, [artifacts]);
 
   useEffect(() => {
-    if (apps) void refreshAppList();
-  }, [apps, refreshAppList]);
-
-  useEffect(() => {
-    if (artifacts) void refreshArtifactList();
-  }, [artifacts, refreshArtifactList]);
-
-  useEffect(() => {
     if (connectionState === ConnectionState.CONNECTED) {
+      // Apps/artifacts plugin refs can be truthy before the WebSocket finishes
+      // handshaking, so listing on plugin-available alone returns [] on a cold
+      // first connect (visible on mobile, where there's no second sidebar
+      // copy of this effect to bail us out). Gate on CONNECTED so the list
+      // calls run against a ready engine — same pattern as notifications and
+      // cron below.
+      if (apps) void refreshAppList();
+      if (artifacts) void refreshArtifactList();
       void refreshNotifications();
       void refreshCronData();
     }
-  }, [connectionState, refreshCronData, refreshNotifications]);
+  }, [
+    connectionState,
+    apps,
+    artifacts,
+    refreshAppList,
+    refreshArtifactList,
+    refreshCronData,
+    refreshNotifications,
+  ]);
 
   const handleDeleteApp = useCallback(
     async (appId: string) => {
@@ -2348,11 +2473,17 @@ export default function ChatApp() {
         const existingPending = (current[threadId]?.uploads ?? []).filter(
           (upload) => upload.status === "pending",
         );
+        // Preserve link state that was just written by the Refine flow —
+        // history-derived link info is `null` for refines (the link isn't in
+        // the message stream yet), so blindly overwriting would drop the chip.
+        const existingLinkedApp = current[threadId]?.linkedApp ?? null;
+        const existingLinkedArtifact = current[threadId]?.linkedArtifact ?? null;
         return {
           ...current,
           [threadId]: {
             uploads: [...remoteUploads, ...existingPending],
-            linkedApp: historyWorkspace.linkedApp,
+            linkedApp: existingLinkedApp ?? historyWorkspace.linkedApp,
+            linkedArtifact: existingLinkedArtifact ?? historyWorkspace.linkedArtifact,
           },
         };
       });
@@ -2448,7 +2579,7 @@ export default function ChatApp() {
   );
 
   return (
-    <ThemeProvider>
+    <ThemeProvider mode={themeMode}>
       <ChatProvider
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         fetchThreadList={adaptedFetchThreadList as any}
@@ -2459,7 +2590,7 @@ export default function ChatApp() {
       >
         <ChatAppInner
           connectionState={connectionState}
-          onSettingsClick={() => navigate({ view: "settings" })}
+          onSettingsClick={() => setSettingsOpen(true)}
           onSettingsSave={(newSettings) => {
             reconnect(newSettings);
             setSettingsOpen(false);
@@ -2475,6 +2606,7 @@ export default function ChatApp() {
           availableModels={availableModels}
           gatewayDefaultModelId={gatewayDefaultModelId}
           agentModelById={agentModelById}
+          defaultAgentId={defaultAgentId}
           patchSession={patchSession}
           knownAgentIds={knownAgentIds}
           artifacts={artifacts}
@@ -2506,32 +2638,31 @@ export default function ChatApp() {
           onRunCronJob={runCronJob}
           onRemoveCronJob={removeCronJob}
           gatewayCommands={gatewayCommands}
-          listSkills={listSkills}
-          setSkillEnabled={setSkillEnabled}
+          themeMode={themeMode}
+          onToggleThemeMode={toggleThemeMode}
         />
 
         {isMobile ? (
           <MobileSettingsDialog
             open={settingsOpen}
             currentSettings={settings}
-            onClose={() => {
-              if (getSettings()?.gatewayUrl) setSettingsOpen(false);
-            }}
+            connectionState={connectionState}
+            onClose={() => setSettingsOpen(false)}
             onSave={(newSettings) => {
+              // Don't close here — the dialog watches `connectionState` and
+              // closes itself on CONNECTED, or stays open with an inline
+              // error on UNREACHABLE / AUTH_FAILED.
               reconnect(newSettings);
-              setSettingsOpen(false);
             }}
           />
         ) : (
           <SettingsDialog
             open={settingsOpen}
             currentSettings={settings}
-            onClose={() => {
-              if (getSettings()?.gatewayUrl) setSettingsOpen(false);
-            }}
+            connectionState={connectionState}
+            onClose={() => setSettingsOpen(false)}
             onSave={(newSettings) => {
               reconnect(newSettings);
-              setSettingsOpen(false);
             }}
           />
         )}
@@ -2596,4 +2727,15 @@ export default function ChatApp() {
       </ChatProvider>
     </ThemeProvider>
   );
+}
+
+// Auto-collapse the main left sidebar when the user lands on a fullscreen
+// app/artifact view. Lives inside <Shell.Container> so it can call into the
+// shell store. Renders nothing.
+function RouteSidebarSync({ collapse }: { collapse: boolean }) {
+  const setIsSidebarOpen = Shell.useShellStore((s) => s.setIsSidebarOpen);
+  useEffect(() => {
+    if (collapse) setIsSidebarOpen(false);
+  }, [collapse, setIsSidebarOpen]);
+  return null;
 }

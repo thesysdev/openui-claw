@@ -584,16 +584,6 @@ body {
   }
 }
 
-/* react-ui's `.openui-shell-thread-chat-panel` is sized assuming an artifact
-   panel sibling (min-width: 360px, flex-shrink: 0, no grow). Our chat view
-   uses `ClawThreadContainer` which renders no artifact panel, so make the
-   chat panel actually fill the row. Scoped to our container class so other
-   Shell.ThreadContainer usages (home/apps/artifacts views) are untouched. */
-.openui-claw-thread-container .openui-shell-thread-chat-panel {
-  flex: 1 1 100%;
-  min-width: 0;
-}
-
 /* ── Streaming loader (Shell.MessageLoading) ──────────────────────────────
    react-ui ships a thin-bordered 32px pill with three tiny dots. Re-skin it
    so it visually reads as the in-flight assistant bubble: left-aligned in

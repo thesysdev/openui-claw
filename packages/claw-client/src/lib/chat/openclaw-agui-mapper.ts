@@ -19,7 +19,7 @@
 
 import { EventType } from "@openuidev/react-headless";
 import type { AgentEvent, ChatEvent } from "@/lib/gateway/types";
-import { ERROR_SENTINEL } from "@/lib/chat/history-merger";
+import { ERROR_SENTINEL, GATEWAY_SENTINEL } from "@/lib/chat/history-merger";
 import { encodeAssistantTimelineSegment } from "@/lib/chat/timeline";
 
 const DEBUG_STORAGE_KEY = "openui-claw-debug-events";
@@ -54,7 +54,23 @@ export function createOpenClawAGUIMapper(
   onEvent: (event: Record<string, unknown>) => void
 ): { onAgentEvent: (evt: AgentEvent) => void; onChatEvent: (evt: ChatEvent) => void } {
   let messageId: string | null = null;
+  let emittedTextContent = false;
   const activeToolCallIds = new Set<string>();
+
+  const extractTextFromMessageContent = (message: unknown): string => {
+    if (!message || typeof message !== "object") return "";
+    const content = (message as { content?: unknown }).content;
+    if (typeof content === "string") return content;
+    if (!Array.isArray(content)) return "";
+    return content
+      .map((part) => {
+        if (!part || typeof part !== "object") return "";
+        const p = part as { type?: unknown; text?: unknown };
+        if (p.type === "text" && typeof p.text === "string") return p.text;
+        return "";
+      })
+      .join("");
+  };
 
   const debugEnabled = (): boolean => {
     if (typeof window === "undefined") return false;
@@ -212,6 +228,7 @@ export function createOpenClawAGUIMapper(
             delta: evt.data.delta,
           });
           ensureMessageStarted(evt.runId);
+          emittedTextContent = true;
           emitEvent({ type: EventType.TEXT_MESSAGE_CONTENT, messageId, delta: evt.data.delta });
         }
         return;
@@ -237,6 +254,7 @@ export function createOpenClawAGUIMapper(
             message: evt.message,
           });
           ensureMessageStarted(evt.runId);
+          emittedTextContent = true;
           emitEvent({ type: EventType.TEXT_MESSAGE_CONTENT, messageId, delta: evt.message });
         }
       } else if (evt.state === "final" || evt.state === "aborted") {
@@ -249,6 +267,18 @@ export function createOpenClawAGUIMapper(
           usage: evt.usage,
         });
         ensureMessageStarted(evt.runId);
+        if (!emittedTextContent) {
+          const finalText = extractTextFromMessageContent(evt.message);
+          if (finalText) {
+            const isGatewayInjected =
+              !!evt.message &&
+              typeof evt.message === "object" &&
+              (evt.message as { model?: unknown }).model === "gateway-injected";
+            const delta = isGatewayInjected ? `${GATEWAY_SENTINEL}${finalText}` : finalText;
+            emittedTextContent = true;
+            emitEvent({ type: EventType.TEXT_MESSAGE_CONTENT, messageId, delta });
+          }
+        }
         // Encode authoritative token usage into the message timeline so the
         // ThinkingPanel can display real Anthropic counts instead of a
         // char/4 estimate. Skipped on `aborted` runs where usage is absent.

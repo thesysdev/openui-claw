@@ -26,6 +26,7 @@ import { resolveSessionTitle } from "@/lib/thread-titles";
 import type {
   AgentsListResult,
   ClawThreadListItem,
+  ConfigGetResult,
   ModelChoice,
   ModelsListResult,
   NotificationsListResult,
@@ -50,8 +51,6 @@ import type {
   ModelInfo,
   OpenClawEngineConfig,
   SessionInfo,
-  SkillsStore,
-  SkillStatusEntry,
   StoredMessage,
   UploadMeta,
   UploadRecord,
@@ -122,10 +121,19 @@ export interface OpenClawEngineEvents {
   onAuthFailed: () => void;
   onSettingsChanged: (settings: Settings) => void;
   onSessionMetaChanged: (meta: Map<string, SessionRow>) => void;
-  onModelsChanged: (models: ModelChoice[], defaultId: string | null) => void;
-  /** Fired when agents.list responds with each agent's configured primary
-   *  model. Keyed by agentId, value is qualified `provider/model`. */
-  onAgentInfoChanged: (agentModelById: Map<string, string>) => void;
+  onModelsChanged: (models: ModelChoice[]) => void;
+  /** Fired when `config.get` resolves on connect. Carries the workspace
+   *  default model (`cfg.agents.defaults.model.primary`), any per-agent
+   *  overrides (`cfg.agents.list[].model.primary`), and the default agent
+   *  id (first entry in `cfg.agents.list`, falling back to "main"). Model
+   *  refs are qualified `provider/model`. Used so the picker can show
+   *  "Default (X)" pre-thread (where no `activeAgentId` exists yet) by
+   *  resolving against `defaultAgentId`. */
+  onModelDefaultsChanged: (defaults: {
+    workspaceDefault: string | null;
+    byAgent: Map<string, string>;
+    defaultAgentId: string | null;
+  }) => void;
   onKnownAgentIdsChanged: (ids: Set<string>) => void;
   /**
    * Fired when the gateway broadcasts `sessions.changed` for a session we
@@ -167,8 +175,6 @@ export class OpenClawEngine implements Engine {
   private _settings: Settings | null;
   private _sessionMeta = new Map<string, SessionRow>();
   private _availableModels: ModelChoice[] = [];
-  /** agentId → qualified `provider/model` from `cfg.agents.byId.{id}.model.primary`. */
-  private _agentModelById: Map<string, string> = new Map();
   private events: OpenClawEngineEvents;
 
   private _isReady = false;
@@ -325,28 +331,29 @@ export class OpenClawEngine implements Engine {
     },
   };
 
-  readonly skills: SkillsStore = {
-    status: async (agentId?: string): Promise<SkillStatusEntry[]> => {
-      try {
-        const params = agentId ? { agentId } : {};
-        const result = await this._request<{ skills: SkillStatusEntry[] }>("skills.status", params);
-        return result?.skills ?? [];
-      } catch (error) {
-        warn("skills.status failed:", error);
-        return [];
-      }
-    },
-
-    setEnabled: async (skillKey: string, enabled: boolean): Promise<boolean> => {
-      try {
-        await this._request("skills.update", { skillKey, enabled });
-        return true;
-      } catch (error) {
-        warn("skills.update failed:", error);
-        return false;
-      }
-    },
-  };
+  // Skills feature removed — see SkillsStore type in engines/types.ts (commented out).
+  // readonly skills: SkillsStore = {
+  //   status: async (agentId?: string): Promise<SkillStatusEntry[]> => {
+  //     try {
+  //       const params = agentId ? { agentId } : {};
+  //       const result = await this._request<{ skills: SkillStatusEntry[] }>("skills.status", params);
+  //       return result?.skills ?? [];
+  //     } catch (error) {
+  //       warn("skills.status failed:", error);
+  //       return [];
+  //     }
+  //   },
+  //
+  //   setEnabled: async (skillKey: string, enabled: boolean): Promise<boolean> => {
+  //     try {
+  //       await this._request("skills.update", { skillKey, enabled });
+  //       return true;
+  //     } catch (error) {
+  //       warn("skills.update failed:", error);
+  //       return false;
+  //     }
+  //   },
+  // };
 
   // ── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -561,19 +568,6 @@ export class OpenClawEngine implements Engine {
     }
 
     this._setKnownAgentIds(new Set(agents.map((a) => a.id)));
-
-    // Capture each agent's configured primary model so the picker can show
-    // the agent's actual default ("gpt-5.4") rather than the heuristic guess
-    // ("Opus 4.7") when the session has no explicit model override.
-    const agentModelMap = new Map<string, string>();
-    for (const a of agents) {
-      const primary = a.model?.primary;
-      if (typeof primary === "string" && primary.length > 0) {
-        agentModelMap.set(a.id, primary);
-      }
-    }
-    this._agentModelById = agentModelMap;
-    this.events.onAgentInfoChanged(new Map(agentModelMap));
 
     const items: ClawThreadListItem[] = [];
     const metaUpdates = new Map<string, SessionRow>();
@@ -815,10 +809,18 @@ export class OpenClawEngine implements Engine {
       },
       onEvent: this._handleEvent,
       onStateChange: (connecting: boolean) => {
+        // Don't downgrade UNREACHABLE → DISCONNECTED on the post-give-up
+        // onStateChange(false). UNREACHABLE is the terminal label until the
+        // user explicitly retries via reconnect().
+        if (this._connectionState === ConnectionState.UNREACHABLE && !connecting) return;
         log(`state → ${connecting ? "CONNECTING" : "DISCONNECTED"}`);
         this._setConnectionState(
           connecting ? ConnectionState.CONNECTING : ConnectionState.DISCONNECTED,
         );
+      },
+      onUnreachable: () => {
+        log("state → UNREACHABLE");
+        this._setConnectionState(ConnectionState.UNREACHABLE);
       },
     });
   }
@@ -967,6 +969,7 @@ export class OpenClawEngine implements Engine {
     this._isReady = true;
     this._readyDeferred?.resolve();
     void this._refreshModels();
+    void this._refreshConfig();
   };
 
   private _handleAuthFailed = (): void => {
@@ -994,13 +997,52 @@ export class OpenClawEngine implements Engine {
     try {
       const result = await this._request<ModelsListResult>("models.list");
       this._availableModels = result?.models ?? [];
-      const defaultId = result?.defaultId ?? null;
-      this.events.onModelsChanged(this._availableModels, defaultId);
-      log(
-        `models.list → ${this._availableModels.length} model(s)${defaultId ? `, default=${defaultId}` : ""}`,
-      );
+      this.events.onModelsChanged(this._availableModels);
+      log(`models.list → ${this._availableModels.length} model(s)`);
     } catch (e) {
       warn("models.list failed:", e);
+    }
+  }
+
+  /**
+   * Fetches the gateway's full config snapshot once on connect to learn the
+   * workspace default model and any per-agent overrides. We use `config.get`
+   * because `models.list` doesn't expose `defaultId` and `agents.list` doesn't
+   * carry `model.primary` per agent in this openclaw build — config is the
+   * single source of truth for those refs.
+   *
+   * The response wraps the config under `resolved` (merged effective view).
+   * Per-agent `model` may be a bare string ref OR a `{primary}` object —
+   * normalize both shapes.
+   */
+  private async _refreshConfig(): Promise<void> {
+    try {
+      const result = await this._request<ConfigGetResult>("config.get");
+      const cfg = result?.resolved ?? result?.parsed;
+      const workspaceDefault = cfg?.agents?.defaults?.model?.primary?.trim() || null;
+      const byAgent = new Map<string, string>();
+      const list = cfg?.agents?.list ?? [];
+      for (const entry of list) {
+        const id = entry?.id?.trim();
+        if (!id) continue;
+        const rawModel = entry.model;
+        const primary =
+          typeof rawModel === "string"
+            ? rawModel.trim()
+            : rawModel?.primary?.trim() ?? "";
+        if (primary) byAgent.set(id, primary);
+      }
+      // Mirror openclaw's `resolveDefaultAgentId`: first configured agent,
+      // or the implicit "main" when the list is empty. This is the agent
+      // any pre-thread composer would route to, so the picker uses its
+      // override as the default before a thread is selected.
+      const defaultAgentId = list[0]?.id?.trim() || "main";
+      this.events.onModelDefaultsChanged({ workspaceDefault, byAgent, defaultAgentId });
+      log(
+        `config.get → workspaceDefault=${workspaceDefault ?? "(none)"}, perAgentOverrides=${byAgent.size}, defaultAgentId=${defaultAgentId}`,
+      );
+    } catch (e) {
+      warn("config.get failed:", e);
     }
   }
 

@@ -11,13 +11,11 @@ import {
   cronsHash,
   homeHash,
   navigate,
-  skillsHash,
   useHashRoute,
 } from "@/lib/hooks/useHashRoute";
 import type { ClawThread } from "@/types/claw-thread";
 import { useThreadList } from "@openuidev/react-headless";
 import {
-  BookOpen,
   ChevronRight,
   Clock3,
   Cpu,
@@ -54,14 +52,7 @@ const DOT_CLASS: Record<ConnectionState, string> = {
   [ConnectionState.CONNECTED]: "bg-status-online",
   [ConnectionState.AUTH_FAILED]: "bg-text-danger-primary",
   [ConnectionState.PAIRING]: "bg-status-warning animate-pulse",
-};
-
-const STATUS_TEXT_CLASS: Record<ConnectionState, string> = {
-  [ConnectionState.DISCONNECTED]: "text-text-danger-primary",
-  [ConnectionState.CONNECTING]: "text-text-alert-primary",
-  [ConnectionState.CONNECTED]: "text-text-success-primary",
-  [ConnectionState.AUTH_FAILED]: "text-text-danger-primary",
-  [ConnectionState.PAIRING]: "text-text-alert-primary",
+  [ConnectionState.UNREACHABLE]: "bg-status-error",
 };
 
 const STATUS_LABEL: Record<ConnectionState, string> = {
@@ -70,6 +61,7 @@ const STATUS_LABEL: Record<ConnectionState, string> = {
   [ConnectionState.CONNECTED]: "Connected",
   [ConnectionState.AUTH_FAILED]: "Auth failed",
   [ConnectionState.PAIRING]: "Pairing…",
+  [ConnectionState.UNREACHABLE]: "Unreachable",
 };
 
 // ─── Agent grouping ──────────────────────────────────────────────────────────
@@ -109,6 +101,8 @@ interface Props {
   hiddenThreadIds?: Set<string>;
   pinnedAppIds: Set<string>;
   onOpenCommandPalette?: () => void;
+  themeMode: "light" | "dark";
+  onToggleThemeMode: () => void;
 }
 
 // ─── Main component ──────────────────────────────────────────────────────────
@@ -125,6 +119,8 @@ export function AppSidebar({
   hiddenThreadIds = new Set(),
   pinnedAppIds,
   onOpenCommandPalette,
+  themeMode,
+  onToggleThemeMode,
 }: Props) {
   // ── Data hooks ──
   const {
@@ -143,18 +139,7 @@ export function AppSidebar({
 
   // ── Local state ──
   const [navCollapsed, setNavCollapsed] = useState(false);
-  const [isDark, setIsDark] = useState(() => {
-    if (typeof document === "undefined") return false;
-    return document.documentElement.classList.contains("dark");
-  });
-  const toggleDark = useCallback(() => {
-    setIsDark((prev) => {
-      const next = !prev;
-      if (next) document.documentElement.classList.add("dark");
-      else document.documentElement.classList.remove("dark");
-      return next;
-    });
-  }, []);
+  const isDark = themeMode === "dark";
   const [sectionsOpen, setSectionsOpen] = useState({
     agents: true,
     apps: true,
@@ -214,13 +199,6 @@ export function AppSidebar({
       return nextValues.length === prev.size ? prev : new Set(nextValues);
     });
   }, [isLoadingThreads, serverThreadIdsKey]);
-
-  useEffect(() => {
-    // Fire on mount + every connection-state change so the
-    // `adaptedFetchThreadList` mock fallback can populate the sidebar
-    // offline; real threads replace the mock once CONNECTED.
-    loadThreads();
-  }, [connectionState, loadThreads]);
 
   const groups = useMemo(() => buildAgentGroups(displayThreads), [displayThreads]);
 
@@ -716,20 +694,6 @@ export function AppSidebar({
           />
         </div>
 
-        <div className={`${nc ? "px-2xs" : "px-s"} transition-[padding] duration-300`}>
-          <NavTab
-            tile={<IconTile icon={BookOpen} />}
-            label="Skills"
-            href={skillsHash()}
-            active={route?.view === "skills"}
-            hovered={hov === "skills"}
-            collapsed={nc}
-            onClick={() => navigate({ view: "skills" })}
-            onMouseEnter={() => setHov("skills")}
-            onMouseLeave={() => setHov(null)}
-            title="Skills"
-          />
-        </div>
       </div>
 
       {/* ── Footer: theme toggle + combined status/settings button ── */}
@@ -773,7 +737,7 @@ export function AppSidebar({
               variant="tertiary"
               size="md"
               title={isDark ? "Switch to light mode" : "Switch to dark mode"}
-              onClick={toggleDark}
+              onClick={onToggleThemeMode}
             />
           </>
         )}

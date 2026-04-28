@@ -313,9 +313,6 @@ export function AgentTopBar({
               onClick={onOpenWorkspace}
             />
           ) : null}
-          <Button variant="tertiary" size="md" icon={Plus} onClick={onNewSession}>
-            New session
-          </Button>
         </>
       }
     >

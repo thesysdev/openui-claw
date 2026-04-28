@@ -1,13 +1,15 @@
 "use client";
 
 import { Bot, Wrench, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { HeaderIconButton } from "@/components/layout/HeaderIconButton";
 import { MobileButton } from "@/components/mobile/MobileButton";
 import { SegmentedTabs } from "@/components/ui/SegmentedTabs";
 import { useBodyScrollLock } from "@/lib/hooks/useBodyScrollLock";
-import { saveSettings, type Settings } from "@/lib/storage";
+import { ConnectionState } from "@/lib/gateway/types";
+import { validateGatewayUrl } from "@/lib/gateway/url";
+import type { Settings } from "@/lib/storage";
 
 const INSTALL_COMMAND =
   "curl -fsSL https://raw.githubusercontent.com/thesysdev/openui-claw/main/scripts/setup-tunnel.mjs -o /tmp/claw-setup.mjs && node /tmp/claw-setup.mjs";
@@ -49,6 +51,7 @@ function MobileAutomatedSetup() {
 interface Props {
   open: boolean;
   currentSettings: Settings | null;
+  connectionState: ConnectionState;
   onClose: () => void;
   onSave: (settings: Settings) => void;
 }
@@ -58,6 +61,7 @@ type Tab = "automated" | "manual";
 export function MobileSettingsDialog({
   open,
   currentSettings,
+  connectionState,
   onClose,
   onSave,
 }: Props) {
@@ -66,29 +70,63 @@ export function MobileSettingsDialog({
   const [tab, setTab] = useState<Tab>("automated");
   const [gatewayUrl, setGatewayUrl] = useState(currentSettings?.gatewayUrl ?? "");
   const [token, setToken] = useState(currentSettings?.token ?? "");
+  const [pending, setPending] = useState(false);
+  // See SettingsDialog for the snapshot-based race rationale.
+  const submitSnapshotRef = useRef<ConnectionState | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!open) return;
     setGatewayUrl(currentSettings?.gatewayUrl ?? "");
     setToken(currentSettings?.token ?? "");
-  }, [currentSettings]);
+    setPending(false);
+    submitSnapshotRef.current = null;
+    setError(null);
+  }, [open]);
+
+  useEffect(() => {
+    if (!pending) return;
+    const snapshot = submitSnapshotRef.current;
+    if (snapshot !== null && connectionState === snapshot) return;
+    if (connectionState === ConnectionState.CONNECTED) {
+      setPending(false);
+      submitSnapshotRef.current = null;
+      setError(null);
+      onClose();
+    } else if (connectionState === ConnectionState.UNREACHABLE) {
+      setPending(false);
+      submitSnapshotRef.current = null;
+      setError("Couldn't reach the gateway at that URL. Check the address and try again.");
+    } else if (connectionState === ConnectionState.AUTH_FAILED) {
+      setPending(false);
+      submitSnapshotRef.current = null;
+      setError("Gateway rejected the auth token. Run `openclaw auth token` to get a fresh one.");
+    }
+  }, [pending, connectionState, onClose]);
 
   if (!open) return null;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const trimmedUrl = gatewayUrl.trim();
-    if (!trimmedUrl) return;
+    const validation = validateGatewayUrl(trimmedUrl);
+    if (!validation.ok) {
+      setError(validation.error);
+      return;
+    }
+    const trimmedToken = token.trim() || undefined;
+    const credsChanged =
+      trimmedUrl !== currentSettings?.gatewayUrl ||
+      trimmedToken !== currentSettings?.token;
     const next: Settings = {
       gatewayUrl: trimmedUrl,
-      token: token.trim() || undefined,
-      deviceToken:
-        trimmedUrl === currentSettings?.gatewayUrl
-          ? currentSettings?.deviceToken
-          : undefined,
+      token: trimmedToken,
+      deviceToken: credsChanged ? undefined : currentSettings?.deviceToken,
     };
-    saveSettings(next);
+    setError(null);
+    setPending(true);
+    submitSnapshotRef.current = connectionState;
     onSave(next);
-    onClose();
   };
 
   return (
@@ -139,7 +177,8 @@ export function MobileSettingsDialog({
                 placeholder="ws://localhost:18789"
                 value={gatewayUrl}
                 onChange={(e) => setGatewayUrl(e.target.value)}
-                className="h-11 rounded-lg border border-border-default bg-background px-m text-sm text-text-neutral-primary outline-none placeholder:text-text-neutral-tertiary focus:ring-2 focus:ring-border-default dark:border-border-default/16 dark:bg-foreground"
+                disabled={pending}
+                className="h-11 rounded-lg border border-border-default bg-background px-m text-sm text-text-neutral-primary outline-none placeholder:text-text-neutral-tertiary focus:ring-2 focus:ring-border-default disabled:opacity-60 dark:border-border-default/16 dark:bg-foreground"
               />
               <p className="text-sm text-text-neutral-tertiary">
                 Use <code className="font-mono">ws://</code> for local,{" "}
@@ -156,7 +195,8 @@ export function MobileSettingsDialog({
                 placeholder="Paste your token here"
                 value={token}
                 onChange={(e) => setToken(e.target.value)}
-                className="h-11 rounded-lg border border-border-default bg-background px-m text-sm text-text-neutral-primary outline-none placeholder:text-text-neutral-tertiary focus:ring-2 focus:ring-border-default dark:border-border-default/16 dark:bg-foreground"
+                disabled={pending}
+                className="h-11 rounded-lg border border-border-default bg-background px-m text-sm text-text-neutral-primary outline-none placeholder:text-text-neutral-tertiary focus:ring-2 focus:ring-border-default disabled:opacity-60 dark:border-border-default/16 dark:bg-foreground"
               />
               <p className="text-sm text-text-neutral-tertiary">
                 Run{" "}
@@ -165,8 +205,24 @@ export function MobileSettingsDialog({
               </p>
             </div>
 
-            <MobileButton type="submit" variant="primary" fullWidth>
-              Save &amp; Connect
+            {error ? (
+              <div
+                role="alert"
+                className="rounded-lg border border-status-error bg-danger-background px-m py-s text-sm text-text-danger-primary"
+              >
+                {error}
+              </div>
+            ) : null}
+
+            {pending ? (
+              <div className="flex items-center gap-s text-sm text-text-neutral-tertiary">
+                <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-status-warning" />
+                Connecting to {gatewayUrl.trim()}…
+              </div>
+            ) : null}
+
+            <MobileButton type="submit" variant="primary" fullWidth disabled={pending}>
+              {pending ? "Connecting…" : "Save & Connect"}
             </MobileButton>
           </form>
         )}

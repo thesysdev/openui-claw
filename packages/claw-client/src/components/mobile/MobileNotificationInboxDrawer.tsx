@@ -1,22 +1,14 @@
 "use client";
 
 import { X } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 
 import { HeaderIconButton } from "@/components/layout/HeaderIconButton";
 import { MobileButton } from "@/components/mobile/MobileButton";
-import { FilterChips } from "@/components/ui/FilterChips";
 import { useBodyScrollLock } from "@/lib/hooks/useBodyScrollLock";
 import type { NotificationRecord } from "@/lib/notifications";
 
-type InboxTab = "all" | "needs_input" | "alerts";
 type NotifCategory = "needs_input" | "alerts" | "tasks";
-
-const TAB_ORDER: Array<{ id: InboxTab; label: string }> = [
-  { id: "all", label: "All" },
-  { id: "needs_input", label: "Needs input" },
-  { id: "alerts", label: "Alerts" },
-];
 
 function notificationCategory(notification: NotificationRecord): NotifCategory {
   const kind = notification.kind.toLowerCase();
@@ -157,38 +149,20 @@ export function MobileNotificationInboxDrawer({
   onMarkAllRead?: () => void | Promise<void>;
 }) {
   useBodyScrollLock(open);
-  const [activeTab, setActiveTab] = useState<InboxTab>("all");
 
   const unreadCount = useMemo(
     () => notifications.filter((n) => n.unread).length,
     [notifications],
   );
 
-  const counts = useMemo(
+  const visibleNotifications = useMemo(
     () =>
-      TAB_ORDER.reduce<Record<InboxTab, number>>(
-        (result, tab) => {
-          result[tab.id] =
-            tab.id === "all"
-              ? notifications.length
-              : notifications.filter((n) => notificationCategory(n) === tab.id).length;
-          return result;
-        },
-        { all: 0, needs_input: 0, alerts: 0 },
-      ),
+      [...notifications].sort((left, right) => {
+        if (left.unread !== right.unread) return left.unread ? -1 : 1;
+        return right.updatedAt.localeCompare(left.updatedAt);
+      }),
     [notifications],
   );
-
-  const visibleNotifications = useMemo(() => {
-    const items =
-      activeTab === "all"
-        ? notifications
-        : notifications.filter((n) => notificationCategory(n) === activeTab);
-    return [...items].sort((left, right) => {
-      if (left.unread !== right.unread) return left.unread ? -1 : 1;
-      return right.updatedAt.localeCompare(left.updatedAt);
-    });
-  }, [activeTab, notifications]);
 
   if (!open) return null;
 
@@ -217,21 +191,8 @@ export function MobileNotificationInboxDrawer({
         </div>
       </header>
 
-      <div className="px-ml pb-ml pt-m">
-        <FilterChips<InboxTab>
-          value={activeTab}
-          onChange={setActiveTab}
-          options={TAB_ORDER.map((tab) => ({
-            value: tab.id,
-            label: tab.label,
-            count: counts[tab.id],
-          }))}
-          ariaLabel="Notification filter"
-        />
-      </div>
-
       <div
-        className="flex-1 overflow-y-auto px-ml pb-2xl"
+        className="flex-1 overflow-y-auto px-ml pb-2xl pt-m"
         style={{ paddingBottom: "max(32px, env(safe-area-inset-bottom))" }}
       >
         {visibleNotifications.length === 0 ? (

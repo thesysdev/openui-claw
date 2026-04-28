@@ -1,6 +1,6 @@
 "use client";
 
-import { ERROR_SENTINEL } from "@/lib/chat/history-merger";
+import { ERROR_SENTINEL, GATEWAY_SENTINEL } from "@/lib/chat/history-merger";
 import { extractAssistantTimeline } from "@/lib/chat/timeline";
 import { separateContentAndContext, wrapContext } from "@/lib/content-parser";
 import { parseInlineResponse } from "@/lib/detection";
@@ -25,6 +25,7 @@ import {
 } from "lucide-react";
 import { useCallback, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
+import remarkBreaks from "remark-breaks";
 import remarkGfm from "remark-gfm";
 
 interface Props {
@@ -677,7 +678,10 @@ export function AssistantMessage({ message }: Props) {
   const errorIdx = visibleText.indexOf(ERROR_SENTINEL);
   const isError = errorIdx !== -1;
   const textContent = isError ? visibleText.slice(0, errorIdx) : visibleText;
-  const finalAssistantText = textContent;
+  const isGatewayInjected = textContent.startsWith(GATEWAY_SENTINEL);
+  const finalAssistantText = isGatewayInjected
+    ? textContent.slice(GATEWAY_SENTINEL.length)
+    : textContent;
   const errorMessage = isError ? visibleText.slice(errorIdx + ERROR_SENTINEL.length) : null;
 
   const { segments } = useMemo(() => parseInlineResponse(finalAssistantText), [finalAssistantText]);
@@ -704,14 +708,34 @@ export function AssistantMessage({ message }: Props) {
         }}
       />
     ) : (
-      <div
-        key={`text-${i}`}
-        className="openui-claw-assistant-markdown mr-auto w-full max-w-3xl rounded-3xl border border-border-default/40 bg-background px-ml py-m shadow-sm dark:border-border-default/20 dark:bg-sunk-deep"
-      >
-        <div className={ASSISTANT_MARKDOWN_CLASSES}>
-          <ReactMarkdown remarkPlugins={[remarkGfm]}>{segment.content}</ReactMarkdown>
+      isGatewayInjected ? (
+        <div
+          key={`text-${i}`}
+          className="openui-claw-assistant-markdown mr-auto w-full max-w-3xl border-l-2 border-border-default/40 bg-transparent pl-m"
+        >
+          {i === 0 ? (
+            <div className="mb-xs inline-flex items-center gap-xs rounded-full bg-text-neutral-tertiary/10 px-s py-[2px] font-body text-xs text-text-neutral-tertiary">
+              Gateway
+            </div>
+          ) : null}
+          <div className={ASSISTANT_MARKDOWN_CLASSES}>
+            <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>
+              {segment.content}
+            </ReactMarkdown>
+          </div>
         </div>
-      </div>
+      ) : (
+        <div
+          key={`text-${i}`}
+          className="openui-claw-assistant-markdown mr-auto w-full max-w-3xl rounded-3xl border border-border-default/40 bg-background px-ml py-m shadow-sm dark:border-border-default/20 dark:bg-sunk-deep"
+        >
+          <div className={ASSISTANT_MARKDOWN_CLASSES}>
+            <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>
+              {segment.content}
+            </ReactMarkdown>
+          </div>
+        </div>
+      )
     ),
   );
 
@@ -756,7 +780,7 @@ export function AssistantMessage({ message }: Props) {
                   summary={oneLineSummary(item.text)}
                 >
                   <div className={TRACE_MARKDOWN_CLASSES}>
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{item.text}</ReactMarkdown>
+                    <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{item.text}</ReactMarkdown>
                   </div>
                 </TimelineRow>
               );
