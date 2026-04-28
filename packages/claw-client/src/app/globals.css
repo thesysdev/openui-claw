@@ -94,7 +94,7 @@
 :root {
   /* ── Colors (bloom light) ── */
   --color-background: #FFFFFF;
-  --color-foreground: #F3F3F3;
+  --color-foreground: #F6F6F6;
   --color-popover-background: #FFFFFF;
   --color-sunk-light: #F0F0F0;
   --color-sunk: #E5E5E5;
@@ -460,6 +460,15 @@ body {
 
 /* ── Thread layout when session workspace pane is visible ─────────────────── */
 
+/* The library's `user-message-anchor` scroll variant always positions the
+   latest user message's border-box top flush with the scroll-area's
+   border-box top (see `useScrollToBottom`: it computes
+   `userMsg.BCR.top - scrollArea.BCR.top + scrollTop` and applies that as
+   the new scrollTop). Any padding on the scroll-area or its parents gets
+   eaten because the formula treats `BCR.top` as the anchor.
+   To keep a visible 20px buffer above the user bubble, the gap has to
+   live INSIDE the user message's own box as `padding-top` — see the
+   `.openui-shell-thread-message-user` rule below. */
 .openui-claw-thread-container .openui-shell-thread-scroll-area {
   padding-left: var(--space-ml);
   padding-right: var(--space-ml);
@@ -471,7 +480,6 @@ body {
      per-message max-w-3xl cap. */
   max-width: 48rem;
   margin: 0 auto;
-  padding-top: var(--space-m);
   padding-bottom: var(--space-s);
   gap: 0 !important;
 }
@@ -481,8 +489,12 @@ body {
   padding-top: 0 !important;
   /* 8px gap between the user message and the assistant (thinking state). */
   margin-top: var(--space-s) !important;
-  /* 40px gap below the full assistant response. */
-  margin-bottom: 40px !important;
+  /* 20px below the assistant response — pairs with the 20px padding-top
+     on the next user message to keep a 40px visual gap between turns
+     while leaving the buffer above the FIRST user message intact (the
+     library's user-message-anchor scroll cancels everything outside the
+     user-message box, see comment near scroll-area above). */
+  margin-bottom: var(--space-l) !important;
 }
 
 .openui-claw-thread-container .openui-shell-thread-message-assistant__content {
@@ -513,7 +525,14 @@ body {
 .openui-claw-thread-container .openui-shell-thread-message-user {
   padding-left: 0;
   padding-right: 0;
-  margin-top: var(--space-2xs);
+  /* 20px buffer ABOVE the bubble. The library's user-message-anchor
+     scroll variant pins this element's border-box top to the scroll
+     area's top, so margin/padding outside this box gets scrolled out
+     of view. Padding inside the box survives — the bubble (a child)
+     renders 20px below the anchored border-top, giving us the visible
+     gap from the chat top bar. */
+  padding-top: var(--space-l) !important;
+  margin-top: 0 !important;
   margin-bottom: 0;
   justify-content: flex-start !important;
   align-self: flex-start !important;
@@ -535,6 +554,8 @@ body {
   padding: var(--space-m) var(--space-l);
   margin-left: 0 !important;
   margin-right: auto !important;
+  /* Match the assistant + thinking state bubble radius. */
+  border-radius: 1rem !important;
   background: color-mix(in srgb, var(--color-interactive-accent-default) 10%, transparent) !important;
   color: rgb(var(--color-text-accent-primary)) !important;
   font-size: var(--font-size-md) !important;
@@ -600,24 +621,24 @@ body {
 .openui-claw-thread-container .openui-shell-thread-message-loading
   .openui-message-loading-container {
   height: auto;
-  padding: var(--space-m) var(--space-ml);
-  border-radius: 1.5rem;
-  border-color: rgb(var(--color-border-default) / 0.4);
-  background: rgb(var(--color-background));
-  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.04);
+  padding: var(--space-2xs) var(--space-xs);
+  /* Bare loader — no border, no fill, no shadow. */
+  border-radius: 0;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
 }
 
 .dark
   .openui-claw-thread-container
   .openui-shell-thread-message-loading
   .openui-message-loading-container {
-  border-color: rgb(var(--color-border-default) / 0.2);
-  background: rgb(var(--color-sunk-deep));
+  background: transparent !important;
 }
 
 .openui-claw-thread-container .openui-shell-thread-message-loading
   .openui-message-loading {
-  width: 32px;
+  width: 24px;
   aspect-ratio: 5;
 }
 
