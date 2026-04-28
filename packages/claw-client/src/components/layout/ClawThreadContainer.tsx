@@ -1,5 +1,6 @@
 "use client";
 
+import { useHashRoute } from "@/lib/hooks/useHashRoute";
 import { useIsMobile } from "@/lib/hooks/useIsMobile";
 import { useActiveArtifact, useThread } from "@openuidev/react-headless";
 import { ArtifactPortalTarget, Shell } from "@openuidev/react-ui";
@@ -36,6 +37,11 @@ export const ClawThreadContainer = ({
   const { isArtifactActive } = useActiveArtifact();
   const isLoadingMessages = useThread((s) => s.isLoadingMessages);
   const setIsSidebarOpen = Shell.useShellStore((s) => s.setIsSidebarOpen);
+  const route = useHashRoute();
+  // On mobile, when the user is in a chat (i.e. refining), don't render the
+  // fullscreen artifact overlay — the chat owns the screen and the chip in the
+  // composer indicates what's being refined.
+  const showMobileArtifact = isMobile && isArtifactActive && route?.view !== "chat";
 
   const wrapperRef = useRef<HTMLDivElement>(null);
   const chatPanelRef = useRef<HTMLDivElement>(null);
@@ -134,7 +140,7 @@ export const ClawThreadContainer = ({
           </>
         )}
       </div>
-      {isMobile && isArtifactActive && (
+      {showMobileArtifact && (
         <div className="absolute inset-0 z-30 flex bg-background dark:bg-sunk">
           <div className="flex min-w-0 flex-1 flex-col">
             <ArtifactPortalTarget className="h-full w-full" />

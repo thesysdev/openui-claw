@@ -2400,11 +2400,15 @@ export default function ChatApp() {
         const existingPending = (current[threadId]?.uploads ?? []).filter(
           (upload) => upload.status === "pending",
         );
+        // Preserve a `linkedApp` that was just written by the Refine flow —
+        // history-derived link info is `null` for refines (the link isn't in
+        // the message stream), so blindly overwriting would drop the chip.
+        const existingLink = current[threadId]?.linkedApp ?? null;
         return {
           ...current,
           [threadId]: {
             uploads: [...remoteUploads, ...existingPending],
-            linkedApp: historyWorkspace.linkedApp,
+            linkedApp: existingLink ?? historyWorkspace.linkedApp,
           },
         };
       });
