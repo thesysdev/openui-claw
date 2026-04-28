@@ -15,7 +15,6 @@ import {
   X,
 } from "lucide-react";
 import { ConnectionState } from "@/lib/gateway/types";
-import { useTheme } from "@/lib/hooks/useTheme";
 import { SegmentedTabs } from "@/components/ui/SegmentedTabs";
 
 const STATUS_LABEL: Record<ConnectionState, string> = {
@@ -24,6 +23,7 @@ const STATUS_LABEL: Record<ConnectionState, string> = {
   [ConnectionState.CONNECTED]: "Connected",
   [ConnectionState.AUTH_FAILED]: "Auth failed",
   [ConnectionState.PAIRING]: "Pairing…",
+  [ConnectionState.UNREACHABLE]: "Unreachable",
 };
 
 const STATUS_DOT: Record<ConnectionState, string> = {
@@ -32,6 +32,7 @@ const STATUS_DOT: Record<ConnectionState, string> = {
   [ConnectionState.CONNECTED]: "bg-status-online",
   [ConnectionState.AUTH_FAILED]: "bg-status-error",
   [ConnectionState.PAIRING]: "bg-status-warning animate-pulse",
+  [ConnectionState.UNREACHABLE]: "bg-status-error",
 };
 import { useState, type ComponentType, type ReactNode } from "react";
 
@@ -109,6 +110,8 @@ export interface MobileShellProps {
   onOpenSearch: () => void;
   onOpenNotifications: () => void;
   onOpenSettings: () => void;
+  themeMode: "light" | "dark";
+  onToggleThemeMode: () => void;
   /** Page-specific top-bar content (e.g. chat header). When set, overrides the default title. */
   topBarOverride?: ReactNode;
   /** When true, the entire shell chrome (top header + bottom nav) is suppressed. */
@@ -123,6 +126,8 @@ export function MobileShell({
   onOpenSearch,
   onOpenNotifications,
   onOpenSettings,
+  themeMode,
+  onToggleThemeMode,
   topBarOverride,
   chromeless = false,
   children,
@@ -232,6 +237,8 @@ export function MobileShell({
         onOpenSearch={onOpenSearch}
         onOpenNotifications={onOpenNotifications}
         onOpenSettings={onOpenSettings}
+        themeMode={themeMode}
+        onToggleThemeMode={onToggleThemeMode}
       />
     </div>
   );
@@ -267,6 +274,8 @@ function MobileNavSheet({
   onOpenSearch,
   onOpenNotifications,
   onOpenSettings,
+  themeMode,
+  onToggleThemeMode,
 }: {
   open: boolean;
   onClose: () => void;
@@ -276,9 +285,10 @@ function MobileNavSheet({
   onOpenSearch: () => void;
   onOpenNotifications: () => void;
   onOpenSettings: () => void;
+  themeMode: "light" | "dark";
+  onToggleThemeMode: () => void;
 }) {
   useBodyScrollLock(open);
-  const { theme, setTheme } = useTheme();
   if (!open) return null;
 
   const isItemActive = (key: NavSheetItem["key"]) =>
@@ -392,8 +402,10 @@ function MobileNavSheet({
         </div>
         <div className="px-ml pb-ml">
           <SegmentedTabs
-            value={theme}
-            onChange={(v) => setTheme(v as "light" | "dark")}
+            value={themeMode}
+            onChange={(v) => {
+              if (v !== themeMode) onToggleThemeMode();
+            }}
             options={[
               { value: "light", label: "Light", icon: Sun },
               { value: "dark", label: "Dark", icon: Moon },

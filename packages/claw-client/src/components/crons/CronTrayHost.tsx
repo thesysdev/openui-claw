@@ -1,7 +1,7 @@
 "use client";
 
 import type { Thread } from "@openuidev/react-headless";
-import { MoreVertical, Pause, Play, Trash2 } from "lucide-react";
+import { MoreVertical, Pause, Play, RotateCw, Trash2 } from "lucide-react";
 import {
   useCallback,
   useEffect,
@@ -257,7 +257,7 @@ function MobileCronTrayShell({
           {
             key: "run-now",
             label: "Run now",
-            icon: Play,
+            icon: RotateCw,
             onSelect: () => onRunNow(job),
           },
           {

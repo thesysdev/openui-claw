@@ -18,6 +18,9 @@ const CHALLENGE_TIMEOUT_MS = 2000;
 
 const RECONNECT_BASE_MS = 1000;
 const RECONNECT_MAX_MS = 30_000;
+// Cap retries so a bad gateway URL surfaces as UNREACHABLE instead of
+// an indefinite "Connecting…" state. ~1+2+4+8+16+30 = 61s of attempts.
+const RECONNECT_MAX_ATTEMPTS = 6;
 
 const log = (...args: unknown[]) => console.log("[claw:socket]", ...args);
 const warn = (...args: unknown[]) => console.warn("[claw:socket]", ...args);
@@ -31,6 +34,12 @@ export interface GatewaySocketOptions {
   onPairingRequired: (deviceId: string) => void;
   onEvent: (frame: EventFrame) => void;
   onStateChange: (connecting: boolean) => void;
+  /**
+   * Fired after `RECONNECT_MAX_ATTEMPTS` consecutive failed connect attempts.
+   * The retry loop stops; the caller must invoke `start()` (or the engine's
+   * `reconnect()`) again to resume.
+   */
+  onUnreachable?: () => void;
 }
 
 export class GatewaySocket {
@@ -38,6 +47,7 @@ export class GatewaySocket {
   private stopped = false;
   private pairingDetected = false;
   private reconnectDelay = RECONNECT_BASE_MS;
+  private reconnectAttempts = 0;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private pendingRpcs = new Map<
     string,
@@ -69,6 +79,10 @@ export class GatewaySocket {
   start(): void {
     log("start()");
     this.stopped = false;
+    // start() means the caller wants a fresh attempt — reset the retry budget
+    // so a previous UNREACHABLE escalation doesn't immediately re-fire.
+    this.reconnectAttempts = 0;
+    this.reconnectDelay = RECONNECT_BASE_MS;
     this.scheduleConnect(0);
   }
 
@@ -127,8 +141,14 @@ export class GatewaySocket {
     try {
       this.ws = new WebSocket(settings.gatewayUrl);
     } catch (e) {
+      // A synchronous throw means the URL itself is structurally invalid
+      // (wrong protocol, malformed host, port out of range, …). Retrying is
+      // pointless — the same throw will repeat forever. Skip the retry budget
+      // and surface UNREACHABLE immediately so the user sees an error within
+      // a tick of clicking Save instead of after ~60s.
       err("WebSocket constructor threw:", e);
-      this.scheduleReconnect();
+      this.opts.onStateChange(false);
+      this.opts.onUnreachable?.();
       return;
     }
 
@@ -193,6 +213,7 @@ export class GatewaySocket {
     }
 
     this.reconnectDelay = RECONNECT_BASE_MS;
+    this.reconnectAttempts = 0;
     this.pairingDetected = false;
     const gotDeviceToken = !!(hello as { auth?: { deviceToken?: string } }).auth?.deviceToken;
     log(`hello-ok  protocol=${hello.protocol}  newDeviceToken=${gotDeviceToken}`);
@@ -317,6 +338,15 @@ export class GatewaySocket {
 
   private scheduleReconnect(): void {
     if (this.stopped) return;
+    this.reconnectAttempts += 1;
+    if (this.reconnectAttempts > RECONNECT_MAX_ATTEMPTS) {
+      warn(
+        `gave up after ${RECONNECT_MAX_ATTEMPTS} reconnect attempts — emitting unreachable`,
+      );
+      this.opts.onStateChange(false);
+      this.opts.onUnreachable?.();
+      return;
+    }
     if (!this.pairingDetected) {
       this.opts.onStateChange(true);
     }
@@ -324,7 +354,9 @@ export class GatewaySocket {
       this.reconnectTimer = null;
       this.connect();
     }, this.reconnectDelay);
-    warn(`scheduling reconnect in ${this.reconnectDelay}ms`);
+    warn(
+      `scheduling reconnect in ${this.reconnectDelay}ms (attempt ${this.reconnectAttempts}/${RECONNECT_MAX_ATTEMPTS})`,
+    );
     this.reconnectDelay = Math.min(this.reconnectDelay * 2, RECONNECT_MAX_MS);
   }
 

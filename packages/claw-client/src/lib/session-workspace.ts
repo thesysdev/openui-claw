@@ -36,9 +36,17 @@ export type LinkedAppContext = {
   sessionKey: string;
 };
 
+export type LinkedArtifactContext = {
+  artifactId: string;
+  title: string;
+  agentId: string;
+  sessionKey: string;
+};
+
 export type ThreadWorkspaceState = {
   uploads: ThreadUpload[];
   linkedApp: LinkedAppContext | null;
+  linkedArtifact: LinkedArtifactContext | null;
 };
 
 type ThreadUploadContextEntry = {
@@ -55,7 +63,18 @@ type LinkedAppContextEntry = {
   sessionKey: string;
 };
 
-type ThreadContextEntry = ThreadUploadContextEntry | LinkedAppContextEntry;
+type LinkedArtifactContextEntry = {
+  type: "linked_artifact";
+  artifactId: string;
+  title: string;
+  agentId: string;
+  sessionKey: string;
+};
+
+type ThreadContextEntry =
+  | ThreadUploadContextEntry
+  | LinkedAppContextEntry
+  | LinkedArtifactContextEntry;
 
 type ThreadWorkspaceMessageLike = {
   role?: string;
@@ -65,6 +84,7 @@ type ThreadWorkspaceMessageLike = {
 export const EMPTY_THREAD_WORKSPACE: ThreadWorkspaceState = {
   uploads: [],
   linkedApp: null,
+  linkedArtifact: null,
 };
 
 function isTextLikeFile(name: string, mimeType: string): boolean {
@@ -97,6 +117,17 @@ function isLinkedAppContextEntry(value: unknown): value is LinkedAppContextEntry
   );
 }
 
+function isLinkedArtifactContextEntry(value: unknown): value is LinkedArtifactContextEntry {
+  return (
+    isRecord(value) &&
+    value.type === "linked_artifact" &&
+    typeof value.artifactId === "string" &&
+    typeof value.title === "string" &&
+    typeof value.agentId === "string" &&
+    typeof value.sessionKey === "string"
+  );
+}
+
 function isThreadUploadContextEntry(value: unknown): value is ThreadUploadContextEntry {
   if (!isRecord(value) || value.type !== "thread_uploads") return false;
   // New compact form: { remoteIds: [...] }
@@ -121,6 +152,7 @@ function parseThreadContextEntries(contextString: string | null): ThreadContextE
 
 function normalizeContextEntry(value: unknown): ThreadContextEntry | null {
   if (isLinkedAppContextEntry(value)) return value;
+  if (isLinkedArtifactContextEntry(value)) return value;
   if (!isRecord(value) || value.type !== "thread_uploads") return null;
 
   if (Array.isArray(value.remoteIds)) {
@@ -239,6 +271,7 @@ export async function fileToThreadUpload(file: File): Promise<ThreadUpload> {
 
 export function buildThreadContextPayload(params: {
   linkedApp?: LinkedAppContext | null;
+  linkedArtifact?: LinkedArtifactContext | null;
   uploads?: ThreadUpload[];
 }): unknown[] {
   const payload: unknown[] = [];
@@ -252,6 +285,18 @@ export function buildThreadContextPayload(params: {
       sessionKey: params.linkedApp.sessionKey,
       instruction:
         "This thread is linked to the app above. Use get_app/app_update when the user asks to refine or modify it.",
+    });
+  }
+
+  if (params.linkedArtifact) {
+    payload.push({
+      type: "linked_artifact",
+      artifactId: params.linkedArtifact.artifactId,
+      title: params.linkedArtifact.title,
+      agentId: params.linkedArtifact.agentId,
+      sessionKey: params.linkedArtifact.sessionKey,
+      instruction:
+        "This thread is linked to the artifact above. Use get_artifact/artifact_update when the user asks to refine or modify it.",
     });
   }
 
@@ -291,18 +336,47 @@ export function deriveLinkedAppFromMessages(
   return linkedApp;
 }
 
-/** Deprecated shim: uploads now come from the plugin, only linkedApp is derived. */
+export function deriveLinkedArtifactFromMessages(
+  messages: ThreadWorkspaceMessageLike[],
+): LinkedArtifactContext | null {
+  let linkedArtifact: LinkedArtifactContext | null = null;
+
+  for (const message of messages) {
+    if (message.role !== "user" || typeof message.content !== "string") continue;
+    const { contextString } = separateContentAndContext(message.content);
+
+    for (const entry of parseThreadContextEntries(contextString)) {
+      if (entry.type === "linked_artifact") {
+        linkedArtifact = {
+          artifactId: entry.artifactId,
+          title: entry.title,
+          agentId: entry.agentId,
+          sessionKey: entry.sessionKey,
+        };
+      }
+    }
+  }
+
+  return linkedArtifact;
+}
+
+/** Deprecated shim: uploads now come from the plugin, only links are derived. */
 export function deriveThreadWorkspaceFromMessages(
   messages: ThreadWorkspaceMessageLike[],
 ): ThreadWorkspaceState {
   return {
     uploads: [],
     linkedApp: deriveLinkedAppFromMessages(messages),
+    linkedArtifact: deriveLinkedArtifactFromMessages(messages),
   };
 }
 
 export function isThreadWorkspaceEmpty(workspace: ThreadWorkspaceState): boolean {
-  return workspace.uploads.length === 0 && workspace.linkedApp == null;
+  return (
+    workspace.uploads.length === 0 &&
+    workspace.linkedApp == null &&
+    workspace.linkedArtifact == null
+  );
 }
 
 export function sessionAppPreviewId(appId: string): string {

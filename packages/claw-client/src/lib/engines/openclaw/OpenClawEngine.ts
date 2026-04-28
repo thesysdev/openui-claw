@@ -809,10 +809,18 @@ export class OpenClawEngine implements Engine {
       },
       onEvent: this._handleEvent,
       onStateChange: (connecting: boolean) => {
+        // Don't downgrade UNREACHABLE → DISCONNECTED on the post-give-up
+        // onStateChange(false). UNREACHABLE is the terminal label until the
+        // user explicitly retries via reconnect().
+        if (this._connectionState === ConnectionState.UNREACHABLE && !connecting) return;
         log(`state → ${connecting ? "CONNECTING" : "DISCONNECTED"}`);
         this._setConnectionState(
           connecting ? ConnectionState.CONNECTING : ConnectionState.DISCONNECTED,
         );
+      },
+      onUnreachable: () => {
+        log("state → UNREACHABLE");
+        this._setConnectionState(ConnectionState.UNREACHABLE);
       },
     });
   }

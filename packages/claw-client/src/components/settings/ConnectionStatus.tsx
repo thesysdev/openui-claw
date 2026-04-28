@@ -32,6 +32,10 @@ const STATES: Record<
     label: "Device pairing required",
     dot: "bg-status-warning animate-pulse",
   },
+  [ConnectionState.UNREACHABLE]: {
+    label: "Unreachable — click to reconfigure",
+    dot: "bg-status-error",
+  },
 };
 
 export function ConnectionStatus({ state, onSettingsClick }: Props) {

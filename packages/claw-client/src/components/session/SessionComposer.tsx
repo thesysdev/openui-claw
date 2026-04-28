@@ -13,7 +13,11 @@ import { wrapContent, wrapContext } from "@/lib/content-parser";
 import type { GatewayCommand } from "@/lib/engines/types";
 import { useSpeechToText } from "@/lib/hooks/useSpeechToText";
 import { qualifyModel } from "@/lib/models";
-import type { LinkedAppContext, ThreadUpload } from "@/lib/session-workspace";
+import type {
+  LinkedAppContext,
+  LinkedArtifactContext,
+  ThreadUpload,
+} from "@/lib/session-workspace";
 import { buildThreadContextPayload } from "@/lib/session-workspace";
 import type { ModelChoice } from "@/types/gateway-responses";
 import { useThread } from "@openuidev/react-headless";
@@ -297,6 +301,7 @@ function SlashMenu({
 export function SessionComposer({
   uploads,
   linkedApp,
+  linkedArtifact,
   onPickFiles,
   onAddFiles,
   onRemoveUpload,
@@ -317,6 +322,7 @@ export function SessionComposer({
 }: {
   uploads: ThreadUpload[];
   linkedApp: LinkedAppContext | null;
+  linkedArtifact: LinkedArtifactContext | null;
   onPickFiles: () => void;
   /**
    * Adds raw `File`s — used by drag-drop and clipboard paste. Optional so the
@@ -522,6 +528,7 @@ export function SessionComposer({
       `Attached ${pendingUploads.length} file${pendingUploads.length === 1 ? "" : "s"}.`;
     const contextPayload = buildThreadContextPayload({
       linkedApp,
+      linkedArtifact,
       uploads: pendingUploads,
     });
     const contentParts =
@@ -622,9 +629,12 @@ export function SessionComposer({
 
       {/* Bordered input card — only the textarea + send/stop button live here. */}
       <div className="overflow-hidden rounded-lg border border-border-default/40 bg-background shadow-md dark:border-border-default/20">
-        {(pendingUploads.length > 0 || linkedApp) && (
+        {(pendingUploads.length > 0 || linkedApp || linkedArtifact) && (
           <div className="flex flex-wrap items-center gap-2 border-b border-border-default px-4 py-3">
             {linkedApp ? <UploadChip label={`Refining ${linkedApp.title}`} /> : null}
+            {linkedArtifact ? (
+              <UploadChip label={`Refining ${linkedArtifact.title}`} />
+            ) : null}
             {pendingUploads.map((upload) => (
               <UploadChip
                 key={upload.id}

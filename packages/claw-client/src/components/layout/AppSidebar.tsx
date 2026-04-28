@@ -52,6 +52,7 @@ const DOT_CLASS: Record<ConnectionState, string> = {
   [ConnectionState.CONNECTED]: "bg-status-online",
   [ConnectionState.AUTH_FAILED]: "bg-status-error",
   [ConnectionState.PAIRING]: "bg-status-warning animate-pulse",
+  [ConnectionState.UNREACHABLE]: "bg-status-error",
 };
 
 const STATUS_LABEL: Record<ConnectionState, string> = {
@@ -60,6 +61,7 @@ const STATUS_LABEL: Record<ConnectionState, string> = {
   [ConnectionState.CONNECTED]: "Connected",
   [ConnectionState.AUTH_FAILED]: "Auth failed",
   [ConnectionState.PAIRING]: "Pairing…",
+  [ConnectionState.UNREACHABLE]: "Unreachable",
 };
 
 // ─── Agent grouping ──────────────────────────────────────────────────────────
@@ -99,6 +101,8 @@ interface Props {
   hiddenThreadIds?: Set<string>;
   pinnedAppIds: Set<string>;
   onOpenCommandPalette?: () => void;
+  themeMode: "light" | "dark";
+  onToggleThemeMode: () => void;
 }
 
 // ─── Main component ──────────────────────────────────────────────────────────
@@ -115,6 +119,8 @@ export function AppSidebar({
   hiddenThreadIds = new Set(),
   pinnedAppIds,
   onOpenCommandPalette,
+  themeMode,
+  onToggleThemeMode,
 }: Props) {
   // ── Data hooks ──
   const {
@@ -133,18 +139,7 @@ export function AppSidebar({
 
   // ── Local state ──
   const [navCollapsed, setNavCollapsed] = useState(false);
-  const [isDark, setIsDark] = useState(() => {
-    if (typeof document === "undefined") return false;
-    return document.documentElement.classList.contains("dark");
-  });
-  const toggleDark = useCallback(() => {
-    setIsDark((prev) => {
-      const next = !prev;
-      if (next) document.documentElement.classList.add("dark");
-      else document.documentElement.classList.remove("dark");
-      return next;
-    });
-  }, []);
+  const isDark = themeMode === "dark";
   const [sectionsOpen, setSectionsOpen] = useState({
     agents: true,
     apps: true,
@@ -731,7 +726,7 @@ export function AppSidebar({
                 variant="tertiary"
                 size="md"
                 title={isDark ? "Switch to light mode" : "Switch to dark mode"}
-                onClick={toggleDark}
+                onClick={onToggleThemeMode}
               />
               <IconButton
                 icon={Settings}

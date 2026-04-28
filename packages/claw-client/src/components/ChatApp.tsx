@@ -62,7 +62,6 @@ import type {
 import { ConnectionState } from "@/lib/gateway/types";
 import { navigate, useHashRoute } from "@/lib/hooks/useHashRoute";
 import { useIsMobile } from "@/lib/hooks/useIsMobile";
-import { bootstrapThemeFromStorage } from "@/lib/hooks/useTheme";
 import { qualifyModel } from "@/lib/models";
 import type { NotificationRecord } from "@/lib/notifications";
 import { apply as applyPreferences, getPreferences } from "@/lib/preferences";
@@ -359,6 +358,7 @@ function ThreadArea({
 
   const paneUploads = workspace.uploads;
   const paneLinkedApp = workspace.linkedApp;
+  const paneLinkedArtifact = workspace.linkedArtifact;
 
   // The refined `linkedApp` may live in a different session than the current
   // thread (e.g. refining from /apps/<id> can land on the agent's main thread
@@ -372,9 +372,17 @@ function ThreadArea({
     const found = appList.find((a) => a.id === paneLinkedApp.appId);
     return found ? [...sessionApps, found] : sessionApps;
   }, [sessionApps, paneLinkedApp, appList]);
-  const paneArtifacts = sessionArtifacts;
+  // Same merge for linkedArtifact — needed when the artifact's origin session
+  // differs from the active thread.
+  const paneArtifacts = useMemo(() => {
+    if (!paneLinkedArtifact) return sessionArtifacts;
+    if (sessionArtifacts.some((a) => a.id === paneLinkedArtifact.artifactId)) return sessionArtifacts;
+    const found = artifactList.find((a) => a.id === paneLinkedArtifact.artifactId);
+    return found ? [...sessionArtifacts, found] : sessionArtifacts;
+  }, [sessionArtifacts, paneLinkedArtifact, artifactList]);
 
-  const workspaceCount = paneUploads.length + (paneLinkedApp ? 1 : 0);
+  const workspaceCount =
+    paneUploads.length + (paneLinkedApp ? 1 : 0) + (paneLinkedArtifact ? 1 : 0);
 
   useEffect(() => {
     const wasRunning = previousRunningRef.current;
@@ -470,10 +478,17 @@ function ThreadArea({
       selectedThreadId &&
       pendingPreviewOpen.threadId === selectedThreadId
     ) {
-      artifactStore.getState().openArtifact(pendingPreviewOpen.previewId);
+      // On mobile during a chat, the artifact overlay is suppressed (chat owns
+      // the screen during refine), so opening the artifact would be a no-op
+      // render but still mutate store state. Skip the auto-open and just
+      // consume the pending request — the chip in the composer is the
+      // mobile-side indicator that refine context is attached.
+      if (!isMobile) {
+        artifactStore.getState().openArtifact(pendingPreviewOpen.previewId);
+      }
       onConsumePendingPreview();
     }
-  }, [artifactStore, onConsumePendingPreview, pendingPreviewOpen, selectedThreadId]);
+  }, [artifactStore, isMobile, onConsumePendingPreview, pendingPreviewOpen, selectedThreadId]);
 
   const addFiles = useCallback(
     async (files: File[]) => {
@@ -802,11 +817,13 @@ function ThreadArea({
               />
             );
           })()}
-          {workspace.linkedApp ? (
+          {workspace.linkedApp || workspace.linkedArtifact ? (
             <div className="sticky top-0 z-20 flex items-center justify-between gap-3 border-b border-border-default/40 bg-info-background px-ml py-2 text-sm dark:border-border-default/16">
               <div className="flex min-w-0 items-center gap-2">
                 <span className="font-medium text-text-info-primary">Refining</span>
-                <span className="truncate text-text-info-primary">{workspace.linkedApp.title}</span>
+                <span className="truncate text-text-info-primary">
+                  {workspace.linkedApp?.title ?? workspace.linkedArtifact?.title}
+                </span>
               </div>
               <button
                 type="button"
@@ -816,6 +833,7 @@ function ThreadArea({
                   onUpdateThreadWorkspace(selectedThreadId, (current) => ({
                     ...current,
                     linkedApp: null,
+                    linkedArtifact: null,
                   }));
                 }}
               >
@@ -835,6 +853,7 @@ function ThreadArea({
           <SessionComposer
             uploads={workspace.uploads}
             linkedApp={workspace.linkedApp}
+            linkedArtifact={workspace.linkedArtifact}
             onPickFiles={openFilePicker}
             onAddFiles={addFiles}
             onRemoveUpload={(uploadId) => {
@@ -1033,12 +1052,15 @@ function ThreadArea({
             pinnedAppIds={pinnedAppIds}
             activePreviewId={activeArtifactId}
             onOpenApp={(appId) => {
-              artifactStore.getState().openArtifact(sessionAppPreviewId(appId));
+              // On mobile, route to /apps/<id> instead of toggling the
+              // artifact store — the chat-route overlay is suppressed so the
+              // store-based open would render nothing.
               setMobileWorkspaceOpen(false);
+              navigate({ view: "app", appId });
             }}
             onOpenArtifact={(artifactId) => {
-              artifactStore.getState().openArtifact(sessionArtifactPreviewId(artifactId));
               setMobileWorkspaceOpen(false);
+              navigate({ view: "artifact", artifactId });
             }}
             onOpenUpload={(uploadId) => {
               artifactStore.getState().openArtifact(sessionUploadPreviewId(uploadId));
@@ -1287,6 +1309,8 @@ interface ChatAppInnerProps {
   onRunCronJob: (id: string, mode?: "force" | "due") => Promise<boolean>;
   onRemoveCronJob: (id: string) => Promise<boolean>;
   gatewayCommands: GatewayCommand[];
+  themeMode: "light" | "dark";
+  onToggleThemeMode: () => void;
 }
 
 function ChatAppInner({
@@ -1336,6 +1360,8 @@ function ChatAppInner({
   onRunCronJob,
   onRemoveCronJob,
   gatewayCommands,
+  themeMode,
+  onToggleThemeMode,
 }: ChatAppInnerProps) {
   // Extra (non-destructured-above) props that flow through ChatAppInner.
   // Using `arguments` would be noisy; re-grab via a local re-assignment.
@@ -1420,11 +1446,12 @@ function ChatAppInner({
     const hidden = new Set<string>();
 
     Object.entries(workspaceByThread).forEach(([threadId, workspace]) => {
-      const linkedAppSessionKey = workspace.linkedApp?.sessionKey;
-      if (!linkedAppSessionKey) return;
+      const sourceSessionKey =
+        workspace.linkedApp?.sessionKey ?? workspace.linkedArtifact?.sessionKey;
+      if (!sourceSessionKey) return;
 
       const sourceThreadId = sessionRouteIdFromSessionKey(
-        linkedAppSessionKey,
+        sourceSessionKey,
         knownAgentIds.current,
       );
 
@@ -1451,6 +1478,7 @@ function ChatAppInner({
         return {
           uploads: [...remoteUploads, ...existingPending],
           linkedApp: current.linkedApp,
+          linkedArtifact: current.linkedArtifact,
         };
       });
     });
@@ -1637,9 +1665,11 @@ function ChatAppInner({
         // and queue the app's artifact preview to auto-open. With the split-
         // pane Shell.ThreadContainer, the chat stays visible on the left
         // while the app pins on the right — so opening the preview no longer
-        // hides the composer.
+        // hides the composer. Clear `linkedArtifact` so a previous artifact
+        // refine doesn't leak both contexts into the next user message.
         onUpdateThreadWorkspace(nextThreadId, (current) => ({
           ...current,
+          linkedArtifact: null,
           linkedApp: {
             appId: target.record.id,
             title: target.record.title,
@@ -1652,6 +1682,24 @@ function ChatAppInner({
           previewId: sessionAppPreviewId(target.record.id),
         });
       } else {
+        // Same parity as `linkedApp`: stamp `linkedArtifact` so the chip shows
+        // and the model gets context, then auto-open the artifact preview on
+        // desktop (mobile suppresses the overlay during chat — see effect at
+        // ~line 467).
+        const artifactSessionKey = target.record.source?.sessionId ?? "";
+        const artifactAgentId = target.record.source?.agentId ?? "";
+        // Clear `linkedApp` so a previous app refine doesn't leak both
+        // contexts into the next user message.
+        onUpdateThreadWorkspace(nextThreadId, (current) => ({
+          ...current,
+          linkedApp: null,
+          linkedArtifact: {
+            artifactId: target.record.id,
+            title: target.record.title,
+            agentId: artifactAgentId,
+            sessionKey: artifactSessionKey,
+          },
+        }));
         onSetPendingPreviewOpen({
           threadId: nextThreadId,
           previewId: sessionArtifactPreviewId(target.record.id),
@@ -1661,22 +1709,6 @@ function ChatAppInner({
       loadThreads();
       selectThread(nextThreadId);
       navigate({ view: "chat", sessionId: nextThreadId });
-
-      // Prime the composer on the next two animation frames so the chat
-      // view (and its composer) has committed and the listener is live.
-      // One RAF fires after navigate's commit; a second guarantees the
-      // useEffect that registers the listener has run.
-      const prefill =
-        target.kind === "app"
-          ? `Refine app "${target.record.title}" (id: ${target.record.id}): `
-          : `Refine artifact "${target.record.title}" (id: ${target.record.id}): `;
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          window.dispatchEvent(
-            new CustomEvent("openui-claw:prime-composer", { detail: { text: prefill } }),
-          );
-        });
-      });
     },
     [
       loadThreads,
@@ -2107,6 +2139,8 @@ function ChatAppInner({
           onOpenSearch={() => setPaletteOpen(true)}
           onOpenNotifications={() => setMobileNotificationInboxOpen(true)}
           onOpenSettings={onSettingsClick}
+          themeMode={themeMode}
+          onToggleThemeMode={onToggleThemeMode}
           chromeless={
             route.view === "chat" ||
             route.view === "app" ||
@@ -2197,6 +2231,8 @@ function ChatAppInner({
         hiddenThreadIds={hiddenRefinementThreadIds}
         pinnedAppIds={pinnedAppIds}
         onOpenCommandPalette={() => setPaletteOpen(true)}
+        themeMode={themeMode}
+        onToggleThemeMode={onToggleThemeMode}
       />
       {mainContent}
       <NotificationToastViewport
@@ -2256,16 +2292,40 @@ function ChatAppInner({
   );
 }
 
+const THEME_STORAGE_KEY = "claw:theme";
+
 export default function ChatApp() {
   const isMobile = useIsMobile();
   const [settingsOpen, setSettingsOpen] = useState(false);
   useEffect(() => {
-    bootstrapThemeFromStorage();
     applyPreferences();
   }, []);
   const [appList, setAppList] = useState<AppSummary[]>([]);
   const [artifactList, setArtifactList] = useState<ArtifactSummary[]>([]);
   const [pinnedAppIds, setPinnedAppIds] = useState<Set<string>>(new Set());
+
+  // Single source of truth for color scheme. Drives:
+  //  1. the Tailwind chrome via `.dark` on <html>
+  //  2. the openui ThemeProvider's `mode` prop (CSS vars)
+  //  3. localStorage so the choice survives reload
+  // Anything else that wants to read/write theme should consume these props,
+  // not mutate <html> or localStorage directly.
+  const [themeMode, setThemeMode] = useState<"light" | "dark">(() => {
+    if (typeof window === "undefined") return "light";
+    const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
+    if (stored === "dark" || stored === "light") return stored;
+    return document.documentElement.classList.contains("dark") ? "dark" : "light";
+  });
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    document.documentElement.classList.toggle("dark", themeMode === "dark");
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(THEME_STORAGE_KEY, themeMode);
+    }
+  }, [themeMode]);
+  const toggleThemeMode = useCallback(() => {
+    setThemeMode((prev) => (prev === "dark" ? "light" : "dark"));
+  }, []);
   const [workspaceByThread, setWorkspaceByThread] = useState<Record<string, ThreadWorkspaceState>>(
     {},
   );
@@ -2335,19 +2395,27 @@ export default function ChatApp() {
   }, [artifacts]);
 
   useEffect(() => {
-    if (apps) void refreshAppList();
-  }, [apps, refreshAppList]);
-
-  useEffect(() => {
-    if (artifacts) void refreshArtifactList();
-  }, [artifacts, refreshArtifactList]);
-
-  useEffect(() => {
     if (connectionState === ConnectionState.CONNECTED) {
+      // Apps/artifacts plugin refs can be truthy before the WebSocket finishes
+      // handshaking, so listing on plugin-available alone returns [] on a cold
+      // first connect (visible on mobile, where there's no second sidebar
+      // copy of this effect to bail us out). Gate on CONNECTED so the list
+      // calls run against a ready engine — same pattern as notifications and
+      // cron below.
+      if (apps) void refreshAppList();
+      if (artifacts) void refreshArtifactList();
       void refreshNotifications();
       void refreshCronData();
     }
-  }, [connectionState, refreshCronData, refreshNotifications]);
+  }, [
+    connectionState,
+    apps,
+    artifacts,
+    refreshAppList,
+    refreshArtifactList,
+    refreshCronData,
+    refreshNotifications,
+  ]);
 
   const handleDeleteApp = useCallback(
     async (appId: string) => {
@@ -2406,15 +2474,17 @@ export default function ChatApp() {
         const existingPending = (current[threadId]?.uploads ?? []).filter(
           (upload) => upload.status === "pending",
         );
-        // Preserve a `linkedApp` that was just written by the Refine flow —
+        // Preserve link state that was just written by the Refine flow —
         // history-derived link info is `null` for refines (the link isn't in
-        // the message stream), so blindly overwriting would drop the chip.
-        const existingLink = current[threadId]?.linkedApp ?? null;
+        // the message stream yet), so blindly overwriting would drop the chip.
+        const existingLinkedApp = current[threadId]?.linkedApp ?? null;
+        const existingLinkedArtifact = current[threadId]?.linkedArtifact ?? null;
         return {
           ...current,
           [threadId]: {
             uploads: [...remoteUploads, ...existingPending],
-            linkedApp: existingLink ?? historyWorkspace.linkedApp,
+            linkedApp: existingLinkedApp ?? historyWorkspace.linkedApp,
+            linkedArtifact: existingLinkedArtifact ?? historyWorkspace.linkedArtifact,
           },
         };
       });
@@ -2510,7 +2580,7 @@ export default function ChatApp() {
   );
 
   return (
-    <ThemeProvider>
+    <ThemeProvider mode={themeMode}>
       <ChatProvider
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         fetchThreadList={adaptedFetchThreadList as any}
@@ -2569,30 +2639,31 @@ export default function ChatApp() {
           onRunCronJob={runCronJob}
           onRemoveCronJob={removeCronJob}
           gatewayCommands={gatewayCommands}
+          themeMode={themeMode}
+          onToggleThemeMode={toggleThemeMode}
         />
 
         {isMobile ? (
           <MobileSettingsDialog
             open={settingsOpen}
             currentSettings={settings}
-            onClose={() => {
-              if (getSettings()?.gatewayUrl) setSettingsOpen(false);
-            }}
+            connectionState={connectionState}
+            onClose={() => setSettingsOpen(false)}
             onSave={(newSettings) => {
+              // Don't close here — the dialog watches `connectionState` and
+              // closes itself on CONNECTED, or stays open with an inline
+              // error on UNREACHABLE / AUTH_FAILED.
               reconnect(newSettings);
-              setSettingsOpen(false);
             }}
           />
         ) : (
           <SettingsDialog
             open={settingsOpen}
             currentSettings={settings}
-            onClose={() => {
-              if (getSettings()?.gatewayUrl) setSettingsOpen(false);
-            }}
+            connectionState={connectionState}
+            onClose={() => setSettingsOpen(false)}
             onSave={(newSettings) => {
               reconnect(newSettings);
-              setSettingsOpen(false);
             }}
           />
         )}

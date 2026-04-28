@@ -254,6 +254,7 @@ export const ConnectionState = {
   CONNECTED: "CONNECTED",
   AUTH_FAILED: "AUTH_FAILED",
   PAIRING: "PAIRING",
+  UNREACHABLE: "UNREACHABLE",
 } as const;
 
 export type ConnectionState = (typeof ConnectionState)[keyof typeof ConnectionState];
