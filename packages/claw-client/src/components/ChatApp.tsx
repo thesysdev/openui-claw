@@ -47,6 +47,7 @@ import {
   sessionRouteIdFromSessionKey,
   useGateway,
 } from "@/lib/chat/useGateway";
+import type { CompactSessionResult } from "@/lib/engines/openclaw/OpenClawEngine";
 import { isTabHidden, playCompletionChime } from "@/lib/chime";
 import type { CommandContext, CommandMessageSnapshot } from "@/lib/commands";
 import type { CronJobRecord, CronRunEntry, CronStatusRecord } from "@/lib/cron";
@@ -107,6 +108,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 // Same default used by FullScreen — swap for a custom Claw logo later.
 const LOGO_URL = "https://www.openui.com/favicon.svg";
 const ENABLE_THREAD_REPLY_NOTIFICATIONS = false;
+
+function formatTokens(n: number): string {
+  if (n >= 1000) return `${(Math.round(n / 100) / 10).toFixed(1)}k`;
+  return String(n);
+}
 
 function toThreadRow(r: ClawThreadListItem): Thread {
   return {
@@ -232,7 +238,7 @@ function ThreadArea({
   defaultAgentId: string | null;
   patchSession: (key: string, patch: Record<string, unknown>) => Promise<boolean>;
   resetSession: (sessionKey: string) => Promise<boolean>;
-  compactSession: (sessionKey: string) => Promise<boolean>;
+  compactSession: (sessionKey: string) => Promise<CompactSessionResult>;
   onSessionChanged: (listener: (sessionKey: string) => void) => () => void;
   loadThread: (threadId: string) => Promise<Message[]>;
   knownAgentIds: React.RefObject<Set<string>>;
@@ -661,11 +667,32 @@ function ThreadArea({
         return true;
       }
       if (name === "compact") {
-        const ok = await compactSession(sessionKey);
-        setCommandToast({
-          message: ok ? "Compaction started" : "Compaction failed",
-          kind: ok ? "success" : "error",
-        });
+        // The RPC awaits the full compaction (~1s), so show a pending toast
+        // up front so the user knows something is happening. Replace with
+        // the enriched result on resolve.
+        setCommandToast({ message: "Compacting context…", kind: "info" });
+        const result = await compactSession(sessionKey);
+        if (!result.ok) {
+          setCommandToast({ message: "Compaction failed", kind: "error" });
+        } else if (!result.compacted) {
+          setCommandToast({
+            message: result.reason
+              ? `Nothing to compact (${result.reason})`
+              : "Nothing to compact",
+            kind: "info",
+          });
+        } else {
+          const before = result.tokensBefore;
+          const after = result.tokensAfter;
+          const detail =
+            before != null && after != null
+              ? ` (${formatTokens(before)} → ${formatTokens(after)} tokens)`
+              : "";
+          setCommandToast({
+            message: `Context compacted${detail}`,
+            kind: "success",
+          });
+        }
         return true;
       }
       return false;
@@ -1262,7 +1289,7 @@ interface ChatAppInnerProps {
   renameSession: (threadId: string, label: string) => Promise<boolean>;
   deleteSession: (threadId: string) => Promise<boolean>;
   resetSession: (sessionKey: string) => Promise<boolean>;
-  compactSession: (sessionKey: string) => Promise<boolean>;
+  compactSession: (sessionKey: string) => Promise<CompactSessionResult>;
   onSessionChanged: (listener: (sessionKey: string) => void) => () => void;
   loadThread: (threadId: string) => Promise<Message[]>;
   sessionMeta: Map<string, SessionRow>;

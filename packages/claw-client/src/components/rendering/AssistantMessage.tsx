@@ -1,6 +1,6 @@
 "use client";
 
-import { ERROR_SENTINEL, GATEWAY_SENTINEL } from "@/lib/chat/history-merger";
+import { COMPACTION_SENTINEL, ERROR_SENTINEL, GATEWAY_SENTINEL } from "@/lib/chat/history-merger";
 import { extractAssistantTimeline } from "@/lib/chat/timeline";
 import { separateContentAndContext, wrapContext } from "@/lib/content-parser";
 import { parseInlineResponse } from "@/lib/detection";
@@ -463,7 +463,36 @@ function oneLineSummary(text: string, max = 100): string {
   return base.length > max ? `${base.slice(0, max - 1)}…` : base;
 }
 
+function CompactionDivider({ label }: { label: string }) {
+  return (
+    <Shell.AssistantMessageContainer>
+      <div
+        role="separator"
+        aria-label={label}
+        className="my-s flex w-full max-w-3xl items-center gap-s"
+      >
+        <span className="h-px flex-1 bg-border-default/50" />
+        <span className="font-label text-xs uppercase tracking-wide text-text-neutral-tertiary">
+          {label}
+        </span>
+        <span className="h-px flex-1 bg-border-default/50" />
+      </div>
+    </Shell.AssistantMessageContainer>
+  );
+}
+
 export function AssistantMessage({ message }: Props) {
+  // Compaction markers are emitted by `history-merger` as assistant messages
+  // tagged with COMPACTION_SENTINEL. Hand them off to a separate component
+  // so this one doesn't conditionally call hooks.
+  if (typeof message.content === "string" && message.content.startsWith(COMPACTION_SENTINEL)) {
+    return (
+      <CompactionDivider
+        label={message.content.slice(COMPACTION_SENTINEL.length) || "Context compacted"}
+      />
+    );
+  }
+
   const messages = useThread((s) => s.messages);
   const isRunning = useThread((s) => s.isRunning);
   const processMessage = useThread((s) => s.processMessage);

@@ -22,6 +22,7 @@ export type ToolCallOutput = {
 
 export const ERROR_SENTINEL = "<!--AGENT_ERROR-->";
 export const GATEWAY_SENTINEL = "<!--GATEWAY-->";
+export const COMPACTION_SENTINEL = "<!--COMPACTION-->";
 
 export type MergedMessage =
   | {
@@ -301,6 +302,20 @@ export function mergeHistoryMessages(raw: ChatHistoryMessage[]): MergedMessage[]
           ...(fallbackError ? { isError: true } : {}),
         },
       ];
+      continue;
+    }
+
+    // System messages with `__openclaw.kind === "compaction"` are markers
+    // for where the gateway compacted the transcript. Emit them as a thin
+    // assistant-shaped message tagged with COMPACTION_SENTINEL so the
+    // renderer can show a centered divider instead of a bubble.
+    if (m.role === "system" && m.__openclaw?.kind === "compaction") {
+      flush();
+      output.push({
+        id: m.__openclaw?.id ?? m.id ?? crypto.randomUUID(),
+        role: "assistant",
+        content: `${COMPACTION_SENTINEL}Context compacted`,
+      });
       continue;
     }
 

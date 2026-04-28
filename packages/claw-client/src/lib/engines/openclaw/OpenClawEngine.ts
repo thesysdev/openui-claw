@@ -62,6 +62,24 @@ const warn = (...args: unknown[]) => console.warn("[claw:openclaw-engine]", ...a
 
 const FULL_VERBOSE_LEVEL = "full";
 
+interface CompactSessionResponse {
+  ok?: boolean;
+  compacted?: boolean;
+  reason?: string;
+  result?: {
+    tokensBefore?: number;
+    tokensAfter?: number;
+  };
+}
+
+export interface CompactSessionResult {
+  ok: boolean;
+  compacted: boolean;
+  tokensBefore: number | null;
+  tokensAfter: number | null;
+  reason: string | null;
+}
+
 function sessionRowTitle(
   row: Pick<SessionRow, "label" | "displayName" | "derivedTitle" | "key">,
 ): string {
@@ -908,15 +926,31 @@ export class OpenClawEngine implements Engine {
     }
   }
 
-  /** RPC: start a compaction on the session. Returns true on success.
-   *  Gateway schema uses `key`, not `sessionKey`. */
-  async compactSession(sessionKey: string): Promise<boolean> {
+  /** RPC: run compaction on the session. Returns the rich gateway payload so
+   *  the UI can show token-count deltas. `ok: false` means the RPC failed;
+   *  `ok: true` + `compacted: false` means the gateway succeeded but had
+   *  nothing to compact (below threshold, no transcript, etc.). */
+  async compactSession(sessionKey: string): Promise<CompactSessionResult> {
     try {
-      await this._request("sessions.compact", { key: sessionKey });
-      return true;
+      const result = await this._request<CompactSessionResponse>("sessions.compact", {
+        key: sessionKey,
+      });
+      return {
+        ok: result?.ok ?? true,
+        compacted: result?.compacted ?? false,
+        tokensBefore: result?.result?.tokensBefore ?? null,
+        tokensAfter: result?.result?.tokensAfter ?? null,
+        reason: result?.reason ?? null,
+      };
     } catch (error) {
       warn("sessions.compact failed:", error);
-      return false;
+      return {
+        ok: false,
+        compacted: false,
+        tokensBefore: null,
+        tokensAfter: null,
+        reason: null,
+      };
     }
   }
 

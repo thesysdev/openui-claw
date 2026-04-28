@@ -2,7 +2,11 @@
 
 import { separateContentAndContext } from "@/lib/content-parser";
 import type { CronJobRecord, CronRunEntry, CronStatusRecord } from "@/lib/cron";
-import { OpenClawEngine, resolveChatSessionKey } from "@/lib/engines/openclaw/OpenClawEngine";
+import {
+  OpenClawEngine,
+  resolveChatSessionKey,
+  type CompactSessionResult,
+} from "@/lib/engines/openclaw/OpenClawEngine";
 import type {
   AppStore,
   ArtifactStore,
@@ -299,8 +303,14 @@ export function useGateway({ onAuthFailed }: { onAuthFailed: () => void }) {
   );
 
   const compactSession = useCallback(
-    async (sessionKey: string): Promise<boolean> =>
-      engineRef.current?.compactSession(sessionKey) ?? false,
+    async (sessionKey: string): Promise<CompactSessionResult> =>
+      engineRef.current?.compactSession(sessionKey) ?? {
+        ok: false,
+        compacted: false,
+        tokensBefore: null,
+        tokensAfter: null,
+        reason: null,
+      },
     [],
   );
 

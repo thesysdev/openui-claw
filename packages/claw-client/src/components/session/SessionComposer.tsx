@@ -265,12 +265,17 @@ function SlashMenu({
   onSelect: (entry: SlashEntry) => void;
   onHover: (index: number) => void;
 }) {
+  const activeRef = useRef<HTMLButtonElement | null>(null);
+  useEffect(() => {
+    activeRef.current?.scrollIntoView({ block: "nearest" });
+  }, [activeIndex]);
   if (entries.length === 0) return null;
   return (
-    <div className="mx-3 mb-2 overflow-hidden rounded-2xl border border-border-default bg-background shadow-lg">
+    <div className="mx-2 mt-2 mb-2 max-h-72 overflow-y-auto rounded-2xl border border-border-default bg-background shadow-lg">
       {entries.map((entry, index) => (
         <button
           key={`${entry.source}:${entry.name}`}
+          ref={index === activeIndex ? activeRef : undefined}
           type="button"
           onClick={() => onSelect(entry)}
           onMouseEnter={() => onHover(index)}
@@ -524,11 +529,12 @@ export function SessionComposer({
           spaceIdx === -1 ? trimmed.slice(1) : trimmed.slice(1, spaceIdx)
         ).toLowerCase();
         const args = spaceIdx === -1 ? "" : trimmed.slice(spaceIdx + 1).trim();
+        // Clear input *before* awaiting so the slash menu and the "/compact"
+        // text disappear immediately, instead of hanging around for the full
+        // duration of the RPC (compaction is ~1s).
+        setTextContent("");
         const handled = await onDispatchGatewayCommand(name, args);
-        if (handled) {
-          setTextContent("");
-          return;
-        }
+        if (handled) return;
       }
     }
 

@@ -245,7 +245,7 @@ export interface ChatHistoryMessage {
   error?: string;
   stopReason?: string;
   errorMessage?: string;
-  __openclaw?: { id: string; seq: number };
+  __openclaw?: { id: string; seq: number; kind?: string };
 }
 
 export const ConnectionState = {
