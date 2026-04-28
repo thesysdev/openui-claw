@@ -14,7 +14,7 @@ const SIZE_STYLES: Record<IconButtonSize, { box: string; icon: number }> = {
 
 const VARIANT_STYLES: Record<IconButtonVariant, string> = {
   primary:
-    "bg-interactive-accent text-background border border-transparent shadow-sm hover:bg-interactive-accent-hover",
+    "bg-interactive-accent text-text-white border border-transparent shadow-sm hover:bg-interactive-accent-hover",
   secondary:
     "bg-background text-text-neutral-secondary border border-border-default shadow-sm hover:bg-sunk-light hover:text-text-neutral-primary",
   tertiary:

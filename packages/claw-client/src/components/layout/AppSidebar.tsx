@@ -49,11 +49,19 @@ import { BorderTile, CategoryTile, IconTile, TextTile } from "./sidebar/Tile";
 // ─── Connection status styling ───────────────────────────────────────────────
 
 const DOT_CLASS: Record<ConnectionState, string> = {
-  [ConnectionState.DISCONNECTED]: "bg-status-muted",
+  [ConnectionState.DISCONNECTED]: "bg-text-danger-primary",
   [ConnectionState.CONNECTING]: "bg-status-warning animate-pulse",
   [ConnectionState.CONNECTED]: "bg-status-online",
-  [ConnectionState.AUTH_FAILED]: "bg-status-error",
+  [ConnectionState.AUTH_FAILED]: "bg-text-danger-primary",
   [ConnectionState.PAIRING]: "bg-status-warning animate-pulse",
+};
+
+const STATUS_TEXT_CLASS: Record<ConnectionState, string> = {
+  [ConnectionState.DISCONNECTED]: "text-text-danger-primary",
+  [ConnectionState.CONNECTING]: "text-text-alert-primary",
+  [ConnectionState.CONNECTED]: "text-text-success-primary",
+  [ConnectionState.AUTH_FAILED]: "text-text-danger-primary",
+  [ConnectionState.PAIRING]: "text-text-alert-primary",
 };
 
 const STATUS_LABEL: Record<ConnectionState, string> = {
@@ -208,9 +216,10 @@ export function AppSidebar({
   }, [isLoadingThreads, serverThreadIdsKey]);
 
   useEffect(() => {
-    if (connectionState === ConnectionState.CONNECTED) {
-      loadThreads();
-    }
+    // Fire on mount + every connection-state change so the
+    // `adaptedFetchThreadList` mock fallback can populate the sidebar
+    // offline; real threads replace the mock once CONNECTED.
+    loadThreads();
   }, [connectionState, loadThreads]);
 
   const groups = useMemo(() => buildAgentGroups(displayThreads), [displayThreads]);
@@ -723,11 +732,11 @@ export function AppSidebar({
         </div>
       </div>
 
-      {/* ── Footer: connection + theme toggle + settings ── */}
+      {/* ── Footer: theme toggle + combined status/settings button ── */}
       <div
-        className={`flex items-center ${
-          nc ? "justify-center" : "justify-between"
-        } bg-sunk-light/60 px-m py-sm`}
+        className={`flex items-center gap-2xs bg-sunk-light/60 px-s py-sm ${
+          nc ? "justify-center" : ""
+        }`}
       >
         {nc ? (
           <IconButton
@@ -739,30 +748,33 @@ export function AppSidebar({
           />
         ) : (
           <>
-            <div className="flex min-w-0 items-center gap-s">
-              <span
-                className={`inline-block h-s w-s shrink-0 rounded-full ${DOT_CLASS[connectionState]}`}
-              />
-              <span className="truncate text-xs text-text-neutral-tertiary">
-                {STATUS_LABEL[connectionState]}
+            <button
+              type="button"
+              onClick={onSettingsClick}
+              title="Open settings"
+              aria-label={`${STATUS_LABEL[connectionState]} — open settings`}
+              className="group flex min-w-0 flex-1 items-center justify-between gap-s rounded-m px-s py-2xs text-left transition-colors hover:bg-sunk dark:hover:bg-sunk-light"
+            >
+              <span className="flex min-w-0 items-center gap-s">
+                <span
+                  className={`inline-block h-s w-s shrink-0 rounded-full ${DOT_CLASS[connectionState]}`}
+                />
+                <span className="truncate font-label text-sm font-regular text-text-neutral-primary">
+                  {STATUS_LABEL[connectionState]}
+                </span>
               </span>
-            </div>
-            <div className="flex shrink-0 items-center gap-2xs">
-              <IconButton
-                icon={isDark ? Sun : Moon}
-                variant="tertiary"
-                size="md"
-                title={isDark ? "Switch to light mode" : "Switch to dark mode"}
-                onClick={toggleDark}
+              <Settings
+                size={14}
+                className="shrink-0 text-text-neutral-tertiary group-hover:text-text-neutral-primary"
               />
-              <IconButton
-                icon={Settings}
-                variant="tertiary"
-                size="md"
-                title="Open settings"
-                onClick={onSettingsClick}
-              />
-            </div>
+            </button>
+            <IconButton
+              icon={isDark ? Sun : Moon}
+              variant="tertiary"
+              size="md"
+              title={isDark ? "Switch to light mode" : "Switch to dark mode"}
+              onClick={toggleDark}
+            />
           </>
         )}
       </div>
