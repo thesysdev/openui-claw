@@ -1580,6 +1580,12 @@ function ChatAppInner({
     }
   }, [connectionState, route, selectedThreadId, selectThread]);
 
+  useEffect(() => {
+    if (connectionState === ConnectionState.CONNECTED) {
+      loadThreads();
+    }
+  }, [connectionState, loadThreads]);
+
   /**
    * Resolve where a refine click should land:
    *   1. originating session (sessionKey → routed thread id)

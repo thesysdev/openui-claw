@@ -205,12 +205,6 @@ export function AppSidebar({
     });
   }, [isLoadingThreads, serverThreadIdsKey]);
 
-  useEffect(() => {
-    if (connectionState === ConnectionState.CONNECTED) {
-      loadThreads();
-    }
-  }, [connectionState, loadThreads]);
-
   const groups = useMemo(() => buildAgentGroups(displayThreads), [displayThreads]);
 
   useEffect(() => {
