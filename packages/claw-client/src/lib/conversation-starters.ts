@@ -10,27 +10,39 @@
 export interface ConversationStarter {
   displayText: string;
   prompt: string;
+  /** Visual accent — drives the icon + tile color on the empty-state list. */
+  accent?: "info" | "accent" | "success" | "alert";
+  /** Lucide icon key picked by the renderer; falls back to Lightbulb. */
+  iconKey?: "newspaper" | "radar" | "trending-up" | "search-check";
 }
 
 export const DEFAULT_STARTERS: ConversationStarter[] = [
   {
-    displayText: "Build me an app",
+    displayText: "Build me a daily news page that fetches the latest news in AI",
     prompt:
-      "Build me a small app I can use right now. Pick something useful and ship a working version with sample data.",
+      "Build me a daily news page that fetches the latest news in AI. Pull from a few reputable sources, group by topic, and let me click into each headline.",
+    accent: "info",
+    iconKey: "newspaper",
   },
   {
-    displayText: "Set up a daily digest",
+    displayText: "Build me a social monitoring page that tracks mentions of my product",
     prompt:
-      "Create a cron job that runs every morning at 8am and summarises my recent activity into a notification.",
+      "Build me a social monitoring page that tracks mentions of my product. Surface volume, sentiment, and the top loud voices, with a feed of recent posts.",
+    accent: "accent",
+    iconKey: "radar",
   },
   {
-    displayText: "Pull data from a website",
+    displayText: "Build me a finance dashboard that tracks my portfolio and market alerts",
     prompt:
-      "Fetch some data from a public website and turn it into a clean table I can browse.",
+      "Build me a finance dashboard that tracks my portfolio and market alerts. Show holdings, P/L, watchlist, and a feed of price/news triggers.",
+    accent: "success",
+    iconKey: "trending-up",
   },
   {
-    displayText: "What can you do?",
+    displayText: "Build me an SEO dashboard that tracks rankings and finds content opportunities",
     prompt:
-      "Give me a short tour of what you can do — tools, apps, artifacts, cron jobs — with one example of each.",
+      "Build me an SEO dashboard that tracks rankings and finds content opportunities. Include keyword positions, competitor gaps, and a backlog of topics to write about.",
+    accent: "alert",
+    iconKey: "search-check",
   },
 ];

@@ -6,6 +6,7 @@ import { AppsView } from "@/components/apps/AppsView";
 import { ArtifactDetail } from "@/components/artifacts/ArtifactDetail";
 import { ArtifactsView } from "@/components/artifacts/ArtifactsView";
 import { AgentTopBar } from "@/components/chat/AgentTopBar";
+import { EmptyAgentHero } from "@/components/chat/EmptyAgentHero";
 import { EmptyChatWelcome } from "@/components/chat/EmptyChatWelcome";
 import { TopBar } from "@/components/chat/TopBar";
 import { CommandPalette } from "@/components/CommandPalette";
@@ -841,94 +842,92 @@ function ThreadArea({
               </button>
             </div>
           ) : null}
-          <Shell.ScrollArea>
-            <EmptyChatWelcome agentName={activeAgentName} />
-            {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-            <Shell.Messages
-              assistantMessage={AssistantMessage}
-              userMessage={UserMessage as any}
-              loader={<Shell.MessageLoading />}
-            />
-          </Shell.ScrollArea>
-          <SessionComposer
-            uploads={workspace.uploads}
-            linkedApp={workspace.linkedApp}
-            linkedArtifact={workspace.linkedArtifact}
-            onPickFiles={openFilePicker}
-            onAddFiles={addFiles}
-            onRemoveUpload={(uploadId) => {
-              if (!selectedThreadId) return;
-              onRemoveUpload(selectedThreadId, uploadId);
-              artifactStore.getState().closeArtifact(sessionUploadPreviewId(uploadId));
-            }}
-            onUploadsSent={(uploadIds) => {
-              if (!selectedThreadId) return;
-              onMarkUploadsSent(selectedThreadId, uploadIds);
-            }}
-            commandContext={buildCommandContext}
-            gatewayCommands={gatewayCommands}
-            onDispatchGatewayCommand={dispatchGatewayCommand}
-            models={availableModels}
-            gatewayDefaultModelId={gatewayDefaultModelId}
-            agentDefaultModelId={(() => {
-              // Per-agent override wins over the workspace default. When no
-              // thread is selected (home/welcome composer) fall back to the
-              // configured default agent so a single-agent setup still
-              // surfaces its model as `Default (X)`.
-              const targetAgentId = activeAgentId ?? defaultAgentId;
-              return targetAgentId ? agentModelById.get(targetAgentId) ?? null : null;
-            })()}
-            currentModel={meta?.model ? qualifyModel(meta.model, meta.modelProvider ?? "") : ""}
-            currentEffort={meta?.thinkingLevel ?? ""}
-            onModelChange={
-              sessionKey
-                ? (value) => {
-                    void patchSession(sessionKey, { model: value || null });
-                  }
-                : undefined
+          {(() => {
+            const composerEl = (
+              <SessionComposer
+                uploads={workspace.uploads}
+                linkedApp={workspace.linkedApp}
+                linkedArtifact={workspace.linkedArtifact}
+                onPickFiles={openFilePicker}
+                onAddFiles={addFiles}
+                onRemoveUpload={(uploadId) => {
+                  if (!selectedThreadId) return;
+                  onRemoveUpload(selectedThreadId, uploadId);
+                  artifactStore.getState().closeArtifact(sessionUploadPreviewId(uploadId));
+                }}
+                onUploadsSent={(uploadIds) => {
+                  if (!selectedThreadId) return;
+                  onMarkUploadsSent(selectedThreadId, uploadIds);
+                }}
+                commandContext={buildCommandContext}
+                gatewayCommands={gatewayCommands}
+                onDispatchGatewayCommand={dispatchGatewayCommand}
+                models={availableModels}
+                gatewayDefaultModelId={gatewayDefaultModelId}
+                agentDefaultModelId={(() => {
+                  // Per-agent override wins over the workspace default. When no
+                  // thread is selected (home/welcome composer) fall back to the
+                  // configured default agent so a single-agent setup still
+                  // surfaces its model as `Default (X)`.
+                  const targetAgentId = activeAgentId ?? defaultAgentId;
+                  return targetAgentId ? agentModelById.get(targetAgentId) ?? null : null;
+                })()}
+                currentModel={
+                  meta?.model ? qualifyModel(meta.model, meta.modelProvider ?? "") : ""
+                }
+                currentEffort={meta?.thinkingLevel ?? ""}
+                onModelChange={
+                  sessionKey
+                    ? (value) => {
+                        void patchSession(sessionKey, { model: value || null });
+                      }
+                    : undefined
+                }
+                onEffortChange={
+                  sessionKey
+                    ? (value) => {
+                        void patchSession(sessionKey, { thinkingLevel: value || null });
+                      }
+                    : undefined
+                }
+                {...(() => {
+                  // Map openclaw's SessionRow fields onto the ring's
+                  // (used, limit) pair. See git blame for the discussion
+                  // about totalTokens vs inputTokens vs contextTokens.
+                  const totalFresh = meta?.totalTokensFresh !== false;
+                  const used = totalFresh
+                    ? meta?.totalTokens ?? meta?.inputTokens
+                    : meta?.inputTokens;
+                  return {
+                    contextTokens: used ?? undefined,
+                    contextLimit: meta?.contextTokens ?? undefined,
+                  };
+                })()}
+              />
+            );
+            const isEmpty = !isRunning && threadMessages.length === 0;
+            if (isEmpty) {
+              return (
+                <div className="min-h-0 flex-1 overflow-y-auto">
+                  <EmptyAgentHero agentName={activeAgentName} composer={composerEl} />
+                </div>
+              );
             }
-            onEffortChange={
-              sessionKey
-                ? (value) => {
-                    void patchSession(sessionKey, { thinkingLevel: value || null });
-                  }
-                : undefined
-            }
-            {...(() => {
-              // Map openclaw's SessionRow fields onto the ring's
-              // (used, limit) pair. Field semantics confirmed against
-              // openclaw/gateway/session-utils.ts and the test fixture at
-              // server.sessions.gateway-server-sessions-a.test.ts:745-783:
-              //
-              //   contextTokens   → MODEL'S CONTEXT WINDOW (capacity).
-              //                     1_048_576 for Claude 1M, 200_000 for
-              //                     GPT-5, etc. NOT "tokens used."
-              //   totalTokens     → cumulative session usage across all
-              //                     turns. The right "used" signal for a
-              //                     fill ring labeled "Context consumed."
-              //   totalTokensFresh→ false when the value has been
-              //                     invalidated (post-reset, etc.) — fall
-              //                     back to the latest turn's input size.
-              //   inputTokens     → only the fresh (uncached) input of the
-              //                     latest turn. With Anthropic prompt
-              //                     caching this is just the new user msg
-              //                     ("hi" = 3 tokens) — meaningless on
-              //                     its own as a context-fill metric.
-              //
-              // First version of this ring used `contextTokens` as both
-              // numerator and denominator → stuck at 100%. Second version
-              // used bare `inputTokens` → showed `3 of 1.0M`. Third time's
-              // the charm.
-              const totalFresh = meta?.totalTokensFresh !== false;
-              const used = totalFresh
-                ? meta?.totalTokens ?? meta?.inputTokens
-                : meta?.inputTokens;
-              return {
-                contextTokens: used ?? undefined,
-                contextLimit: meta?.contextTokens ?? undefined,
-              };
-            })()}
-          />
+            return (
+              <>
+                <Shell.ScrollArea>
+                  <EmptyChatWelcome agentName={activeAgentName} />
+                  {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                  <Shell.Messages
+                    assistantMessage={AssistantMessage}
+                    userMessage={UserMessage as any}
+                    loader={<Shell.MessageLoading />}
+                  />
+                </Shell.ScrollArea>
+                {composerEl}
+              </>
+            );
+          })()}
           {commandToast && (
             <div className="pointer-events-none absolute left-1/2 top-4 z-40 -translate-x-1/2 transform">
               <div

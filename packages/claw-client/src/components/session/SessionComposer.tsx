@@ -645,7 +645,7 @@ export function SessionComposer({
           </div>
         )}
 
-        <div className="flex items-center gap-2 px-3 py-2">
+        <div className="flex items-end gap-2 px-3 py-2">
           <textarea
             ref={textareaRef}
             value={textContent}
