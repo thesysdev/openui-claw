@@ -22,7 +22,7 @@ import type { AgentEvent, ChatEvent } from "@/lib/gateway/types";
 import { ERROR_SENTINEL, GATEWAY_SENTINEL } from "@/lib/chat/history-merger";
 import { encodeAssistantTimelineSegment } from "@/lib/chat/timeline";
 
-const DEBUG_STORAGE_KEY = "openui-claw-debug-events";
+const DEBUG_STORAGE_KEY = "openclaw-ui-debug-events";
 const TOOL_RESULT_KNOWN_KEYS = new Set([
   "phase",
   "name",

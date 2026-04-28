@@ -1,10 +1,10 @@
 /**
  * Single source of truth for the OpenClaw session-key format.
  *
- * Format:  agent:<agentId>:<slot>:openui-claw
+ * Format:  agent:<agentId>:<slot>:openclaw-ui
  *   - `<slot>` is `"main"` for the agent's primary thread, or a UUID for
  *     extra (named) sessions under the same agent.
- *   - The `:openui-claw` suffix is what lets the gateway / plugin filter
+ *   - The `:openclaw-ui` suffix is what lets the gateway / plugin filter
  *     Claw sessions out of the rest of the OpenClaw session pool.
  *
  * Centralizing here so the format isn't grepped+rebuilt across the codebase
@@ -15,18 +15,18 @@
  * are authoritative when *creating* a key.
  */
 
-export const CLAW_SUFFIX = ":openui-claw";
+export const CLAW_SUFFIX = ":openclaw-ui";
 
-const MAIN_KEY_REGEX = /^agent:[^:]+:main:openui-claw$/i;
-const EXTRA_KEY_REGEX = /^agent:[^:]+:([0-9a-f-]+):openui-claw$/i;
-const AGENT_ID_KEY_REGEX = /^agent:([^:]+):[^:]+:openui-claw$/i;
+const MAIN_KEY_REGEX = /^agent:[^:]+:main:openclaw-ui$/i;
+const EXTRA_KEY_REGEX = /^agent:[^:]+:([0-9a-f-]+):openclaw-ui$/i;
+const AGENT_ID_KEY_REGEX = /^agent:([^:]+):[^:]+:openclaw-ui$/i;
 
-/** `agent:<agentId>:main:openui-claw` — the agent's primary thread key. */
+/** `agent:<agentId>:main:openclaw-ui` — the agent's primary thread key. */
 export function encodeMain(agentId: string): string {
   return `agent:${agentId}:main${CLAW_SUFFIX}`;
 }
 
-/** `agent:<agentId>:<uuid>:openui-claw` — an extra named session key. */
+/** `agent:<agentId>:<uuid>:openclaw-ui` — an extra named session key. */
 export function encodeExtra(agentId: string, slotId: string = crypto.randomUUID()): string {
   return `agent:${agentId}:${slotId}${CLAW_SUFFIX}`;
 }
@@ -52,7 +52,7 @@ export function extractExtraSlotId(key: string): string | null {
 
 /**
  * Pull the agent id out of any Claw session key (main or extra). Returns
- * `null` if the input doesn't match the `agent:<id>:<slot>:openui-claw`
+ * `null` if the input doesn't match the `agent:<id>:<slot>:openclaw-ui`
  * shape — useful when callers receive a bare agent id or a non-Claw key.
  */
 export function extractAgentIdFromKey(key: string): string | null {

@@ -1,7 +1,7 @@
 <div align="center">
 
 <!-- Replace with hosted banner when available -->
-# OpenUI Claw
+# OpenClaw UI
 
 ### OpenUI × OpenClaw
 
@@ -14,17 +14,17 @@ Agents respond with interactive UI - charts, cards, tables, forms - instead of p
 
 ---
 
-## What is OpenUI Claw?
+## What is OpenClaw UI?
 
 <!-- Add demo gif here
 <div align="center">
-  <img src="./assets/demo.gif" alt="OpenUI Claw demo - agent responding with a live dashboard" width="720" />
+  <img src="./assets/demo.gif" alt="OpenClaw UI demo - agent responding with a live dashboard" width="720" />
 </div>
 -->
 
 <br/>
 
-OpenUI Claw is a two-part system that adds generative UI to any OpenClaw agent:
+OpenClaw UI is a two-part system that adds generative UI to any OpenClaw agent:
 
 1. **`@openuidev/claw-plugin`** - an OpenClaw server-side plugin that detects Claw sessions and injects [OpenUI Lang](https://openui.com) instructions into the agent's system prompt, so the LLM responds with structured UI markup instead of text.
 
@@ -45,8 +45,8 @@ No build step for the plugin. OpenClaw loads it as raw TypeScript via [jiti](htt
 ### 1. Clone the repo
 
 ```bash
-git clone https://github.com/thesysdev/openui-claw.git
-cd openui-claw
+git clone https://github.com/thesysdev/openclaw-ui.git
+cd openclaw-ui
 pnpm install
 ```
 
@@ -102,7 +102,7 @@ This prints your gateway URL and auth token from `~/.openclaw/openclaw.json`. Co
 | Package | Name | Description |
 |---------|------|-------------|
 | [`packages/claw-client`](packages/claw-client) | `@openuidev/claw-client` | Next.js generative UI web client |
-| [`packages/claw-plugin`](packages/claw-plugin) | `@openuidev/openui-claw-plugin` | OpenClaw server-side plugin |
+| [`packages/claw-plugin`](packages/claw-plugin) | `@openuidev/openclaw-ui-plugin` | OpenClaw server-side plugin |
 
 ---
 

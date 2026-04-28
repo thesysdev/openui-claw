@@ -438,9 +438,9 @@ export function SessionComposer({
       setTextContent(detail.text);
       requestAnimationFrame(() => textareaRef.current?.focus());
     };
-    window.addEventListener("openui-claw:prime-composer", listener as EventListener);
+    window.addEventListener("openclaw-ui:prime-composer", listener as EventListener);
     return () =>
-      window.removeEventListener("openui-claw:prime-composer", listener as EventListener);
+      window.removeEventListener("openclaw-ui:prime-composer", listener as EventListener);
   }, []);
 
   const applySlashCompletion = (entry: SlashEntry) => {
@@ -603,7 +603,7 @@ export function SessionComposer({
 
   return (
     <div
-      className={`openui-claw-session-composer relative mb-1 w-full rounded-xl bg-sunk-light p-[2px] dark:bg-foreground sm:mb-3 ${
+      className={`openclaw-ui-session-composer relative mb-1 w-full rounded-xl bg-sunk-light p-[2px] dark:bg-foreground sm:mb-3 ${
         isDragOver ? "ring-2 ring-text-accent-primary ring-offset-2" : ""
       }`}
       onDragEnter={handleDragEnter}
