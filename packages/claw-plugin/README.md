@@ -6,7 +6,7 @@ OpenClaw plugin that enables [Generative UI](https://openui.com) in the [Claw cl
 
 The plugin registers a `before_prompt_build` hook. For each agent run initiated by the Claw client, it prepends the OpenUI Lang system prompt, instructing the LLM to emit structured UI components. Runs from other clients (CLI, other web apps) are unaffected.
 
-Detection works via a session key convention: the Claw client appends `:openui-claw` to its session keys (e.g. `agent:main:main:openui-claw`). The plugin checks for this suffix in `ctx.sessionKey` and only activates when it is present.
+Detection works via a session key convention: the Claw client appends `:openclaw-ui` to its session keys (e.g. `agent:main:main:openclaw-ui`). The plugin checks for this suffix in `ctx.sessionKey` and only activates when it is present.
 
 The OpenUI Lang system prompt is baked directly into `src/index.ts` at generate time — the plugin is a single self-contained `.ts` file with no runtime dependencies beyond `openclaw` itself (which the gateway provides).
 
@@ -42,7 +42,7 @@ If running openclaw remotely
 ```sh
 rsync -az --exclude node_modules --exclude .git \
   -e "ssh -i <path-to-pem>" \
-  . <user>@<hostname>:~/openui-claw-plugin
+  . <user>@<hostname>:~/openclaw-ui-plugin
 ```
 
 Install the plugin:
@@ -55,4 +55,4 @@ Then restart your gateway:
 openclaw start
 ```
 
-Open the OpenUI Claw client, connect to the gateway, and send a message. If the plugin is active you will see OpenUI Lang output rendered as interactive components instead of plain text.
+Open the OpenClaw UI client, connect to the gateway, and send a message. If the plugin is active you will see OpenUI Lang output rendered as interactive components instead of plain text.

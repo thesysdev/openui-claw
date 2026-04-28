@@ -50,7 +50,7 @@ export class NotificationStore {
   private writeQueue: Promise<unknown> = Promise.resolve();
 
   constructor(stateDir: string) {
-    this.dir = path.join(stateDir, "plugins", "openui-claw", "notifications");
+    this.dir = path.join(stateDir, "plugins", "openclaw-ui", "notifications");
     this.filePath = path.join(this.dir, "notifications.json");
   }
 

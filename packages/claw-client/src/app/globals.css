@@ -452,13 +452,13 @@ body {
 
 /* ── Thread layout when session workspace pane is visible ─────────────────── */
 
-.openui-claw-thread-container .openui-shell-thread-scroll-area {
+.openclaw-ui-thread-container .openui-shell-thread-scroll-area {
   padding-left: var(--space-ml);
   padding-right: var(--space-ml);
   background: transparent;
 }
 
-.openui-claw-thread-container .openui-shell-thread-messages {
+.openclaw-ui-thread-container .openui-shell-thread-messages {
   /* Center the message column in the scroll area. 48rem matches the
      per-message max-w-3xl cap. */
   max-width: 48rem;
@@ -468,7 +468,7 @@ body {
   gap: 0 !important;
 }
 
-.openui-claw-thread-container .openui-shell-thread-message-assistant {
+.openclaw-ui-thread-container .openui-shell-thread-message-assistant {
   padding-right: 0;
   padding-top: 0 !important;
   /* 8px gap between the user message and the assistant (thinking state). */
@@ -477,7 +477,7 @@ body {
   margin-bottom: 40px !important;
 }
 
-.openui-claw-thread-container .openui-shell-thread-message-assistant__content {
+.openclaw-ui-thread-container .openui-shell-thread-message-assistant__content {
   padding-top: 0 !important;
   margin-top: 0 !important;
   /* Symmetric gap around the ThinkingPanel — matches the 8px above
@@ -490,19 +490,19 @@ body {
    scroll area handle scrolling instead. Applied as a separate rule so it
    doesn't accidentally co-opt the parent's margin-top (which carries the
    8px user → assistant gap defined above). */
-.openui-claw-thread-container .openui-shell-thread-message-assistant,
-.openui-claw-thread-container .openui-shell-thread-message-assistant__content {
+.openclaw-ui-thread-container .openui-shell-thread-message-assistant,
+.openclaw-ui-thread-container .openui-shell-thread-message-assistant__content {
   overflow: visible !important;
 }
 
 /* Hide avatar/logo on both sides — we want a clean, left-aligned chat. */
-.openui-claw-thread-container .openui-shell-thread-message-assistant__logo,
-.openui-claw-thread-container .openui-shell-thread-message-user__avatar,
-.openui-claw-thread-container .openui-shell-thread-message-user__logo {
+.openclaw-ui-thread-container .openui-shell-thread-message-assistant__logo,
+.openclaw-ui-thread-container .openui-shell-thread-message-user__avatar,
+.openclaw-ui-thread-container .openui-shell-thread-message-user__logo {
   display: none !important;
 }
 
-.openui-claw-thread-container .openui-shell-thread-message-user {
+.openclaw-ui-thread-container .openui-shell-thread-message-user {
   padding-left: 0;
   padding-right: 0;
   margin-top: var(--space-2xs);
@@ -512,7 +512,7 @@ body {
   margin-right: auto !important;
 }
 
-.openui-claw-thread-container .openui-shell-thread-message-user .openui-genui-user-message {
+.openclaw-ui-thread-container .openui-shell-thread-message-user .openui-genui-user-message {
   margin-left: 0 !important;
   margin-right: auto !important;
   align-self: flex-start !important;
@@ -520,7 +520,7 @@ body {
   max-width: 48rem !important;
 }
 
-.openui-claw-thread-container .openui-shell-thread-message-user__content {
+.openclaw-ui-thread-container .openui-shell-thread-message-user__content {
   /* Match the assistant response width (Tailwind max-w-3xl = 48rem). */
   max-width: 48rem !important;
   width: 100% !important;
@@ -533,17 +533,17 @@ body {
   line-height: var(--line-height-body) !important;
 }
 
-.dark .openui-claw-thread-container .openui-shell-thread-message-user__content {
+.dark .openclaw-ui-thread-container .openui-shell-thread-message-user__content {
   background: color-mix(in srgb, var(--color-interactive-accent-default) 14%, transparent) !important;
 }
 
-.openui-claw-thread-container .openui-shell-thread-error {
+.openclaw-ui-thread-container .openui-shell-thread-error {
   padding-left: 0;
   padding-right: 0;
 }
 
-.openui-claw-thread-container .composer-toolbar,
-.openui-claw-thread-container .openui-claw-session-composer {
+.openclaw-ui-thread-container .composer-toolbar,
+.openclaw-ui-thread-container .openclaw-ui-session-composer {
   /* 848px = 768px (chat bubble max-w-3xl) + 80px extra on each side.
      `width: calc(100% - 24px)` guarantees ≥ 12px gap on each side even on
      narrow viewports where the max-width cap doesn't kick in. */
@@ -557,21 +557,21 @@ body {
    no global override needed. Kept the rule empty-shell for anyone
    scanning the file. */
 
-.openui-claw-thread-container .composer-toolbar {
+.openclaw-ui-thread-container .composer-toolbar {
   padding: 0 var(--space-ml);
 }
 
 @media (max-width: 640px) {
-  .openui-claw-thread-container .composer-toolbar,
-  .openui-claw-thread-container .openui-claw-session-composer {
+  .openclaw-ui-thread-container .composer-toolbar,
+  .openclaw-ui-thread-container .openclaw-ui-session-composer {
     max-width: none;
   }
 
-  .openui-claw-thread-container .composer-toolbar {
+  .openclaw-ui-thread-container .composer-toolbar {
     padding: 0 var(--space-m);
   }
 
-  .openui-claw-thread-container .openui-shell-thread-message-user__content {
+  .openclaw-ui-thread-container .openui-shell-thread-message-user__content {
     max-width: 100%;
   }
 }
@@ -580,7 +580,7 @@ body {
    react-ui ships a thin-bordered 32px pill with three tiny dots. Re-skin it
    so it visually reads as the in-flight assistant bubble: left-aligned in
    the message column, rounded-3xl, soft background, larger dots. */
-.openui-claw-thread-container .openui-shell-thread-message-loading {
+.openclaw-ui-thread-container .openui-shell-thread-message-loading {
   display: flex;
   justify-content: flex-start;
   padding-left: 0;
@@ -589,7 +589,7 @@ body {
   margin-bottom: 40px;
 }
 
-.openui-claw-thread-container .openui-shell-thread-message-loading
+.openclaw-ui-thread-container .openui-shell-thread-message-loading
   .openui-message-loading-container {
   height: auto;
   padding: var(--space-m) var(--space-ml);
@@ -600,14 +600,14 @@ body {
 }
 
 .dark
-  .openui-claw-thread-container
+  .openclaw-ui-thread-container
   .openui-shell-thread-message-loading
   .openui-message-loading-container {
   border-color: rgb(var(--color-border-default) / 0.2);
   background: rgb(var(--color-sunk-deep));
 }
 
-.openui-claw-thread-container .openui-shell-thread-message-loading
+.openclaw-ui-thread-container .openui-shell-thread-message-loading
   .openui-message-loading {
   width: 32px;
   aspect-ratio: 5;

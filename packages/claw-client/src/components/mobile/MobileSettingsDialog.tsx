@@ -12,7 +12,7 @@ import { validateGatewayUrl } from "@/lib/gateway/url";
 import type { Settings } from "@/lib/storage";
 
 const INSTALL_COMMAND =
-  "curl -fsSL https://raw.githubusercontent.com/thesysdev/openui-claw/main/scripts/setup-tunnel.mjs -o /tmp/claw-setup.mjs && node /tmp/claw-setup.mjs";
+  "curl -fsSL https://raw.githubusercontent.com/thesysdev/openclaw-ui/main/scripts/setup-tunnel.mjs -o /tmp/claw-setup.mjs && node /tmp/claw-setup.mjs";
 
 function MobileAutomatedSetup() {
   const [copied, setCopied] = useState(false);
