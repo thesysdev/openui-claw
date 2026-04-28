@@ -217,20 +217,13 @@ export function useGateway({ onAuthFailed }: { onAuthFailed: () => void }) {
 
         if (!serverTitle || isOpaqueSessionTitle(serverTitle, sessionKey)) {
           const derivedTitle = deriveThreadTitleFromMessages(messages);
-          const labelAlreadyUsed =
-            derivedTitle != null &&
-            Array.from(sessionMetaRef.current.entries()).some(
-              ([existingSessionKey, existingSession]) =>
-                existingSessionKey !== sessionKey && existingSession.label?.trim() === derivedTitle,
-            );
           if (
             derivedTitle &&
-            !labelAlreadyUsed &&
             attemptedAutoTitlesRef.current.get(sessionKey) !== derivedTitle
           ) {
             // Mark optimistically *before* awaiting so we don't fire two
             // patches in parallel for the same title; clear on failure so a
-            // retry isn't permanently blocked (B27 — was fire-and-forget).
+            // retry isn't permanently blocked.
             attemptedAutoTitlesRef.current.set(sessionKey, derivedTitle);
             engineRef.current
               .patchSession(sessionKey, { label: derivedTitle })

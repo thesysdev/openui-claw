@@ -21,6 +21,8 @@ export function ComposerToolbar({ meta, models, onPatch, sessionKey }: Props) {
   if (!sessionKey) return null;
 
   const currentThinking = meta?.thinkingLevel ?? "";
+  const thinkingDefault = meta?.thinkingDefault ?? null;
+  const thinkingOptions = meta?.thinkingOptions ?? null;
 
   const currentModelValue = meta?.model
     ? qualifyModel(meta.model, meta.modelProvider ?? "")
@@ -65,9 +67,13 @@ export function ComposerToolbar({ meta, models, onPatch, sessionKey }: Props) {
               onChange={handleThinkingChange}
               className="composer-toolbar__select"
             >
-              {THINKING_LEVELS.map((t) => (
+              {THINKING_LEVELS.filter(
+                (t) => t.value === "" || !thinkingOptions || thinkingOptions.includes(t.value),
+              ).map((t) => (
                 <option key={t.value} value={t.value}>
-                  {t.label}
+                  {t.value === "" && thinkingDefault
+                    ? `Default (${thinkingDefault})`
+                    : t.label}
                 </option>
               ))}
             </select>

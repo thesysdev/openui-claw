@@ -314,6 +314,8 @@ export function SessionComposer({
   agentDefaultModelId = null,
   currentModel = "",
   currentEffort = "",
+  effortDefault = null,
+  effortOptions = null,
   onModelChange,
   onEffortChange,
   contextTokens,
@@ -348,6 +350,13 @@ export function SessionComposer({
   currentModel?: string;
   /** Current thinking/effort level, or "" for default. */
   currentEffort?: string;
+  /** Model-specific default thinking level (from `SessionRow.thinkingDefault`).
+   *  Used to render the `""` option as `Default (<resolved>)`. */
+  effortDefault?: string | null;
+  /** Allowed thinking levels for the current model (from
+   *  `SessionRow.thinkingOptions`). When set, filters the dropdown so models
+   *  that don't support e.g. `adaptive` don't show it. */
+  effortOptions?: string[] | null;
   onModelChange?: (value: string) => void;
   onEffortChange?: (value: string) => void;
   /** Tokens used / total context-window for the active model. */
@@ -818,9 +827,14 @@ export function SessionComposer({
               value={currentEffort}
               onChange={onEffortChange}
               title="Reasoning effort"
-              options={THINKING_LEVELS.map((t) => ({
+              options={THINKING_LEVELS.filter(
+                (t) => t.value === "" || !effortOptions || effortOptions.includes(t.value),
+              ).map((t) => ({
                 value: t.value,
-                label: t.label,
+                label:
+                  t.value === "" && effortDefault
+                    ? `Default (${effortDefault})`
+                    : t.label,
               }))}
             />
           ) : null}

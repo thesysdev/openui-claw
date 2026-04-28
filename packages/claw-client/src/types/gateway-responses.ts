@@ -10,6 +10,8 @@ export interface SessionRow {
   derivedTitle?: string | null;
   updatedAt?: number | null;
   thinkingLevel?: string | null;
+  thinkingDefault?: string | null;
+  thinkingOptions?: string[] | null;
   model?: string | null;
   modelProvider?: string | null;
   totalTokens?: number | null;

@@ -14,7 +14,7 @@ import type {
 import { ConnectionState } from "@/lib/gateway/types";
 import { normalizeSessionPatch } from "@/lib/models";
 import type { NotificationRecord } from "@/lib/notifications";
-import { encodeExtra, encodeMain, hasClawSuffix } from "@/lib/session-keys";
+import { encodeExtra, encodeMain, extractAgentIdFromKey, hasClawSuffix } from "@/lib/session-keys";
 import type { Settings } from "@/lib/storage";
 import {
   clearAuthCredentials,
@@ -624,6 +624,13 @@ export class OpenClawEngine implements Engine {
         ...localPatch,
       } as SessionRow);
       this.events.onSessionMetaChanged(new Map(this._sessionMeta));
+      // A `model` change re-derives `thinkingDefault` / `thinkingOptions` on
+      // the gateway side. Pull the fresh row so the composer's effort dropdown
+      // reflects the new model immediately, instead of waiting for the next
+      // chat run's `state:"final"` refresh.
+      if ("model" in patch) {
+        this._refreshSessionMeta(sessionKey);
+      }
       return true;
     } catch (e) {
       warn("sessions.patch failed:", e);
@@ -1047,13 +1054,21 @@ export class OpenClawEngine implements Engine {
   }
 
   private _refreshSessionMeta(sessionKey: string): void {
-    this._request<SessionGetResult>("sessions.get", { key: sessionKey })
+    // The gateway's `sessions.get` returns only `{ messages }` and `chat.history`
+    // returns `{ messages, thinkingLevel, verboseLevel }` — neither carries the
+    // full row (no `model`, `thinkingDefault`, `thinkingOptions`). Only
+    // `sessions.list` does, so we refetch the agent's session list and pick out
+    // our row.
+    const agentId = extractAgentIdFromKey(sessionKey);
+    if (!agentId) return;
+    this._request<SessionsListResult>("sessions.list", { agentId, limit: 50 })
       .then((result) => {
-        if (!result?.session) return;
-        this._sessionMeta.set(sessionKey, result.session);
+        const row = result?.sessions?.find((r) => r.key === sessionKey);
+        if (!row) return;
+        this._sessionMeta.set(sessionKey, row);
         this.events.onSessionMetaChanged(new Map(this._sessionMeta));
       })
-      .catch((e) => warn("sessions.get failed:", e));
+      .catch((e) => warn("sessions.list (refresh) failed:", e));
   }
 
   private isUnknownMethodError(error: unknown, method: string): boolean {

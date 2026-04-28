@@ -876,6 +876,8 @@ function ThreadArea({
                   meta?.model ? qualifyModel(meta.model, meta.modelProvider ?? "") : ""
                 }
                 currentEffort={meta?.thinkingLevel ?? ""}
+                effortDefault={meta?.thinkingDefault ?? null}
+                effortOptions={meta?.thinkingOptions ?? null}
                 onModelChange={
                   sessionKey
                     ? (value) => {
