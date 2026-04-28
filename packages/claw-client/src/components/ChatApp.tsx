@@ -1310,6 +1310,7 @@ interface ChatAppInnerProps {
   gatewayCommands: GatewayCommand[];
   themeMode: "light" | "dark";
   onToggleThemeMode: () => void;
+  requestThreadListRefresh: (fn: () => void) => void;
 }
 
 function ChatAppInner({
@@ -1361,6 +1362,7 @@ function ChatAppInner({
   gatewayCommands,
   themeMode,
   onToggleThemeMode,
+  requestThreadListRefresh,
 }: ChatAppInnerProps) {
   // Extra (non-destructured-above) props that flow through ChatAppInner.
   // Using `arguments` would be noisy; re-grab via a local re-assignment.
@@ -1612,6 +1614,10 @@ function ChatAppInner({
       loadThreads();
     }
   }, [connectionState, loadThreads]);
+
+  useEffect(() => {
+    requestThreadListRefresh(() => loadThreads());
+  }, [requestThreadListRefresh, loadThreads]);
 
   /**
    * Resolve where a refine click should land:
@@ -2369,6 +2375,7 @@ export default function ChatApp() {
     removeCronJob,
     gatewayCommands,
     onSessionChanged,
+    requestThreadListRefresh,
   } = useGateway({ onAuthFailed: () => setSettingsOpen(true) });
 
   const refreshAppList = useCallback(async () => {
@@ -2601,6 +2608,7 @@ export default function ChatApp() {
           resetSession={resetSession}
           compactSession={compactSession}
           onSessionChanged={onSessionChanged}
+          requestThreadListRefresh={requestThreadListRefresh}
           loadThread={adaptedLoadThread}
           sessionMeta={sessionMeta}
           availableModels={availableModels}

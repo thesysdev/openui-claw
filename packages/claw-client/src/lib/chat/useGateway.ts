@@ -70,6 +70,11 @@ export function sessionRouteIdFromSessionKey(
 }
 
 export function useGateway({ onAuthFailed }: { onAuthFailed: () => void }) {
+  const threadListRefreshFnRef = useRef<(() => void) | null>(null);
+  const requestThreadListRefresh = useCallback((fn: () => void) => {
+    threadListRefreshFnRef.current = fn;
+  }, []);
+
   const [connectionState, setConnectionState] = useState<ConnectionState>(
     ConnectionState.DISCONNECTED,
   );
@@ -230,7 +235,14 @@ export function useGateway({ onAuthFailed }: { onAuthFailed: () => void }) {
             engineRef.current
               .patchSession(sessionKey, { label: derivedTitle })
               .then((ok) => {
-                if (!ok) attemptedAutoTitlesRef.current.delete(sessionKey);
+                if (!ok) {
+                  attemptedAutoTitlesRef.current.delete(sessionKey);
+                  return;
+                }
+                // Refresh the sidebar so the new title (and the row itself,
+                // if it was missing) shows up without waiting for the next
+                // reconnect.
+                threadListRefreshFnRef.current?.();
               })
               .catch(() => {
                 attemptedAutoTitlesRef.current.delete(sessionKey);
@@ -554,6 +566,7 @@ export function useGateway({ onAuthFailed }: { onAuthFailed: () => void }) {
     compactSession,
     renameSession,
     reconnect,
+    requestThreadListRefresh,
     sessionMeta,
     availableModels,
     gatewayDefaultModelId,

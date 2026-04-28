@@ -1120,7 +1120,6 @@ export class OpenClawEngine implements Engine {
       await this._request("sessions.create", {
         agentId,
         key,
-        verboseLevel: FULL_VERBOSE_LEVEL,
         // `label` is the gateway field that backs the session title in
         // `sessions.list`; passing it here means callers who supply a title
         // at create time get a labelled session immediately, with no

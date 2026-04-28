@@ -3,8 +3,6 @@ import { CLAW_SUFFIX, extractExtraSlotId, isMainSession } from "@/lib/session-ke
 const OPAQUE_UUID_REGEX =
   /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/i;
 const SHORT_OPAQUE_SEGMENT_REGEX = /^[0-9a-f]{8,}$/i;
-const TRIVIAL_THREAD_TITLE_REGEX =
-  /^(hi|hello|hey|yo|ok|okay|test|new session|untitled)$/i;
 
 function firstNonEmpty(...values: Array<string | null | undefined>): string | null {
   for (const value of values) {
@@ -91,7 +89,6 @@ export function resolveSessionTitle(params: {
 export function deriveTitleFromText(text: string): string | null {
   const normalized = text.replace(/\s+/g, " ").trim();
   if (!normalized) return null;
-  if (TRIVIAL_THREAD_TITLE_REGEX.test(normalized)) return null;
 
   const withoutTrailingPunctuation = normalized.replace(/[.?!]+$/, "");
   const capped =
