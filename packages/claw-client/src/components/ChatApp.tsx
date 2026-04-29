@@ -230,6 +230,7 @@ function ThreadArea({
   gatewayCommands,
   createSession,
   deleteSession,
+  renameSession,
 }: {
   sessionMeta: Map<string, SessionRow>;
   availableModels: ModelChoice[];
@@ -268,6 +269,7 @@ function ThreadArea({
   gatewayCommands: GatewayCommand[];
   createSession: (agentId: string) => Promise<string | null>;
   deleteSession: (threadId: string) => Promise<boolean>;
+  renameSession: (threadId: string, label: string) => Promise<boolean>;
 }) {
   const { threads: allThreadsRaw, selectedThreadId } = useThreadList();
   const isRunning = useThread((state) => state.isRunning);
@@ -827,7 +829,7 @@ function ThreadArea({
                 sessions={sessions}
                 onBack={() => navigate({ view: "home" })}
                 onSwitchAgent={(a) => {
-                  // Open that agent's main thread if present, else any thread.
+                  // Open the agent's main thread if present, else any thread.
                   const target =
                     allThreads.find(
                       (t) => (t.clawAgentId ?? t.id) === a.id && t.clawKind === "main",
@@ -838,6 +840,37 @@ function ThreadArea({
                   navigate({ view: "chat", sessionId: threadId })
                 }
                 onNewSession={onNewSession}
+                onRenameSession={async (next) => {
+                  await renameSession(currentThread.id, next);
+                }}
+                onDeleteSession={async () => {
+                  await deleteSession(currentThread.id);
+                  navigate({ view: "agents" });
+                }}
+                // Renaming the agent = renaming its main thread (the one
+                // whose title bubbles up as the agent name in the sidebar).
+                onRenameAgent={async (next) => {
+                  const main =
+                    allThreads.find(
+                      (t) =>
+                        (t.clawAgentId ?? t.id) === currentAgentId &&
+                        t.clawKind === "main",
+                    ) ?? allThreads.find((t) => (t.clawAgentId ?? t.id) === currentAgentId);
+                  if (main) await renameSession(main.id, next);
+                }}
+                onDeleteAgent={async () => {
+                  const main =
+                    allThreads.find(
+                      (t) =>
+                        (t.clawAgentId ?? t.id) === currentAgentId &&
+                        t.clawKind === "main",
+                    ) ?? allThreads.find((t) => (t.clawAgentId ?? t.id) === currentAgentId);
+                  const target = main?.id;
+                  if (target) {
+                    await deleteSession(target);
+                    navigate({ view: "agents" });
+                  }
+                }}
                 // On mobile, the workspace pane is a drawer instead of the
                 // permanent right-rail. Surface a toggle in the chat header
                 // since the desktop expand-rail doesn't exist here.
@@ -846,27 +879,13 @@ function ThreadArea({
             );
           })()}
           {workspace.linkedApp || workspace.linkedArtifact ? (
-            <div className="sticky top-0 z-20 flex items-center justify-between gap-3 border-b border-border-default/40 bg-info-background px-ml py-2 text-sm dark:border-border-default/16">
-              <div className="flex min-w-0 items-center gap-2">
-                <span className="font-medium text-text-info-primary">Refining</span>
-                <span className="truncate text-text-info-primary">
-                  {workspace.linkedApp?.title ?? workspace.linkedArtifact?.title}
-                </span>
-              </div>
-              <button
-                type="button"
-                className="shrink-0 text-sm font-medium text-text-info-primary underline underline-offset-2 hover:opacity-80"
-                onClick={() => {
-                  if (!selectedThreadId) return;
-                  onUpdateThreadWorkspace(selectedThreadId, (current) => ({
-                    ...current,
-                    linkedApp: null,
-                    linkedArtifact: null,
-                  }));
-                }}
-              >
-                Cancel refine
-              </button>
+            <div className="sticky top-0 z-20 flex items-center gap-xs border-b border-border-default/40 bg-info-background px-ml py-2xs text-sm dark:border-border-default/16">
+              <span className="font-medium text-text-info-primary">
+                {workspace.linkedApp ? "App" : "Artifact"}:
+              </span>
+              <span className="truncate text-text-info-primary">
+                {workspace.linkedApp?.title ?? workspace.linkedArtifact?.title}
+              </span>
             </div>
           ) : null}
           {(() => {
@@ -2125,6 +2144,7 @@ function ChatAppInner({
         patchSession={patchSession}
         createSession={createSession}
         deleteSession={deleteSession}
+        renameSession={renameSession}
         resetSession={resetSession}
         compactSession={compactSession}
         onSessionChanged={onSessionChanged}

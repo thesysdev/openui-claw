@@ -644,12 +644,8 @@ export function SessionComposer({
 
       {/* Bordered input card — only the textarea + send/stop button live here. */}
       <div className="overflow-hidden rounded-lg border border-border-default/40 bg-background shadow-md dark:border-border-default/20">
-        {(pendingUploads.length > 0 || linkedApp || linkedArtifact) && (
+        {pendingUploads.length > 0 && (
           <div className="flex flex-wrap items-center gap-2 border-b border-border-default px-4 py-3">
-            {linkedApp ? <UploadChip label={`Refining ${linkedApp.title}`} /> : null}
-            {linkedArtifact ? (
-              <UploadChip label={`Refining ${linkedArtifact.title}`} />
-            ) : null}
             {pendingUploads.map((upload) => (
               <UploadChip
                 key={upload.id}

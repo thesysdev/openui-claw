@@ -147,7 +147,15 @@ export function ArtifactDetail({
           onClose={onClose ?? (() => { window.location.hash = artifactsHash(); })}
           onCustomize={onCustomize ? () => onCustomize(record) : undefined}
           onShare={onShare ? () => onShare(record) : undefined}
-          onDelete={() => setConfirmDelete(true)}
+          onDelete={() => void handleDelete()}
+          renameLabel="Rename artifact"
+          deleteLabel="Delete artifact"
+          onRename={(next) => {
+            // Backend rename API isn't available yet — keep the change
+            // local so the user sees the title flip immediately. Hook up
+            // when the gateway gains `artifacts.rename`.
+            setRecord((r) => (r ? { ...r, title: next } : r));
+          }}
           onRefresh={() => setRefreshTick((t) => t + 1)}
         />
       )}
@@ -182,18 +190,23 @@ export function ArtifactDetail({
         {mode === "panel" ? (
           <>
             <TextTile label={record.title} category="artifacts" />
-            {siblings && siblings.length >= 1 && onSwitch ? (
-              <TitleSwitcher
-                activeId={artifactId}
-                currentLabel={record.title}
-                items={siblings}
-                onSelect={onSwitch}
-              />
-            ) : (
-              <span className="font-label text-md font-medium text-text-neutral-primary">
-                {record.title}
-              </span>
-            )}
+            <TitleSwitcher
+              activeId={artifactId}
+              currentLabel={record.title}
+              items={siblings ?? []}
+              onSelect={onSwitch ?? (() => {})}
+              renameLabel="Rename artifact"
+              deleteLabel="Delete artifact"
+              // Rename has no backend API yet — keep the change local so the
+              // user sees the title update immediately. Hook up to a real
+              // artifacts mutation when the gateway gains `artifacts.rename`.
+              onRename={(next) => {
+                setRecord((r) => (r ? { ...r, title: next } : r));
+              }}
+              onDelete={() => {
+                void handleDelete();
+              }}
+            />
           </>
         ) : null}
       </TopBar>

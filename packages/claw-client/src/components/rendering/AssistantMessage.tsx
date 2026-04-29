@@ -756,7 +756,7 @@ export function AssistantMessage({ message }: Props) {
       ) : (
         <div
           key={`text-${i}`}
-          className="openclaw-ui-assistant-markdown mr-auto w-full max-w-3xl rounded-3xl border border-border-default/40 bg-background px-ml py-m shadow-sm dark:border-border-default/20 dark:bg-sunk-deep"
+          className="openclaw-ui-assistant-markdown mr-auto w-full max-w-3xl rounded-4xl border border-border-default/40 bg-background px-ml py-m shadow-sm dark:border-border-default/20 dark:bg-sunk-deep"
         >
           <div className={ASSISTANT_MARKDOWN_CLASSES}>
             <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>

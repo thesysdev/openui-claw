@@ -18,13 +18,13 @@ export function AutomatedSetup() {
   };
 
   return (
-    <div className="flex flex-col gap-ml">
-      <div className="flex flex-col gap-2xs">
+    <div className="flex flex-col gap-l">
+      <div className="flex flex-col gap-xs">
         <label className="font-label text-sm font-medium text-text-neutral-secondary">
           Run this on your Mac Mini:
         </label>
         <pre
-          className="overflow-auto whitespace-pre-wrap break-all rounded-lg border border-border-default bg-sunk-light p-s font-mono text-sm text-text-neutral-secondary dark:border-border-default/16 dark:bg-elevated"
+          className="overflow-auto whitespace-pre-wrap break-all rounded-lg border border-border-default bg-sunk-light p-m font-mono text-sm text-text-neutral-secondary dark:border-border-default/16 dark:bg-elevated"
           style={{ height: 200 }}
         >
           {INSTALL_COMMAND}
@@ -40,7 +40,7 @@ export function AutomatedSetup() {
         </Button>
       </div>
 
-      <p className="font-body text-sm text-text-neutral-tertiary">
+      <p className="font-body text-md leading-snug text-text-neutral-tertiary">
         This command provisions a Cloudflare Tunnel, installs{" "}
         <code className="rounded bg-sunk-light px-3xs font-mono text-sm dark:bg-elevated">
           cloudflared

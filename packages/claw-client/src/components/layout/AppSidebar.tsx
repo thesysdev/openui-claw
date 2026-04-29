@@ -369,7 +369,7 @@ export function AppSidebar({
           nc ? "justify-center px-0" : "justify-between px-ml"
         } transition-[padding] duration-300`}
       >
-        <Logo name="OpenUI" suffix="shell" collapsed={nc} />
+        <Logo name="OpenClaw" suffix="OS" collapsed={nc} />
         <IconButton
           icon={nc ? PanelLeft : PanelLeftClose}
           variant="tertiary"

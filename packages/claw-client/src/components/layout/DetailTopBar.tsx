@@ -4,6 +4,7 @@ import { RotateCw, Share2, Sparkles, Trash2, X } from "lucide-react";
 
 import { IconButton } from "@/components/layout/sidebar/IconButton";
 import { Button } from "@/components/ui/Button";
+import { TitleSwitcher } from "@/components/chat/TitleSwitcher";
 
 export interface DetailTopBarProps {
   /** Title shown on the left — app or artifact name. */
@@ -14,8 +15,17 @@ export interface DetailTopBarProps {
   onCustomize?: () => void;
   /** Share action (copy link, export, etc.). */
   onShare?: () => void;
-  /** Delete the app/artifact. */
+  /** Delete the app/artifact. When supplied alongside `onRename`, the
+   *  delete + rename actions are folded into the title's dropdown menu
+   *  instead of being a separate trash button. */
   onDelete?: () => void;
+  /** Inline-rename the app/artifact via the title's dropdown. When set,
+   *  the title becomes a clickable pill that opens an actions menu;
+   *  Rename swaps the pill for an inline input. */
+  onRename?: (next: string) => void | Promise<void>;
+  /** Custom labels for the title menu (e.g. "Rename app"). */
+  renameLabel?: string;
+  deleteLabel?: string;
   /** Refresh the content (reload from server). */
   onRefresh?: () => void;
 }
@@ -31,13 +41,33 @@ export function DetailTopBar({
   onCustomize,
   onShare,
   onDelete,
+  onRename,
+  renameLabel,
+  deleteLabel,
   onRefresh,
 }: DetailTopBarProps) {
+  // When the consumer wires up rename, fold delete into the title menu so
+  // there's a single point of control for naming/destruction. Otherwise
+  // keep the legacy standalone trash button.
+  const useTitleMenu = !!onRename;
   return (
     <div className="flex min-h-[48px] items-center justify-between gap-xs border-b border-border-default/50 px-m py-xs dark:border-border-default/16">
-      <span className="truncate font-body text-md font-medium text-text-neutral-primary">
-        {title}
-      </span>
+      {useTitleMenu ? (
+        <TitleSwitcher
+          activeId={title}
+          currentLabel={title}
+          items={[]}
+          onSelect={() => {}}
+          onRename={onRename}
+          onDelete={onDelete}
+          renameLabel={renameLabel}
+          deleteLabel={deleteLabel}
+        />
+      ) : (
+        <span className="truncate font-body text-md font-medium text-text-neutral-primary">
+          {title}
+        </span>
+      )}
       <div className="flex items-center gap-xs">
         {onRefresh ? (
           <IconButton
@@ -48,7 +78,8 @@ export function DetailTopBar({
             onClick={onRefresh}
           />
         ) : null}
-        {onDelete ? (
+        {/* Trash kept only when the title menu isn't in play (legacy flow). */}
+        {onDelete && !useTitleMenu ? (
           <IconButton
             icon={Trash2}
             variant="tertiary"

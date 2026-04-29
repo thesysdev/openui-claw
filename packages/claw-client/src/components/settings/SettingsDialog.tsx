@@ -29,7 +29,12 @@ const STATUS_BANNER: Record<
     /** Color applied to the icon — paired with neutral title + neutral surface. */
     accent: string;
     /** Tile background tint matching the accent. */
-    tile: string;
+    tileBg: string;
+    /** CSS variable for the tile's border. The render mixes it with
+     *  transparent so the stroke comes through colored but subtle —
+     *  Tailwind's `/N` opacity modifier doesn't work on hex tokens, hence
+     *  the inline `color-mix`. Var swap handles dark mode automatically. */
+    borderVar: string;
     icon: typeof CheckCircle2;
     spin?: boolean;
   }
@@ -38,14 +43,16 @@ const STATUS_BANNER: Record<
     label: "Connected",
     description: "The gateway is reachable and ready.",
     accent: "text-text-success-primary",
-    tile: "bg-success-background border-border-success/50",
+    tileBg: "bg-success-background",
+    borderVar: "--color-border-success",
     icon: CheckCircle2,
   },
   [ConnectionState.CONNECTING]: {
     label: "Connecting…",
     description: "Reaching the gateway — hold on.",
     accent: "text-text-alert-primary",
-    tile: "bg-alert-background border-border-alert/50",
+    tileBg: "bg-alert-background",
+    borderVar: "--color-border-alert",
     icon: Loader2,
     spin: true,
   },
@@ -53,7 +60,8 @@ const STATUS_BANNER: Record<
     label: "Pairing…",
     description: "Waiting for the gateway handshake.",
     accent: "text-text-alert-primary",
-    tile: "bg-alert-background border-border-alert/50",
+    tileBg: "bg-alert-background",
+    borderVar: "--color-border-alert",
     icon: Loader2,
     spin: true,
   },
@@ -61,21 +69,24 @@ const STATUS_BANNER: Record<
     label: "Disconnected",
     description: "Add a gateway URL below or run the setup command.",
     accent: "text-text-danger-primary",
-    tile: "bg-danger-background border-border-danger/50",
+    tileBg: "bg-danger-background",
+    borderVar: "--color-border-danger",
     icon: XCircle,
   },
   [ConnectionState.AUTH_FAILED]: {
     label: "Auth failed",
     description: "The token was rejected. Re-run `openclaw auth token`.",
     accent: "text-text-danger-primary",
-    tile: "bg-danger-background border-border-danger/50",
+    tileBg: "bg-danger-background",
+    borderVar: "--color-border-danger",
     icon: XCircle,
   },
   [ConnectionState.UNREACHABLE]: {
     label: "Unreachable",
     description: "Couldn't reach the gateway. Check the URL and try again.",
     accent: "text-text-danger-primary",
-    tile: "bg-danger-background border-border-danger/50",
+    tileBg: "bg-danger-background",
+    borderVar: "--color-border-danger",
     icon: XCircle,
   },
 };
@@ -195,11 +206,11 @@ export function SettingsDialog({
   return (
     <dialog
       ref={dialogRef}
-      className="w-full max-w-md rounded-2xl border border-border-default/50 bg-background p-ml text-text-neutral-primary shadow-2xl outline-none backdrop:bg-overlay dark:border-border-default/16 dark:bg-foreground"
+      className="w-full max-w-md rounded-2xl border border-border-default/50 bg-background p-l text-text-neutral-primary shadow-2xl outline-none backdrop:bg-overlay dark:border-border-default/16 dark:bg-foreground"
       onClose={onClose}
     >
       <div className="flex flex-col">
-        <div className="mb-m flex items-center justify-between">
+        <div className="mb-ml flex items-center justify-between">
           <h2 className="font-heading text-md font-bold text-text-neutral-primary">
             Gateway Settings
           </h2>
@@ -213,9 +224,12 @@ export function SettingsDialog({
           />
         </div>
 
-        <div className="mb-ml flex items-stretch gap-s rounded-lg border border-border-default/50 bg-background p-s dark:border-border-default/16 dark:bg-foreground">
+        <div className="mb-ml flex items-stretch gap-m rounded-lg border border-border-default/50 bg-background p-m dark:border-border-default/16 dark:bg-foreground">
           <div
-            className={`flex shrink-0 items-center justify-center self-stretch rounded-md border px-s ${banner.tile}`}
+            className={`flex shrink-0 items-center justify-center self-stretch rounded-md border px-s ${banner.tileBg}`}
+            style={{
+              borderColor: `color-mix(in srgb, var(${banner.borderVar}) 50%, transparent)`,
+            }}
           >
             <Icon
               size={16}
@@ -226,7 +240,7 @@ export function SettingsDialog({
             <p className="font-label text-sm font-medium leading-tight text-text-neutral-primary">
               {banner.label}
             </p>
-            <p className="mt-3xs font-body text-sm leading-snug text-text-neutral-tertiary">
+            <p className="mt-3xs font-body text-md leading-snug text-text-neutral-tertiary">
               {banner.description}
             </p>
           </div>
@@ -250,7 +264,7 @@ export function SettingsDialog({
 
           {tab === "manual" ? (
             <>
-              <p className="mb-ml font-body text-sm text-text-neutral-tertiary">
+              <p className="mb-ml font-body text-md leading-snug text-text-neutral-tertiary">
                 Connect Claw to your OpenClaw gateway. Run{" "}
                 <code className="rounded bg-sunk-light px-3xs font-mono text-sm dark:bg-elevated">
                   openclaw config show
@@ -258,8 +272,8 @@ export function SettingsDialog({
                 in a terminal to see your gateway URL and token.
               </p>
 
-              <form onSubmit={handleSubmit} className="flex flex-col gap-ml">
-                <div className="flex flex-col gap-2xs">
+              <form onSubmit={handleSubmit} className="flex flex-col gap-l">
+                <div className="flex flex-col gap-xs">
                   <label className="font-label text-sm font-medium text-text-neutral-secondary">
                     Gateway URL
                   </label>
@@ -270,7 +284,7 @@ export function SettingsDialog({
                     value={gatewayUrl}
                     onChange={(e) => setGatewayUrl(e.target.value)}
                     disabled={pending}
-                    className="rounded-lg border border-border-default bg-background px-s py-xs font-body text-sm text-text-neutral-primary outline-none focus:border-border-interactive-emphasis disabled:opacity-60 dark:border-border-default/16 dark:bg-foreground"
+                    className="rounded-lg border border-border-default bg-background px-m py-s font-body text-md text-text-neutral-primary outline-none focus:border-border-interactive-emphasis disabled:opacity-60 dark:border-border-default/16 dark:bg-foreground"
                   />
                   <p className="font-body text-sm text-text-neutral-tertiary">
                     Use <code className="font-mono">ws://</code> for local,{" "}
@@ -278,7 +292,7 @@ export function SettingsDialog({
                   </p>
                 </div>
 
-                <div className="flex flex-col gap-2xs">
+                <div className="flex flex-col gap-xs">
                   <label className="font-label text-sm font-medium text-text-neutral-secondary">
                     Auth Token
                   </label>
@@ -288,7 +302,7 @@ export function SettingsDialog({
                     value={token}
                     onChange={(e) => setToken(e.target.value)}
                     disabled={pending}
-                    className="rounded-lg border border-border-default bg-background px-s py-xs font-body text-sm text-text-neutral-primary outline-none focus:border-border-interactive-emphasis disabled:opacity-60 dark:border-border-default/16 dark:bg-foreground"
+                    className="rounded-lg border border-border-default bg-background px-m py-s font-body text-md text-text-neutral-primary outline-none focus:border-border-interactive-emphasis disabled:opacity-60 dark:border-border-default/16 dark:bg-foreground"
                   />
                   <p className="font-body text-sm text-text-neutral-tertiary">
                     Run{" "}
@@ -302,20 +316,20 @@ export function SettingsDialog({
                 {error ? (
                   <div
                     role="alert"
-                    className="rounded-lg border border-border-danger bg-danger-background px-s py-xs font-body text-sm text-text-danger-primary"
+                    className="rounded-lg border border-border-danger bg-danger-background px-m py-s font-body text-md text-text-danger-primary"
                   >
                     {error}
                   </div>
                 ) : null}
 
                 {pending ? (
-                  <div className="flex items-center gap-xs font-body text-sm text-text-neutral-tertiary">
+                  <div className="flex items-center gap-xs font-body text-md text-text-neutral-tertiary">
                     <Loader2 size={14} className="animate-spin" />
                     Connecting to {gatewayUrl.trim()}…
                   </div>
                 ) : null}
 
-                <div className="mt-xs flex justify-end gap-xs">
+                <div className="mt-s flex justify-end gap-s">
                   <Button variant="secondary" size="md" onClick={onClose}>
                     Cancel
                   </Button>

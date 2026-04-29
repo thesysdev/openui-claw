@@ -268,7 +268,10 @@
   --color-highlight-strong: #333333;
   --color-highlight-intense: #3D3D3D;
   --color-inverted-background: #FFFFFF;
-  --color-info-background: #1A2A1A;
+  /* Sky-blue dark tint, mirroring the light `#E7F5FF`. The previous
+     value (`#1A2A1A`) was actually a dark green — a hue mismatch with
+     the light token and with how `text-text-info-primary` reads.       */
+  --color-info-background: #0F2335;
   --color-success-background: #152A15;
   --color-alert-background: #2A2510;
   --color-danger-background: #2C1515;
@@ -555,7 +558,7 @@ body {
   margin-left: 0 !important;
   margin-right: auto !important;
   /* Match the assistant + thinking state bubble radius. */
-  border-radius: 1rem !important;
+  border-radius: 16px !important;
   background: color-mix(in srgb, var(--color-interactive-accent-default) 10%, transparent) !important;
   color: rgb(var(--color-text-accent-primary)) !important;
   font-size: var(--font-size-md) !important;

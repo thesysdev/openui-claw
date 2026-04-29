@@ -238,7 +238,15 @@ export function AppDetail({
           onClose={onClose ?? (() => undefined)}
           onCustomize={onCustomize ? () => onCustomize(record) : undefined}
           onShare={onShare ? () => onShare(record) : undefined}
-          onDelete={onDeleted ? () => setConfirmDelete(true) : undefined}
+          onDelete={onDeleted ? () => void handleDelete() : undefined}
+          renameLabel="Rename app"
+          deleteLabel="Delete app"
+          onRename={(next) => {
+            // Backend rename API isn't available yet — keep the change
+            // local so the user sees the title flip immediately. Hook up
+            // when the gateway gains `apps.rename`.
+            setRecord((r) => (r ? { ...r, title: next } : r));
+          }}
           onRefresh={() => setRefreshTick((t) => t + 1)}
         />
       )}
@@ -321,18 +329,23 @@ export function AppDetail({
         {mode === "panel" ? (
           <>
             <TextTile label={record.title} category="apps" />
-            {siblings && siblings.length >= 1 && onSwitch ? (
-              <TitleSwitcher
-                activeId={appId}
-                currentLabel={record.title}
-                items={siblings}
-                onSelect={onSwitch}
-              />
-            ) : (
-              <span className="font-label text-md font-medium text-text-neutral-primary">
-                {record.title}
-              </span>
-            )}
+            <TitleSwitcher
+              activeId={appId}
+              currentLabel={record.title}
+              items={siblings ?? []}
+              onSelect={onSwitch ?? (() => {})}
+              renameLabel="Rename app"
+              deleteLabel="Delete app"
+              // Rename has no backend API yet — keep the change local so the
+              // user sees the title update immediately. Hook up to a real
+              // app-store mutation when the gateway gains `apps.rename`.
+              onRename={(next) => {
+                setRecord((r) => (r ? { ...r, title: next } : r));
+              }}
+              onDelete={() => {
+                void handleDelete();
+              }}
+            />
           </>
         ) : null}
         <div className="w-[88px]">
