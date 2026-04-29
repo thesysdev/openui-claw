@@ -39,9 +39,7 @@ export function AppsView({ apps, pinnedAppIds, onOpenApp }: AppsViewProps) {
   return (
     <div className="h-full flex-1 overflow-y-auto bg-background p-3xl">
       <div className="mx-auto max-w-[1080px]">
-        <h2 className="mb-3xl font-heading text-lg font-bold text-text-neutral-primary">
-          Apps
-        </h2>
+        <h2 className="mb-3xl font-heading text-lg font-bold text-text-neutral-primary">Apps</h2>
 
         {apps.length === 0 ? (
           <p className="rounded-2xl border border-dashed border-border-default px-ml py-xl text-sm text-text-neutral-tertiary">
@@ -77,7 +75,10 @@ export function AppsView({ apps, pinnedAppIds, onOpenApp }: AppsViewProps) {
                 right={
                   <SortPills
                     value={sort}
-                    options={[{ key: "recent", label: "Recent" }, { key: "a-z", label: "A–Z" }]}
+                    options={[
+                      { key: "recent", label: "Recent" },
+                      { key: "a-z", label: "A–Z" },
+                    ]}
                     onChange={setSort}
                   />
                 }

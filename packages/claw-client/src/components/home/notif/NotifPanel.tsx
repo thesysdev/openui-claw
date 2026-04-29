@@ -29,10 +29,7 @@ export function NotifPanel({
   onMarkAllRead,
   onAction,
 }: NotifPanelProps) {
-  const unread = useMemo(
-    () => notifications.filter((n) => !n.read).length,
-    [notifications],
-  );
+  const unread = useMemo(() => notifications.filter((n) => !n.read).length, [notifications]);
 
   const needsInputCards = useMemo(
     () => notifications.filter((n) => n.type === "needs_input" && !n.read),
@@ -88,9 +85,7 @@ export function NotifPanel({
         {rows.length === 0 && needsInputCards.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center gap-s px-ml text-center">
             <BellOff size={16} className="text-text-neutral-tertiary/60" />
-            <p className="font-body text-sm text-text-neutral-tertiary">
-              It&apos;s quiet here
-            </p>
+            <p className="font-body text-sm text-text-neutral-tertiary">It&apos;s quiet here</p>
           </div>
         ) : (
           rows.map((n, i) => (

@@ -1,7 +1,7 @@
 "use client";
 
-import { Clock3 } from "lucide-react";
 import type { Thread } from "@openuidev/react-headless";
+import { Clock3 } from "lucide-react";
 
 import { cronOwnerLabel, humanFrequency } from "@/components/crons/format";
 import { Tag } from "@/components/layout/sidebar/Tag";

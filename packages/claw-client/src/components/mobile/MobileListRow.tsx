@@ -3,10 +3,7 @@
 import { ChevronRight, MoreVertical } from "lucide-react";
 import { useState, type ComponentType, type ReactNode } from "react";
 
-import {
-  MobileMenuDrawer,
-  type MobileMenuDrawerItem,
-} from "@/components/mobile/MobileMenuDrawer";
+import { MobileMenuDrawer, type MobileMenuDrawerItem } from "@/components/mobile/MobileMenuDrawer";
 
 export type MobileRowCategory = "agent" | "app" | "artifact" | "activity";
 

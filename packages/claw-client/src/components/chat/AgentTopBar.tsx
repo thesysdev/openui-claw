@@ -3,9 +3,8 @@
 import { ArrowLeft, Cpu, PanelRightOpen, Plus } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
-import { IconButton } from "@/components/layout/sidebar/IconButton";
-import { Button } from "@/components/ui/Button";
 import { TopBar } from "@/components/chat/TopBar";
+import { IconButton } from "@/components/layout/sidebar/IconButton";
 import type { ClawThread } from "@/types/claw-thread";
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -88,9 +87,7 @@ function PillButton({
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
       className={`flex h-7 items-center gap-xs rounded-m px-2xs transition-colors ${
-        hovered || open
-          ? "bg-sunk-light dark:bg-highlight-subtle"
-          : "bg-transparent"
+        hovered || open ? "bg-sunk-light dark:bg-highlight-subtle" : "bg-transparent"
       }`}
     >
       {children}
@@ -98,13 +95,7 @@ function PillButton({
   );
 }
 
-function DropdownPanel({
-  children,
-  width = 240,
-}: {
-  children: ReactNode;
-  width?: number;
-}) {
+function DropdownPanel({ children, width = 240 }: { children: ReactNode; width?: number }) {
   return (
     <div
       style={{ minWidth: width }}
@@ -166,11 +157,7 @@ function AgentSwitcher({
               >
                 <Cpu
                   size={13}
-                  className={
-                    isActive
-                      ? "text-text-neutral-primary"
-                      : "text-text-neutral-tertiary"
-                  }
+                  className={isActive ? "text-text-neutral-primary" : "text-text-neutral-tertiary"}
                 />
                 <span
                   className={`flex-1 truncate font-body text-sm ${
@@ -263,9 +250,7 @@ function SessionSwitcher({
             className="flex w-full items-center gap-s rounded-m px-s py-xs text-left transition-colors hover:bg-sunk-light dark:hover:bg-highlight-subtle"
           >
             <Plus size={13} className="text-text-neutral-tertiary" />
-            <span className="font-body text-sm text-text-neutral-secondary">
-              New session
-            </span>
+            <span className="font-body text-sm text-text-neutral-secondary">New session</span>
           </button>
         </DropdownPanel>
       ) : null}

@@ -191,9 +191,7 @@ function InlineUploadChip({ remoteId }: { remoteId: string }) {
           <Icon className="h-4 w-4" />
         </span>
         <span className="flex max-w-[180px] flex-col">
-          <span className="truncate text-sm font-medium text-text-neutral-primary">
-            {name}
-          </span>
+          <span className="truncate text-sm font-medium text-text-neutral-primary">{name}</span>
           {meta?.mimeType ? (
             <span className="truncate text-sm uppercase tracking-wide text-text-neutral-tertiary">
               {meta.mimeType}

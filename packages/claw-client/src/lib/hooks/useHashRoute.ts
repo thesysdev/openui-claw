@@ -94,7 +94,7 @@ export function navigate(route: Route): void {
 
 export function useHashRoute(): Route | null {
   const [route, setRoute] = useState<Route | null>(() =>
-    typeof window !== "undefined" ? parseHash(window.location.hash) : null
+    typeof window !== "undefined" ? parseHash(window.location.hash) : null,
   );
 
   useEffect(() => {

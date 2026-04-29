@@ -57,7 +57,7 @@ import type {
   UploadStore,
 } from "../types";
 
-const log = (...args: unknown[]) => console.log("[claw:openclaw-engine]", ...args);
+const log = (...args: unknown[]) => console.info("[claw:openclaw-engine]", ...args);
 const warn = (...args: unknown[]) => console.warn("[claw:openclaw-engine]", ...args);
 
 const FULL_VERBOSE_LEVEL = "full";
@@ -450,13 +450,13 @@ export class OpenClawEngine implements Engine {
           .map((item) => {
             if (!item || typeof item !== "object") return null;
             const candidate = item as Record<string, unknown>;
-            const mimeType = typeof candidate.mimeType === "string" ? candidate.mimeType : "";
-            const fileName = typeof candidate.fileName === "string" ? candidate.fileName : "";
-            const content = typeof candidate.content === "string" ? candidate.content : "";
+            const mimeType = typeof candidate["mimeType"] === "string" ? candidate["mimeType"] : "";
+            const fileName = typeof candidate["fileName"] === "string" ? candidate["fileName"] : "";
+            const content = typeof candidate["content"] === "string" ? candidate["content"] : "";
 
             if (!mimeType || !fileName || !content) return null;
             return {
-              ...(typeof candidate.type === "string" ? { type: candidate.type } : {}),
+              ...(typeof candidate["type"] === "string" ? { type: candidate["type"] } : {}),
               mimeType,
               fileName,
               content,
@@ -1068,9 +1068,7 @@ export class OpenClawEngine implements Engine {
         if (!id) continue;
         const rawModel = entry.model;
         const primary =
-          typeof rawModel === "string"
-            ? rawModel.trim()
-            : rawModel?.primary?.trim() ?? "";
+          typeof rawModel === "string" ? rawModel.trim() : (rawModel?.primary?.trim() ?? "");
         if (primary) byAgent.set(id, primary);
       }
       // Mirror openclaw's `resolveDefaultAgentId`: first configured agent,
@@ -1223,8 +1221,8 @@ export class OpenClawEngine implements Engine {
       if (!result?.session) return {};
       const { model, thinkingLevel } = result.session;
       const config: Record<string, string> = {};
-      if (model) config.model = model;
-      if (thinkingLevel) config.thinkingLevel = thinkingLevel;
+      if (model) config["model"] = model;
+      if (thinkingLevel) config["thinkingLevel"] = thinkingLevel;
       return config;
     } catch (e) {
       warn("sessions.get (config) failed:", e);

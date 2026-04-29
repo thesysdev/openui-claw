@@ -165,8 +165,7 @@ export function mergeHistoryMessages(raw: ChatHistoryMessage[]): MergedMessage[]
       // self-contained turns produced by command handlers (/status, /help, …).
       // They must not merge with adjacent assistant messages, otherwise two
       // consecutive `/status` runs would fuse into one bubble.
-      const isGatewayInjected =
-        (m as unknown as { model?: string }).model === "gateway-injected";
+      const isGatewayInjected = (m as unknown as { model?: string }).model === "gateway-injected";
       if (isGatewayInjected) {
         flush();
         const text = extractText(m.content);
@@ -205,13 +204,13 @@ export function mergeHistoryMessages(raw: ChatHistoryMessage[]): MergedMessage[]
       }
 
       // Only TOOLS force text into the timeline — they create a
-       // need-to-flush boundary because tool I/O is interleaved with text in
-       // a multi-message assistant turn. `thinking` doesn't: it always sits in
-       // the timeline regardless of where the text lands. Treating thinking as
-       // an "interleaver" caused OpenRouter's `[thinking, text]` saved-content
-       // shape to push the visible answer into an `assistant_update` row,
-       // which `hoistTrailingAssistantUpdates` then couldn't recover (because
-       // the trailing segment is `reasoning`, not `assistant_update`).
+      // need-to-flush boundary because tool I/O is interleaved with text in
+      // a multi-message assistant turn. `thinking` doesn't: it always sits in
+      // the timeline regardless of where the text lands. Treating thinking as
+      // an "interleaver" caused OpenRouter's `[thinking, text]` saved-content
+      // shape to push the visible answer into an `assistant_update` row,
+      // which `hoistTrailingAssistantUpdates` then couldn't recover (because
+      // the trailing segment is `reasoning`, not `assistant_update`).
       const hasInterleavedActivity = allTools.length > 0;
 
       if (!pending) {

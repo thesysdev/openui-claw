@@ -6,9 +6,9 @@ import { useEffect, useRef, useState } from "react";
 import { HeaderIconButton } from "@/components/layout/HeaderIconButton";
 import { MobileButton } from "@/components/mobile/MobileButton";
 import { SegmentedTabs } from "@/components/ui/SegmentedTabs";
-import { useBodyScrollLock } from "@/lib/hooks/useBodyScrollLock";
 import { ConnectionState } from "@/lib/gateway/types";
 import { validateGatewayUrl } from "@/lib/gateway/url";
+import { useBodyScrollLock } from "@/lib/hooks/useBodyScrollLock";
 import type { Settings } from "@/lib/storage";
 
 const INSTALL_COMMAND =
@@ -116,8 +116,7 @@ export function MobileSettingsDialog({
     }
     const trimmedToken = token.trim() || undefined;
     const credsChanged =
-      trimmedUrl !== currentSettings?.gatewayUrl ||
-      trimmedToken !== currentSettings?.token;
+      trimmedUrl !== currentSettings?.gatewayUrl || trimmedToken !== currentSettings?.token;
     const next: Settings = {
       gatewayUrl: trimmedUrl,
       token: trimmedToken,
@@ -163,8 +162,8 @@ export function MobileSettingsDialog({
           <form onSubmit={handleSubmit} className="mt-ml flex flex-col gap-ml">
             <p className="text-sm text-text-neutral-tertiary">
               Connect Claw to your OpenClaw gateway. Run{" "}
-              <code className="rounded bg-foreground px-1 font-mono">openclaw config show</code>{" "}
-              in a terminal to see your gateway URL and token.
+              <code className="rounded bg-foreground px-1 font-mono">openclaw config show</code> in
+              a terminal to see your gateway URL and token.
             </p>
 
             <div className="flex flex-col gap-xs">
@@ -200,8 +199,8 @@ export function MobileSettingsDialog({
               />
               <p className="text-sm text-text-neutral-tertiary">
                 Run{" "}
-                <code className="rounded bg-foreground px-1 font-mono">openclaw auth token</code>{" "}
-                to get your token. Stored locally — only needed once per device.
+                <code className="rounded bg-foreground px-1 font-mono">openclaw auth token</code> to
+                get your token. Stored locally — only needed once per device.
               </p>
             </div>
 

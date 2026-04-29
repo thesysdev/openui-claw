@@ -1,18 +1,18 @@
-import { NextResponse } from "next/server";
 import {
-  createTunnel,
   configureTunnelIngress,
   createDnsCname,
-  getTunnelToken,
-  findDnsRecord,
-  deleteTunnel,
+  createTunnel,
   deleteDnsRecord,
+  deleteTunnel,
+  findDnsRecord,
+  getTunnelToken,
 } from "@/lib/cloudflare";
+import { NextResponse } from "next/server";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function getDomain(): string {
-  const d = process.env.DOMAIN;
+  const d = process.env["DOMAIN"];
   if (!d) throw new Error("Missing env var: DOMAIN");
   return d;
 }
@@ -25,7 +25,7 @@ export async function POST(req: Request) {
     if (typeof port !== "number" || port < 1 || port > 65535) {
       return NextResponse.json(
         { error: "port must be a number between 1 and 65535" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -46,7 +46,7 @@ export async function POST(req: Request) {
     console.error("[provision] POST error:", err);
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Internal error" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -57,10 +57,7 @@ export async function DELETE(req: Request) {
     const { tunnelId } = body;
 
     if (!tunnelId || !UUID_RE.test(tunnelId)) {
-      return NextResponse.json(
-        { error: "tunnelId must be a valid UUID" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "tunnelId must be a valid UUID" }, { status: 400 });
     }
 
     const domain = getDomain();
@@ -77,7 +74,7 @@ export async function DELETE(req: Request) {
       if (!dnsRecord) {
         return NextResponse.json(
           { error: "No tunnel or DNS record found for this tunnelId" },
-          { status: 404 }
+          { status: 404 },
         );
       }
       throw err;
@@ -88,7 +85,7 @@ export async function DELETE(req: Request) {
     console.error("[provision] DELETE error:", err);
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Internal error" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

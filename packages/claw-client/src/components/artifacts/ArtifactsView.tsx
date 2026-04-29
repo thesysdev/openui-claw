@@ -66,18 +66,17 @@ export function ArtifactsView({ artifacts, onOpenArtifact, connectionState }: Pr
               right={
                 <SortPills
                   value={sort}
-                  options={[{ key: "recent", label: "Recent" }, { key: "a-z", label: "A–Z" }]}
+                  options={[
+                    { key: "recent", label: "Recent" },
+                    { key: "a-z", label: "A–Z" },
+                  ]}
                   onChange={setSort}
                 />
               }
             />
             <div className="grid grid-cols-1 gap-ml sm:grid-cols-2 lg:grid-cols-3">
               {sorted.map((a) => (
-                <ArtifactCard
-                  key={a.id}
-                  artifact={a}
-                  onClick={() => onOpenArtifact(a.id)}
-                />
+                <ArtifactCard key={a.id} artifact={a} onClick={() => onOpenArtifact(a.id)} />
               ))}
             </div>
           </section>

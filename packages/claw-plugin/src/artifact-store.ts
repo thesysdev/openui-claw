@@ -1,6 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { generateSecureUuid } from "openclaw/plugin-sdk/core";
+import { generateSecureUuid } from "openclaw/plugin-sdk/infra-runtime";
 
 const MAX_VERSIONS = 25;
 

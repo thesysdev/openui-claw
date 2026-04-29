@@ -1,7 +1,7 @@
-import type { EventFrame, GatewayError, GatewayFrame, HelloOk } from "./types";
 import type { Settings } from "../storage";
 import type { DeviceIdentity } from "./device-identity";
 import { buildConnectParams } from "./handshake";
+import type { EventFrame, GatewayError, GatewayFrame, HelloOk } from "./types";
 
 // WebSocket close codes that indicate non-retryable auth failures
 const AUTH_CLOSE_CODES = new Set([4001, 4003, 4401]);
@@ -22,7 +22,7 @@ const RECONNECT_MAX_MS = 30_000;
 // an indefinite "Connecting…" state. ~1+2+4+8+16+30 = 61s of attempts.
 const RECONNECT_MAX_ATTEMPTS = 6;
 
-const log = (...args: unknown[]) => console.log("[claw:socket]", ...args);
+const log = (...args: unknown[]) => console.info("[claw:socket]", ...args);
 const warn = (...args: unknown[]) => console.warn("[claw:socket]", ...args);
 const err = (...args: unknown[]) => console.error("[claw:socket]", ...args);
 
@@ -179,11 +179,7 @@ export class GatewaySocket {
       return;
     }
 
-    const authMethod = settings.deviceToken
-      ? "deviceToken"
-      : settings.token
-      ? "token"
-      : "none";
+    const authMethod = settings.deviceToken ? "deviceToken" : settings.token ? "token" : "none";
     log(`sending connect (auth=${authMethod})`);
 
     let hello: HelloOk;
@@ -192,7 +188,7 @@ export class GatewaySocket {
       hello = await this.request<HelloOk>("connect", params);
     } catch (e) {
       warn(`connect RPC failed — raw error:`, e);
-      const error = this.parseError(e instanceof Error ? e.cause ?? e.message : e);
+      const error = this.parseError(e instanceof Error ? (e.cause ?? e.message) : e);
       if (this.isPairingRequired(error)) {
         warn("device not paired — invoking onPairingRequired");
         this.pairingDetected = true;
@@ -321,7 +317,7 @@ export class GatewaySocket {
   /** Matches the NOT_PAIRED / PAIRING_REQUIRED error from the gateway. */
   private isPairingRequired(error: GatewayError): boolean {
     const raw = error as Record<string, unknown>;
-    if (raw.code === "NOT_PAIRED") return true;
+    if (raw["code"] === "NOT_PAIRED") return true;
     if (error.details?.code === "PAIRING_REQUIRED") return true;
     if (error.message === "pairing required") return true;
     return false;
@@ -340,9 +336,7 @@ export class GatewaySocket {
     if (this.stopped) return;
     this.reconnectAttempts += 1;
     if (this.reconnectAttempts > RECONNECT_MAX_ATTEMPTS) {
-      warn(
-        `gave up after ${RECONNECT_MAX_ATTEMPTS} reconnect attempts — emitting unreachable`,
-      );
+      warn(`gave up after ${RECONNECT_MAX_ATTEMPTS} reconnect attempts — emitting unreachable`);
       this.opts.onStateChange(false);
       this.opts.onUnreachable?.();
       return;

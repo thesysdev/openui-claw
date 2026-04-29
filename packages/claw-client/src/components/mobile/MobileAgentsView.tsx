@@ -1,7 +1,7 @@
 "use client";
 
-import { Cpu } from "lucide-react";
 import type { Thread } from "@openuidev/react-headless";
+import { Cpu } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { AgentCard, type AgentCardData } from "@/components/cards/AgentCard";

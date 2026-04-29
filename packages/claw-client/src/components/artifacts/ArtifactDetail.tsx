@@ -1,15 +1,12 @@
 "use client";
 
 import { ArtifactContentView } from "@/components/artifacts/ArtifactContentView";
-import { DetailTopBar } from "@/components/layout/DetailTopBar";
+import { TitleSwitcher, type TitleSwitcherItem } from "@/components/chat/TitleSwitcher";
 import { TopBar } from "@/components/chat/TopBar";
-import {
-  TitleSwitcher,
-  type TitleSwitcherItem,
-} from "@/components/chat/TitleSwitcher";
-import { Button } from "@/components/ui/Button";
+import { DetailTopBar } from "@/components/layout/DetailTopBar";
 import { IconButton } from "@/components/layout/sidebar/IconButton";
 import { TextTile } from "@/components/layout/sidebar/Tile";
+import { Button } from "@/components/ui/Button";
 import type { ArtifactRecord, ArtifactStore } from "@/lib/engines/types";
 import { artifactsHash } from "@/lib/hooks/useHashRoute";
 import { Sparkles, Trash2, X } from "lucide-react";
@@ -113,19 +110,10 @@ export function ArtifactDetail({
   // mode's TopBar.
   const deleteControl = confirmDelete ? (
     <>
-      <Button
-        variant="borderless"
-        size="sm"
-        onClick={() => setConfirmDelete(false)}
-      >
+      <Button variant="borderless" size="sm" onClick={() => setConfirmDelete(false)}>
         Cancel
       </Button>
-      <Button
-        variant="destructive"
-        size="sm"
-        disabled={deleting}
-        onClick={handleDelete}
-      >
+      <Button variant="destructive" size="sm" disabled={deleting} onClick={handleDelete}>
         {deleting ? "Deleting…" : "Confirm delete"}
       </Button>
     </>
@@ -144,7 +132,12 @@ export function ArtifactDetail({
       {mode === "page" && (
         <DetailTopBar
           title={record.title}
-          onClose={onClose ?? (() => { window.location.hash = artifactsHash(); })}
+          onClose={
+            onClose ??
+            (() => {
+              window.location.hash = artifactsHash();
+            })
+          }
           onCustomize={onCustomize ? () => onCustomize(record) : undefined}
           onShare={onShare ? () => onShare(record) : undefined}
           onDelete={() => setConfirmDelete(true)}

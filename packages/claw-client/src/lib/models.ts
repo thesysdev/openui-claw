@@ -21,7 +21,7 @@ export function splitModelRef(qualified: string): { model: string; modelProvider
  * the server returns (separate model + modelProvider fields).
  */
 export function normalizeSessionPatch(patch: Record<string, unknown>): Record<string, unknown> {
-  const model = patch.model;
+  const model = patch["model"];
   if (typeof model === "string" && model.includes("/")) {
     const split = splitModelRef(model);
     return { ...patch, model: split.model, modelProvider: split.modelProvider };

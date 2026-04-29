@@ -109,31 +109,23 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function isLinkedAppContextEntry(value: unknown): value is LinkedAppContextEntry {
   return (
     isRecord(value) &&
-    value.type === "linked_app" &&
-    typeof value.appId === "string" &&
-    typeof value.title === "string" &&
-    typeof value.agentId === "string" &&
-    typeof value.sessionKey === "string"
+    value["type"] === "linked_app" &&
+    typeof value["appId"] === "string" &&
+    typeof value["title"] === "string" &&
+    typeof value["agentId"] === "string" &&
+    typeof value["sessionKey"] === "string"
   );
 }
 
 function isLinkedArtifactContextEntry(value: unknown): value is LinkedArtifactContextEntry {
   return (
     isRecord(value) &&
-    value.type === "linked_artifact" &&
-    typeof value.artifactId === "string" &&
-    typeof value.title === "string" &&
-    typeof value.agentId === "string" &&
-    typeof value.sessionKey === "string"
+    value["type"] === "linked_artifact" &&
+    typeof value["artifactId"] === "string" &&
+    typeof value["title"] === "string" &&
+    typeof value["agentId"] === "string" &&
+    typeof value["sessionKey"] === "string"
   );
-}
-
-function isThreadUploadContextEntry(value: unknown): value is ThreadUploadContextEntry {
-  if (!isRecord(value) || value.type !== "thread_uploads") return false;
-  // New compact form: { remoteIds: [...] }
-  if (Array.isArray(value.remoteIds)) return true;
-  // Legacy form: { files: [{id, remoteId?, ...}] } — accept and normalize in parser.
-  return Array.isArray(value.files);
 }
 
 function parseThreadContextEntries(contextString: string | null): ThreadContextEntry[] {
@@ -153,18 +145,22 @@ function parseThreadContextEntries(contextString: string | null): ThreadContextE
 function normalizeContextEntry(value: unknown): ThreadContextEntry | null {
   if (isLinkedAppContextEntry(value)) return value;
   if (isLinkedArtifactContextEntry(value)) return value;
-  if (!isRecord(value) || value.type !== "thread_uploads") return null;
+  if (!isRecord(value) || value["type"] !== "thread_uploads") return null;
 
-  if (Array.isArray(value.remoteIds)) {
+  const remoteIdsValue = value["remoteIds"];
+  if (Array.isArray(remoteIdsValue)) {
     return {
       type: "thread_uploads",
-      remoteIds: value.remoteIds.filter((id): id is string => typeof id === "string"),
+      remoteIds: remoteIdsValue.filter((id): id is string => typeof id === "string"),
     };
   }
   // Legacy shape: files: [{id, remoteId?, ...}]
-  if (Array.isArray(value.files)) {
-    const remoteIds = value.files
-      .map((file) => (isRecord(file) && typeof file.remoteId === "string" ? file.remoteId : null))
+  const filesValue = value["files"];
+  if (Array.isArray(filesValue)) {
+    const remoteIds = filesValue
+      .map((file) =>
+        isRecord(file) && typeof file["remoteId"] === "string" ? file["remoteId"] : null,
+      )
       .filter((id): id is string => id != null);
     return { type: "thread_uploads", remoteIds };
   }

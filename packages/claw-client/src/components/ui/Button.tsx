@@ -13,7 +13,10 @@ export type ButtonVariant =
 
 // Heights mirror `IconButton`'s sizes so a <Button size="md"> lines up with
 // any <IconButton size="md"> siblings in the same row.
-const SIZE_STYLES: Record<ButtonSize, { height: string; padding: string; text: string; icon: number }> = {
+const SIZE_STYLES: Record<
+  ButtonSize,
+  { height: string; padding: string; text: string; icon: number }
+> = {
   sm: { height: "h-l", padding: "px-s", text: "text-sm", icon: 12 },
   md: { height: "h-7", padding: "px-m", text: "text-md", icon: 13 },
   lg: { height: "h-2xl", padding: "px-ml", text: "text-md", icon: 14 },
@@ -28,8 +31,7 @@ const VARIANT_STYLES: Record<ButtonVariant, string> = {
     "bg-transparent text-text-neutral-tertiary border border-transparent hover:bg-sunk dark:hover:bg-sunk-light hover:text-text-neutral-primary",
   borderless:
     "bg-transparent text-text-neutral-tertiary border border-transparent hover:text-text-neutral-primary",
-  pill:
-    "bg-transparent text-text-neutral-tertiary border border-transparent aria-[pressed=true]:bg-sunk-light aria-[pressed=true]:text-text-neutral-primary",
+  pill: "bg-transparent text-text-neutral-tertiary border border-transparent aria-[pressed=true]:bg-sunk-light aria-[pressed=true]:text-text-neutral-primary",
   destructive:
     "bg-interactive-destructive text-text-white border border-transparent shadow-sm hover:bg-interactive-destructive-hover disabled:opacity-50",
 };

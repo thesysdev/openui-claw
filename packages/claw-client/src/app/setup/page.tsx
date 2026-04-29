@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import { saveSettings } from "@/lib/storage";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 
 type Status = "configuring" | "error";
 
@@ -37,12 +37,8 @@ export default function SetupPage() {
     return (
       <div className="flex min-h-full items-center justify-center p-ml">
         <div className="text-center max-w-sm">
-          <h1 className="text-lg font-semibold text-text-neutral-primary mb-2">
-            Setup Failed
-          </h1>
-          <p className="text-sm text-text-neutral-tertiary mb-4">
-            {errorMsg}
-          </p>
+          <h1 className="text-lg font-semibold text-text-neutral-primary mb-2">Setup Failed</h1>
+          <p className="text-sm text-text-neutral-tertiary mb-4">{errorMsg}</p>
           <a
             href="/"
             className="text-sm font-medium text-text-neutral-primary underline underline-offset-2 hover:text-text-neutral-secondary"
@@ -56,9 +52,7 @@ export default function SetupPage() {
 
   return (
     <div className="flex min-h-full items-center justify-center p-ml">
-      <p className="text-sm text-text-neutral-tertiary">
-        Configuring...
-      </p>
+      <p className="text-sm text-text-neutral-tertiary">Configuring...</p>
     </div>
   );
 }

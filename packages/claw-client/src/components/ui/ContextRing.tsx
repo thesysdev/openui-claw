@@ -37,12 +37,7 @@ function ringColor(pct: number): string {
  * Compact circular progress ring showing % of the model's context window
  * used. Hover opens a popover with a per-category token breakdown.
  */
-export function ContextRing({
-  used,
-  limit,
-  size = 12,
-  className = "",
-}: ContextRingProps) {
+export function ContextRing({ used, limit, size = 12, className = "" }: ContextRingProps) {
   const [hover, setHover] = useState(false);
   const pct = limit > 0 ? Math.max(0, Math.min(1, used / limit)) : 0;
 
@@ -92,13 +87,8 @@ export function ContextRing({
         >
           <p className="mb-s font-body text-sm text-text-neutral-primary">
             Context{" "}
-            <span className="font-mono text-text-neutral-secondary">
-              {formatTokens(used)}
-            </span>{" "}
-            of{" "}
-            <span className="font-mono text-text-neutral-secondary">
-              {formatTokens(limit)}
-            </span>{" "}
+            <span className="font-mono text-text-neutral-secondary">{formatTokens(used)}</span> of{" "}
+            <span className="font-mono text-text-neutral-secondary">{formatTokens(limit)}</span>{" "}
             consumed
           </p>
           <div className="h-[6px] w-full overflow-hidden rounded-full bg-border-default/50 dark:bg-border-default/40">

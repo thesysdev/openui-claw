@@ -4,25 +4,14 @@ import { COMPACTION_SENTINEL, ERROR_SENTINEL, GATEWAY_SENTINEL } from "@/lib/cha
 import { extractAssistantTimeline } from "@/lib/chat/timeline";
 import { separateContentAndContext, wrapContext } from "@/lib/content-parser";
 import { parseInlineResponse } from "@/lib/detection";
-import {
-  buildContinueConversationPayload,
-  handleOpenUrlAction,
-} from "@/lib/renderer-actions";
+import { buildContinueConversationPayload, handleOpenUrlAction } from "@/lib/renderer-actions";
 import type { AssistantMessage as AssistantMsg } from "@openuidev/react-headless";
 import { useThread } from "@openuidev/react-headless";
 import type { ActionEvent } from "@openuidev/react-lang";
 import { Renderer } from "@openuidev/react-lang";
 import { Callout, Shell } from "@openuidev/react-ui";
 import { openuiChatLibrary } from "@openuidev/react-ui/genui-lib";
-import {
-  ArrowDown,
-  ArrowUp,
-  Check,
-  ChevronDown,
-  ChevronRight,
-  Loader2,
-  X,
-} from "lucide-react";
+import { ArrowDown, ArrowUp, Check, ChevronDown, ChevronRight, Loader2, X } from "lucide-react";
 import { useCallback, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkBreaks from "remark-breaks";
@@ -68,25 +57,17 @@ function prettyPayload(value: string | null): string | null {
   }
 }
 
-function formatDuration(durationMs: number | null): string | null {
-  if (durationMs == null || !Number.isFinite(durationMs)) return null;
-  if (durationMs < 1000) return `${Math.round(durationMs)}ms`;
-  return `${(durationMs / 1000).toFixed(durationMs >= 10_000 ? 0 : 1)}s`;
-}
-
 // Shared prose styling for any markdown rendered inside an assistant
 // surface — bubble *and* timeline trace. Keeping the base in one place so
 // future tweaks (font sizes, code/link colors) propagate uniformly.
 const BASE_MARKDOWN_CLASSES =
   "prose prose-sm max-w-none dark:prose-invert prose-p:leading-relaxed prose-p:text-md prose-headings:font-semibold prose-headings:tracking-tight prose-li:text-md prose-strong:font-semibold prose-pre:bg-sunk-light prose-pre:border prose-pre:border-border-default/30 prose-pre:rounded-lg prose-pre:text-sm prose-pre:text-text-neutral-primary prose-code:text-sm prose-code:text-text-neutral-primary prose-code:before:content-none prose-code:after:content-none prose-a:text-text-accent-primary prose-a:underline-offset-2";
 
-const ASSISTANT_MARKDOWN_CLASSES =
-  `${BASE_MARKDOWN_CLASSES} prose-h1:text-lg prose-h2:text-lg prose-h3:text-md prose-table:text-sm`;
+const ASSISTANT_MARKDOWN_CLASSES = `${BASE_MARKDOWN_CLASSES} prose-h1:text-lg prose-h2:text-lg prose-h3:text-md prose-table:text-sm`;
 
 // Trace blocks live in narrower, denser rows — kill paragraph margins and
 // tighten heading spacing so reasoning/tool detail panels don't bloat.
-const TRACE_MARKDOWN_CLASSES =
-  `${BASE_MARKDOWN_CLASSES} prose-p:my-0 prose-headings:mb-2 prose-headings:mt-0`;
+const TRACE_MARKDOWN_CLASSES = `${BASE_MARKDOWN_CLASSES} prose-p:my-0 prose-headings:mb-2 prose-headings:mt-0`;
 
 // ── New compact "Behind the scenes" timeline ─────────────────────────────────
 //
@@ -117,12 +98,7 @@ function StatusGlyph({ status }: { status: TimelineStatus }) {
     return (
       <span className={base} role="img" aria-label={STATUS_LABEL[status]}>
         {srLabel}
-        <Check
-          size={10}
-          strokeWidth={3}
-          className="text-status-online"
-          aria-hidden="true"
-        />
+        <Check size={10} strokeWidth={3} className="text-status-online" aria-hidden="true" />
       </span>
     );
   }
@@ -130,12 +106,7 @@ function StatusGlyph({ status }: { status: TimelineStatus }) {
     return (
       <span className={base} role="img" aria-label={STATUS_LABEL[status]}>
         {srLabel}
-        <X
-          size={10}
-          strokeWidth={3}
-          className="text-status-error"
-          aria-hidden="true"
-        />
+        <X size={10} strokeWidth={3} className="text-status-error" aria-hidden="true" />
       </span>
     );
   }
@@ -154,10 +125,7 @@ function StatusGlyph({ status }: { status: TimelineStatus }) {
   return (
     <span className={base} role="img" aria-label={STATUS_LABEL[status]}>
       {srLabel}
-      <span
-        aria-hidden="true"
-        className="h-[3px] w-[3px] rounded-full bg-cat-context"
-      />
+      <span aria-hidden="true" className="h-[3px] w-[3px] rounded-full bg-cat-context" />
     </span>
   );
 }
@@ -252,12 +220,7 @@ function TimelineRow({
         <span className="min-w-0 flex-1 truncate font-body text-sm text-text-neutral-primary">
           {summary}
         </span>
-        <TimelineMeta
-          category={category}
-          time={time}
-          upTokens={upTokens}
-          downTokens={downTokens}
-        />
+        <TimelineMeta category={category} time={time} upTokens={upTokens} downTokens={downTokens} />
         <ChevronRight
           size={12}
           aria-hidden="true"
@@ -333,9 +296,7 @@ function ToolCallDetail({
         </TabBtn>
         <TabBtn active={tab === "output"} onClick={() => setTab("output")}>
           Output
-          {isError ? (
-            <span className="ml-2xs text-text-danger-primary">· error</span>
-          ) : null}
+          {isError ? <span className="ml-2xs text-text-danger-primary">· error</span> : null}
         </TabBtn>
       </div>
       <pre className="overflow-x-auto whitespace-pre-wrap break-words rounded-m bg-background px-s py-xs font-code text-sm leading-body text-text-neutral-secondary">
@@ -449,7 +410,9 @@ function ThinkingPanel({
         className="overflow-hidden transition-[max-height,opacity] duration-300 ease-out"
         style={{ maxHeight: open ? 10000 : 0, opacity: open ? 1 : 0 }}
       >
-        <div className="mt-xs space-y-xs rounded-lg bg-sunk-light p-m dark:bg-sunk-deep">{children}</div>
+        <div className="mt-xs space-y-xs rounded-lg bg-sunk-light p-m dark:bg-sunk-deep">
+          {children}
+        </div>
       </div>
     </div>
   );
@@ -736,35 +699,29 @@ export function AssistantMessage({ message }: Props) {
           }
         }}
       />
+    ) : isGatewayInjected ? (
+      <div
+        key={`text-${i}`}
+        className="openclaw-ui-assistant-markdown mr-auto w-full max-w-3xl border-l-2 border-border-default/40 bg-transparent pl-m"
+      >
+        {i === 0 ? (
+          <div className="mb-xs inline-flex items-center gap-xs rounded-full bg-text-neutral-tertiary/10 px-s py-[2px] font-body text-xs text-text-neutral-tertiary">
+            Gateway
+          </div>
+        ) : null}
+        <div className={ASSISTANT_MARKDOWN_CLASSES}>
+          <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{segment.content}</ReactMarkdown>
+        </div>
+      </div>
     ) : (
-      isGatewayInjected ? (
-        <div
-          key={`text-${i}`}
-          className="openclaw-ui-assistant-markdown mr-auto w-full max-w-3xl border-l-2 border-border-default/40 bg-transparent pl-m"
-        >
-          {i === 0 ? (
-            <div className="mb-xs inline-flex items-center gap-xs rounded-full bg-text-neutral-tertiary/10 px-s py-[2px] font-body text-xs text-text-neutral-tertiary">
-              Gateway
-            </div>
-          ) : null}
-          <div className={ASSISTANT_MARKDOWN_CLASSES}>
-            <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>
-              {segment.content}
-            </ReactMarkdown>
-          </div>
+      <div
+        key={`text-${i}`}
+        className="openclaw-ui-assistant-markdown mr-auto w-full max-w-3xl rounded-3xl border border-border-default/40 bg-background px-ml py-m shadow-sm dark:border-border-default/20 dark:bg-sunk-deep"
+      >
+        <div className={ASSISTANT_MARKDOWN_CLASSES}>
+          <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{segment.content}</ReactMarkdown>
         </div>
-      ) : (
-        <div
-          key={`text-${i}`}
-          className="openclaw-ui-assistant-markdown mr-auto w-full max-w-3xl rounded-3xl border border-border-default/40 bg-background px-ml py-m shadow-sm dark:border-border-default/20 dark:bg-sunk-deep"
-        >
-          <div className={ASSISTANT_MARKDOWN_CLASSES}>
-            <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>
-              {segment.content}
-            </ReactMarkdown>
-          </div>
-        </div>
-      )
+      </div>
     ),
   );
 
@@ -809,7 +766,9 @@ export function AssistantMessage({ message }: Props) {
                   summary={oneLineSummary(item.text)}
                 >
                   <div className={TRACE_MARKDOWN_CLASSES}>
-                    <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{item.text}</ReactMarkdown>
+                    <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>
+                      {item.text}
+                    </ReactMarkdown>
                   </div>
                 </TimelineRow>
               );

@@ -5,9 +5,8 @@ import type { ClawThread } from "@/types/claw-thread";
 /** Resolve a human-readable agent name from a thread list, falling back to the id. */
 export function makeAgentNameResolver(threads: ClawThread[]) {
   return (agentId: string) =>
-    threads.find(
-      (t) => (t.clawAgentId ?? t.id) === agentId && t.clawKind === "main",
-    )?.title ?? agentId;
+    threads.find((t) => (t.clawAgentId ?? t.id) === agentId && t.clawKind === "main")?.title ??
+    agentId;
 }
 
 export function buildAppSiblings(

@@ -39,7 +39,9 @@ export function SegmentedTabs<V extends string>({
     >
       {options.map(({ value: optValue, label, labelText, icon: Icon, iconOnly }) => {
         const active = value === optValue;
-        const ariaLabel = iconOnly ? labelText ?? (typeof label === "string" ? label : undefined) : undefined;
+        const ariaLabel = iconOnly
+          ? (labelText ?? (typeof label === "string" ? label : undefined))
+          : undefined;
         return (
           <button
             key={optValue}

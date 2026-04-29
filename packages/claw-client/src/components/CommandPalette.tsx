@@ -8,14 +8,7 @@ import { useIsMobile } from "@/lib/hooks/useIsMobile";
 import type { ClawThreadListItem } from "@/types/gateway-responses";
 import { Command as CommandPrimitive } from "cmdk";
 import Fuse from "fuse.js";
-import {
-  Clock,
-  FileText,
-  LayoutGrid,
-  MessageSquare,
-  Search,
-  Terminal,
-} from "lucide-react";
+import { Clock, FileText, LayoutGrid, MessageSquare, Search, Terminal } from "lucide-react";
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 
 export type PaletteTarget =
@@ -175,9 +168,7 @@ function ResultRow({
       </span>
       <span className="flex min-w-0 flex-1 flex-col">
         <span className="truncate text-text-neutral-primary">{row.label}</span>
-        <span className="truncate text-sm text-text-neutral-tertiary">
-          {row.hint}
-        </span>
+        <span className="truncate text-sm text-text-neutral-tertiary">{row.hint}</span>
       </span>
     </CommandPrimitive.Item>
   );
@@ -217,10 +208,7 @@ export function CommandPalette({
     return () => cancelAnimationFrame(id);
   }, [open]);
 
-  const rows = useMemo(
-    () => buildRows({ threads, apps, artifacts }),
-    [apps, artifacts, threads],
-  );
+  const rows = useMemo(() => buildRows({ threads, apps, artifacts }), [apps, artifacts, threads]);
 
   const rowsById = useMemo(() => {
     const map = new Map<string, PaletteRow>();
@@ -263,10 +251,7 @@ export function CommandPalette({
     const scored = hits.map((hit) => {
       const baseScore = hit.score ?? 1;
       const picks = freq[hit.item.id] ?? 0;
-      const boost =
-        totalPicks > 0
-          ? Math.min(MAX_FREQUENCY_BOOST, (picks / totalPicks) * 0.5)
-          : 0;
+      const boost = totalPicks > 0 ? Math.min(MAX_FREQUENCY_BOOST, (picks / totalPicks) * 0.5) : 0;
       return { row: hit.item, score: baseScore - boost };
     });
     scored.sort((a, b) => a.score - b.score);
@@ -317,17 +302,16 @@ export function CommandPalette({
     : "mt-[12vh] flex w-full max-w-xl flex-col overflow-hidden rounded-2xl border border-border-default bg-background shadow-xl";
 
   return (
-    <div
-      className={containerClass}
-      onClick={isMobile ? undefined : onClose}
-      role="presentation"
-    >
+    <div className={containerClass} onClick={isMobile ? undefined : onClose} role="presentation">
       <div
         className={panelClass}
         onClick={(event) => event.stopPropagation()}
         style={
           isMobile
-            ? { paddingTop: "env(safe-area-inset-top)", paddingBottom: "env(safe-area-inset-bottom)" }
+            ? {
+                paddingTop: "env(safe-area-inset-top)",
+                paddingBottom: "env(safe-area-inset-bottom)",
+              }
             : undefined
         }
       >

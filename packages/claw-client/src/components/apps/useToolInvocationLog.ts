@@ -61,12 +61,9 @@ export function useToolInvocationLog(): ToolInvocationLog {
     [],
   );
 
-  const updateStatus = useCallback(
-    (id: string, patch: Partial<ToolInvocationLogEntry>): void => {
-      setLog((prev) => prev.map((e) => (e.id === id ? { ...e, ...patch } : e)));
-    },
-    [],
-  );
+  const updateStatus = useCallback((id: string, patch: Partial<ToolInvocationLogEntry>): void => {
+    setLog((prev) => prev.map((e) => (e.id === id ? { ...e, ...patch } : e)));
+  }, []);
 
   const clear = useCallback(() => {
     setLog([]);

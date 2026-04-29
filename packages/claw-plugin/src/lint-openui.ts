@@ -13,10 +13,10 @@ import schemaJson from "./generated/openui-schema.json";
 // names extracted at build time. The constrained `LibraryJSONSchema` type
 // in lang-core only names the fields the parser reads (`$defs.*.{properties,
 // required}`), so the cast at the boundary stays.
-const LIBRARY_SCHEMA: LibraryJSONSchema =
-  (schemaJson as unknown as { schema: LibraryJSONSchema }).schema;
-const COMPONENT_NAMES: readonly string[] =
-  (schemaJson as unknown as { componentNames: string[] }).componentNames;
+const LIBRARY_SCHEMA: LibraryJSONSchema = (schemaJson as unknown as { schema: LibraryJSONSchema })
+  .schema;
+const COMPONENT_NAMES: readonly string[] = (schemaJson as unknown as { componentNames: string[] })
+  .componentNames;
 
 /** Public-shape of a single lint finding returned to the LLM. */
 export interface LintFinding {
@@ -26,6 +26,43 @@ export interface LintFinding {
   component?: string;
   path?: string;
   hint?: string;
+}
+
+/**
+ * Loose typing for the AST nodes the lint walker inspects. The lang-core
+ * `ASTNode` union models the parser's emitted shape, but at lint time we
+ * also walk materialized element trees and a few dynamically-shaped
+ * branches (e.g. `then`/`otherwise` on legacy conditional nodes). Narrowing
+ * everything through this single union lets us dot-access the fields we
+ * read while keeping the runtime walk over arbitrary subtrees.
+ */
+interface LintAstNode {
+  k: string;
+  name?: unknown;
+  n?: unknown;
+  args?: unknown;
+  els?: unknown;
+  entries?: unknown;
+  mappedProps?: unknown;
+  then?: unknown;
+  otherwise?: unknown;
+}
+
+interface LintElementNode {
+  type: "element";
+  props?: unknown;
+}
+
+function isLintAstNode(value: unknown): value is LintAstNode {
+  return (
+    typeof value === "object" && value !== null && typeof (value as { k?: unknown }).k === "string"
+  );
+}
+
+function isLintElementNode(value: unknown): value is LintElementNode {
+  return (
+    typeof value === "object" && value !== null && (value as { type?: unknown }).type === "element"
+  );
 }
 
 export interface LintReport {
@@ -86,20 +123,20 @@ function walkSemantic(parsed: ParseResult): LintFinding[] {
     compName: "Run" | "Set" | "Reset",
     argNode: unknown,
   ): { code: string; message: string; hint: string } | null => {
-    const n = argNode as Record<string, unknown> | null;
-    if (!n || typeof n !== "object") {
+    if (!argNode || typeof argNode !== "object") {
       return {
         code: "action-bad-target",
         message: `@${compName}(...) received an empty or invalid target`,
         hint: `@${compName} must reference a declared top-level identifier (or $state for @Set/@Reset).`,
       };
     }
+    const n = argNode as { k?: unknown; name?: unknown };
     const k = n.k;
     if (compName === "Run") {
       // Valid: RuntimeRef (resolved at materialize) or Ref (still-unresolved at walk time — reported separately as unresolved)
       if (k === "RuntimeRef" || k === "Ref") return null;
       if (k === "Comp") {
-        const inlineName = String((n as Record<string, unknown>).name ?? "?");
+        const inlineName = String(n.name ?? "?");
         return {
           code: "action-inline-target",
           message: `@Run(${inlineName}(...)) was passed an inline call. @Run needs a reference to a top-level declared statement.`,
@@ -129,20 +166,19 @@ function walkSemantic(parsed: ParseResult): LintFinding[] {
       for (let i = 0; i < node.length; i++) visit(node[i], [...path, `[${i}]`]);
       return;
     }
-    const rec = node as Record<string, unknown>;
     // Element node (rendered component) — recurse into its props
-    if (rec.type === "element" && rec.props && typeof rec.props === "object") {
-      for (const [key, value] of Object.entries(rec.props as Record<string, unknown>)) {
+    if (isLintElementNode(node) && node.props && typeof node.props === "object") {
+      for (const [key, value] of Object.entries(node.props as Record<string, unknown>)) {
         visit(value, [...path, key]);
       }
     }
     // AST node
-    if (typeof rec.k === "string") {
+    if (isLintAstNode(node)) {
       // Inline reserved (Query / Mutation) surviving the materialize pass means
       // it's embedded in an expression position — parser won't have flagged it.
       if (
-        rec.k === "Comp" &&
-        (rec.name === "Query" || rec.name === "Mutation") &&
+        node.k === "Comp" &&
+        (node.name === "Query" || node.name === "Mutation") &&
         !flaggedNodes.has(node)
       ) {
         flaggedNodes.add(node);
@@ -151,33 +187,33 @@ function walkSemantic(parsed: ParseResult): LintFinding[] {
         );
         findings.push({
           code: "inline-reserved",
-          message: `${rec.name}(...) is used inline. It must be declared as a top-level statement — e.g. \`myRef = ${String(rec.name)}("tool", { ... })\` — then referenced by name.`,
+          message: `${node.name}(...) is used inline. It must be declared as a top-level statement — e.g. \`myRef = ${node.name}("tool", { ... })\` — then referenced by name.`,
           ...(statementGuess ? { statement: statementGuess } : {}),
-          component: String(rec.name),
-          hint: `When the call needs per-row data, route it through $state: \`$selectedId = null; myRef = ${String(rec.name)}("tool", { params: {id: $selectedId}, ... }); Button(..., Action([@Set($selectedId, row.id), @Run(myRef)]))\`.`,
+          component: node.name,
+          hint: `When the call needs per-row data, route it through $state: \`$selectedId = null; myRef = ${node.name}("tool", { params: {id: $selectedId}, ... }); Button(..., Action([@Set($selectedId, row.id), @Run(myRef)]))\`.`,
         });
       }
       // Action step calls — @Run / @Set / @Reset must have valid targets
       if (
-        rec.k === "Comp" &&
-        typeof rec.name === "string" &&
-        isRunLike(rec.name) &&
+        node.k === "Comp" &&
+        typeof node.name === "string" &&
+        isRunLike(node.name) &&
         !flaggedNodes.has(node)
       ) {
         flaggedNodes.add(node);
-        const firstArg = Array.isArray(rec.args) ? rec.args[0] : undefined;
-        const problem = describeRunArgProblem(rec.name as "Run" | "Set" | "Reset", firstArg);
+        const firstArg = Array.isArray(node.args) ? node.args[0] : undefined;
+        const compName = node.name as "Run" | "Set" | "Reset";
+        const problem = describeRunArgProblem(compName, firstArg);
         if (problem) {
           findings.push({
             code: problem.code,
             message: problem.message,
-            component: rec.name,
+            component: compName,
             hint: problem.hint,
           });
-        } else if (rec.name === "Run" && firstArg && typeof firstArg === "object") {
-          const argRec = firstArg as Record<string, unknown>;
-          if (argRec.k === "Ref" && typeof argRec.n === "string") {
-            const refName = argRec.n;
+        } else if (compName === "Run" && isLintAstNode(firstArg)) {
+          if (firstArg.k === "Ref" && typeof firstArg.n === "string") {
+            const refName = firstArg.n;
             if (!declaredQueries.has(refName) && !declaredMutations.has(refName)) {
               findings.push({
                 code: "action-unknown-target",
@@ -191,20 +227,20 @@ function walkSemantic(parsed: ParseResult): LintFinding[] {
         }
       }
       // Recurse known children
-      if (Array.isArray(rec.args)) visit(rec.args, [...path, "args"]);
-      if (Array.isArray(rec.els)) visit(rec.els, [...path, "els"]);
-      if (Array.isArray(rec.entries)) visit(rec.entries, [...path, "entries"]);
-      if (rec.mappedProps && typeof rec.mappedProps === "object") {
-        for (const [key, value] of Object.entries(rec.mappedProps as Record<string, unknown>)) {
+      if (Array.isArray(node.args)) visit(node.args, [...path, "args"]);
+      if (Array.isArray(node.els)) visit(node.els, [...path, "els"]);
+      if (Array.isArray(node.entries)) visit(node.entries, [...path, "entries"]);
+      if (node.mappedProps && typeof node.mappedProps === "object") {
+        for (const [key, value] of Object.entries(node.mappedProps as Record<string, unknown>)) {
           visit(value, [...path, "mappedProps", key]);
         }
       }
-      if (rec.then) visit(rec.then, [...path, "then"]);
-      if (rec.otherwise) visit(rec.otherwise, [...path, "otherwise"]);
+      if (node.then) visit(node.then, [...path, "then"]);
+      if (node.otherwise) visit(node.otherwise, [...path, "otherwise"]);
       return;
     }
     // Generic fallback — recurse object keys
-    for (const [key, value] of Object.entries(rec)) {
+    for (const [key, value] of Object.entries(node as Record<string, unknown>)) {
       if (value && typeof value === "object") visit(value, [...path, key]);
     }
   };

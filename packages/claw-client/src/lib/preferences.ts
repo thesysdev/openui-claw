@@ -97,11 +97,11 @@ export function subscribe(listener: () => void): () => void {
 export function apply(prefs: Preferences = read()): void {
   if (typeof document === "undefined") return;
   const root = document.documentElement;
-  root.dataset.clawFontSize = prefs.fontSize;
-  root.dataset.clawSkin = prefs.themeSkin;
+  root.dataset["clawFontSize"] = prefs.fontSize;
+  root.dataset["clawSkin"] = prefs.themeSkin;
   // Drop any data-attr a previous version of the app may have set so
   // stale CSS rules don't keep applying after the pref is removed.
-  delete root.dataset.clawDensity;
+  delete root.dataset["clawDensity"];
 }
 
 /**

@@ -33,12 +33,7 @@ export interface TitleSwitcherProps {
  * text (like parent agent name) on the right — matches the pattern of the
  * AgentSwitcher in AgentTopBar.
  */
-export function TitleSwitcher({
-  activeId,
-  currentLabel,
-  items,
-  onSelect,
-}: TitleSwitcherProps) {
+export function TitleSwitcher({ activeId, currentLabel, items, onSelect }: TitleSwitcherProps) {
   const [open, setOpen] = useState(false);
   const isMobile = useIsMobile();
   const ref = useRef<HTMLDivElement>(null);
@@ -105,9 +100,7 @@ export function TitleSwitcher({
                     : "hover:bg-sunk-light dark:hover:bg-highlight-subtle"
                 }`}
               >
-                {it.leading ? (
-                  <span className="shrink-0">{it.leading}</span>
-                ) : null}
+                {it.leading ? <span className="shrink-0">{it.leading}</span> : null}
                 <span
                   className={`min-w-0 flex-1 truncate font-body text-sm ${
                     isActive

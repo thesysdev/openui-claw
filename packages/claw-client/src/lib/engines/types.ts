@@ -241,7 +241,6 @@ export interface Engine {
     abortController: AbortController,
   ): Promise<Response>;
   abort(sessionId: string): Promise<void>;
-
 }
 
 // ── Engine config ─────────────────────────────────────────────────────────────

@@ -1,6 +1,6 @@
 "use client";
 
-import { LayoutGrid, Sparkles, Trash2 } from "lucide-react";
+import { LayoutGrid } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { SectionHeader } from "@/components/home/SectionHeader";
@@ -22,13 +22,7 @@ function truncate(value: string, max = 48): string {
   return value.length > max ? `${value.slice(0, max - 1)}…` : value;
 }
 
-export function MobileAppsView({
-  apps,
-  pinnedAppIds,
-  onOpenApp,
-  onDeleteApp,
-  onRefineApp,
-}: AppsViewProps) {
+export function MobileAppsView({ apps, pinnedAppIds, onOpenApp }: AppsViewProps) {
   const [sort, setSort] = useState<Sort>("recent");
 
   const { topApps, otherApps } = useMemo(() => {
@@ -83,10 +77,7 @@ export function MobileAppsView({
         )}
 
         <section className="mb-3xl">
-          <SectionHeader
-            title="All apps"
-            right={<SortButton value={sort} onChange={setSort} />}
-          />
+          <SectionHeader title="All apps" right={<SortButton value={sort} onChange={setSort} />} />
           <MobileListCard>
             {sortedOther.map((app) => (
               <MobileListRow

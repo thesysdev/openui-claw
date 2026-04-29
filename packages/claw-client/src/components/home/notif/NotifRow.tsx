@@ -2,8 +2,8 @@
 
 import { ChevronRight } from "lucide-react";
 
-import { StatusDot } from "@/components/ui/StatusDot";
 import { Sep } from "@/components/ui/Sep";
+import { StatusDot } from "@/components/ui/StatusDot";
 import { relTime } from "@/lib/time";
 
 import { type HomeNotif, TYPE_TAG } from "./types";
@@ -45,11 +45,11 @@ export function NotifRow({ notif, isLast = false, onClick, onMarkRead }: NotifRo
           <p className="truncate font-body text-xs text-text-neutral-tertiary">{notif.desc}</p>
           <div className="flex items-center gap-xs">
             {notif.agent ? (
-              <span className="font-body text-2xs text-text-neutral-tertiary/70">{notif.agent}</span>
+              <span className="font-body text-2xs text-text-neutral-tertiary/70">
+                {notif.agent}
+              </span>
             ) : null}
-            {notif.agent ? (
-              <span className="text-2xs text-text-neutral-tertiary/40">·</span>
-            ) : null}
+            {notif.agent ? <span className="text-2xs text-text-neutral-tertiary/40">·</span> : null}
             <span className="font-body text-2xs text-text-neutral-tertiary/70">
               {relTime(notif.time)}
             </span>

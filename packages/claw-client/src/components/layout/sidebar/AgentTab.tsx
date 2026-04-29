@@ -55,11 +55,7 @@ export function AgentTab({
     : `${ROW_BASE} ${gap} ${justify} border-0 bg-transparent`;
 
   return (
-    <div
-      onMouseEnter={onMouseEnter}
-      onMouseLeave={onMouseLeave}
-      className={outerCls}
-    >
+    <div onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave} className={outerCls}>
       <button
         type="button"
         onClick={onToggle}
@@ -74,9 +70,7 @@ export function AgentTab({
         />
         <span
           className={`flex-1 text-left text-sm truncate overflow-hidden whitespace-nowrap ${
-            cardActive || hovered
-              ? "text-text-neutral-primary"
-              : "text-text-neutral-secondary"
+            cardActive || hovered ? "text-text-neutral-primary" : "text-text-neutral-secondary"
           } ${cardActive ? "font-medium" : "font-normal"} ${
             collapsed ? "opacity-0 max-w-0" : "opacity-100 max-w-[200px]"
           } transition-[opacity,max-width] duration-300 ease-out`}
@@ -109,9 +103,7 @@ export function AgentTab({
               <div className="flex h-l w-l shrink-0 items-center justify-center">
                 <Plus size={13} />
               </div>
-              <span className="truncate font-body">
-                {creating ? "Creating…" : "New session"}
-              </span>
+              <span className="truncate font-body">{creating ? "Creating…" : "New session"}</span>
             </button>
           ) : null}
         </div>

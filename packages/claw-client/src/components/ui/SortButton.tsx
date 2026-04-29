@@ -1,16 +1,16 @@
 "use client";
 
-import { ChevronDown, Check } from "lucide-react";
+import { Check, ChevronDown } from "lucide-react";
 import { useState } from "react";
 
 import { useBodyScrollLock } from "@/lib/hooks/useBodyScrollLock";
 
 export type SortValue = "recent" | "a-z";
 
-const OPTIONS: ReadonlyArray<{ value: SortValue; label: string; description: string }> = [
+const OPTIONS = [
   { value: "recent", label: "Recent", description: "Most recently updated first" },
   { value: "a-z", label: "A–Z", description: "Alphabetical" },
-];
+] as const satisfies ReadonlyArray<{ value: SortValue; label: string; description: string }>;
 
 interface Props {
   value: SortValue;
@@ -79,9 +79,7 @@ function SortTray({
         style={{ paddingBottom: "max(16px, env(safe-area-inset-bottom))" }}
       >
         <div className="mx-auto mb-s mt-s h-[3px] w-10 rounded-full bg-border-default/60 dark:bg-border-default/30" />
-        <h3 className="px-ml pb-s text-sm font-medium text-text-neutral-secondary">
-          Sort by
-        </h3>
+        <h3 className="px-ml pb-s text-sm font-medium text-text-neutral-secondary">Sort by</h3>
         <ul className="px-2xs">
           {OPTIONS.map((opt) => {
             const active = opt.value === value;

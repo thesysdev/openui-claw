@@ -78,7 +78,7 @@ function truncateJson(value: unknown, maxChars: number): string {
     const json = JSON.stringify(value);
     return json.length > maxChars ? json.slice(0, maxChars) + "…[truncated]" : json;
   } catch {
-    return "\"[unserializable]\"";
+    return '"[unserializable]"';
   }
 }
 
@@ -114,9 +114,7 @@ export function buildContinueConversationPayload(
 
   const formState =
     event.formState ??
-    (fallbackFormState && typeof fallbackFormState === "object"
-      ? fallbackFormState
-      : undefined);
+    (fallbackFormState && typeof fallbackFormState === "object" ? fallbackFormState : undefined);
   if (formState) ctx.push(formState);
 
   return {

@@ -13,8 +13,8 @@ import { useMemo } from "react";
 
 import { AgentCard, type AgentCardData } from "@/components/cards/AgentCard";
 import { Greeting } from "@/components/home/Greeting";
-import { SectionHeader } from "@/components/home/SectionHeader";
 import type { HomeViewProps } from "@/components/home/HomeView";
+import { SectionHeader } from "@/components/home/SectionHeader";
 import { MobileButton } from "@/components/mobile/MobileButton";
 import { MobileCronRow } from "@/components/mobile/MobileCronRow";
 import { MobileListCard, MobileListRow } from "@/components/mobile/MobileListRow";

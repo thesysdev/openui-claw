@@ -1,17 +1,14 @@
 "use client";
 
-import { Settings } from "lucide-react";
 import { ConnectionState } from "@/lib/gateway/types";
+import { Settings } from "lucide-react";
 
 interface Props {
   state: ConnectionState;
   onSettingsClick: () => void;
 }
 
-const STATES: Record<
-  ConnectionState,
-  { label: string; dot: string }
-> = {
+const STATES: Record<ConnectionState, { label: string; dot: string }> = {
   [ConnectionState.DISCONNECTED]: {
     label: "Disconnected",
     dot: "bg-status-muted",

@@ -1,9 +1,9 @@
 "use client";
 
+import { inferWorkspacePreviewKind } from "@/lib/session-workspace";
+import { FileArchive, FileCode2, FileImage, FileText } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { FileText, FileCode2, FileImage, FileArchive } from "lucide-react";
-import { inferWorkspacePreviewKind } from "@/lib/session-workspace";
 
 function resolveTextContent(content: unknown): string | null {
   if (typeof content === "string") return content;
@@ -22,10 +22,10 @@ function looksLikeRenderableUrl(value: string): boolean {
 function resolvePreviewSource(content: unknown, metadata?: Record<string, unknown>): string | null {
   if (typeof content === "string" && looksLikeRenderableUrl(content)) return content;
   const candidates = [
-    metadata?.url,
-    metadata?.href,
-    metadata?.previewUrl,
-    metadata?.dataUrl,
+    metadata?.["url"],
+    metadata?.["href"],
+    metadata?.["previewUrl"],
+    metadata?.["dataUrl"],
   ];
   for (const candidate of candidates) {
     if (typeof candidate === "string" && looksLikeRenderableUrl(candidate)) return candidate;
@@ -44,8 +44,8 @@ export function ArtifactContentView({
   content: unknown;
   metadata?: Record<string, unknown>;
 }) {
-  const name = typeof metadata?.fileName === "string" ? metadata.fileName : title;
-  const mimeType = typeof metadata?.mimeType === "string" ? metadata.mimeType : "";
+  const name = typeof metadata?.["fileName"] === "string" ? metadata["fileName"] : title;
+  const mimeType = typeof metadata?.["mimeType"] === "string" ? metadata["mimeType"] : "";
   const resolvedKind = inferWorkspacePreviewKind(name, mimeType, kind);
   const textContent = resolveTextContent(content);
   const previewSource = resolvePreviewSource(content, metadata);
@@ -95,11 +95,10 @@ export function ArtifactContentView({
           <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-foreground">
             <FileArchive className="h-6 w-6 text-text-neutral-tertiary" />
           </div>
-          <h3 className="text-sm font-semibold text-text-neutral-primary">
-            Preview coming soon
-          </h3>
+          <h3 className="text-sm font-semibold text-text-neutral-primary">Preview coming soon</h3>
           <p className="mt-2 text-sm text-text-neutral-tertiary">
-            This presentation is stored and available in the workspace, but slide rendering is not wired yet.
+            This presentation is stored and available in the workspace, but slide rendering is not
+            wired yet.
           </p>
         </div>
       </div>
@@ -120,9 +119,7 @@ export function ArtifactContentView({
             )}
           </div>
           <div className="min-w-0">
-            <p className="truncate text-sm font-semibold text-text-neutral-primary">
-              {title}
-            </p>
+            <p className="truncate text-sm font-semibold text-text-neutral-primary">{title}</p>
             <p className="truncate text-sm text-text-neutral-tertiary">
               {mimeType || kind || "File"}
             </p>
