@@ -15,11 +15,7 @@ export interface SortPillsProps<Key extends string = string> {
  * Segmented sort/filter control. Container is a sunken pill; the active
  * option pops out with a lighter fill and a subtle shadow.
  */
-export function SortPills<Key extends string>({
-  value,
-  options,
-  onChange,
-}: SortPillsProps<Key>) {
+export function SortPills<Key extends string>({ value, options, onChange }: SortPillsProps<Key>) {
   return (
     <div className="inline-flex items-center rounded-full bg-sunk-light p-3xs dark:bg-foreground">
       {options.map((o) => {

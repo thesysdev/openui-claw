@@ -48,8 +48,6 @@ export type NotificationRecord = {
  * surface only cron notifications (the only kind the server emits today);
  * read history is preserved so users can scroll back through past runs.
  */
-export function shouldSurfaceNotification(
-  notification: Pick<NotificationRecord, "kind">,
-): boolean {
+export function shouldSurfaceNotification(notification: Pick<NotificationRecord, "kind">): boolean {
   return notification.kind.startsWith("cron_");
 }

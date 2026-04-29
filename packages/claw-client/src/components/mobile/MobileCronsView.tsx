@@ -1,11 +1,10 @@
 "use client";
 
 import type { Thread } from "@openuidev/react-headless";
-import { Clock3, MoreVertical, Pause, Play, Trash2, X } from "lucide-react";
+import { MoreVertical, Pause, Play, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { CronDetailTray, type CronJobEdits } from "@/components/crons/CronDetailTray";
-import { cronOwnerLabel, humanFrequency } from "@/components/crons/format";
 import { SectionHeader } from "@/components/home/SectionHeader";
 import { HeaderIconButton } from "@/components/layout/HeaderIconButton";
 import { MobileCronRow } from "@/components/mobile/MobileCronRow";
@@ -114,12 +113,12 @@ export function MobileCronsView({
       });
       if (!onUpdateCronJob) return;
       const serverPatch: Record<string, unknown> = {};
-      if (edits.name !== undefined) serverPatch.name = edits.name;
+      if (edits.name !== undefined) serverPatch["name"] = edits.name;
       if (edits.prompt !== undefined) {
-        serverPatch.payload = { ...(job.payload ?? {}), message: edits.prompt };
+        serverPatch["payload"] = { ...(job.payload ?? {}), message: edits.prompt };
       }
       if (edits.scheduleExpr && edits.scheduleExpr !== job.schedule?.expr) {
-        serverPatch.schedule = nextSchedule;
+        serverPatch["schedule"] = nextSchedule;
       }
       if (Object.keys(serverPatch).length === 0) return;
       const ok = await onUpdateCronJob(job.id, serverPatch);

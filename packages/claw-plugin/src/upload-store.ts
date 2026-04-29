@@ -1,6 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { generateSecureUuid } from "openclaw/plugin-sdk/core";
+import { generateSecureUuid } from "openclaw/plugin-sdk/infra-runtime";
 
 /** Hard cap per upload. 25 MB covers screenshots and most documents; anything
  *  larger should go through a proper object store, not a plugin state dir. */

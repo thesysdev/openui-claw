@@ -17,24 +17,16 @@
  * the assistant content stream so the client can replay one coherent run.
  */
 
-import { EventType } from "@openuidev/react-headless";
-import type { AgentEvent, ChatEvent } from "@/lib/gateway/types";
 import { ERROR_SENTINEL, GATEWAY_SENTINEL } from "@/lib/chat/history-merger";
 import { encodeAssistantTimelineSegment } from "@/lib/chat/timeline";
+import type { AgentEvent, ChatEvent } from "@/lib/gateway/types";
+import { EventType } from "@openuidev/react-headless";
 
 const DEBUG_STORAGE_KEY = "openclaw-ui-debug-events";
-const TOOL_RESULT_KNOWN_KEYS = new Set([
-  "phase",
-  "name",
-  "toolCallId",
-  "isError",
-  "durationMs",
-]);
+const TOOL_RESULT_KNOWN_KEYS = new Set(["phase", "name", "toolCallId", "isError", "durationMs"]);
 
-function resolveToolResultPayload(
-  data: Record<string, unknown>,
-): unknown {
-  if (data.result !== undefined) return data.result;
+function resolveToolResultPayload(data: Record<string, unknown>): unknown {
+  if (data["result"] !== undefined) return data["result"];
 
   for (const key of ["output", "content", "text", "value", "payload"]) {
     if (data[key] !== undefined) {
@@ -50,9 +42,10 @@ function resolveToolResultPayload(
   return Object.fromEntries(remainingEntries);
 }
 
-export function createOpenClawAGUIMapper(
-  onEvent: (event: Record<string, unknown>) => void
-): { onAgentEvent: (evt: AgentEvent) => void; onChatEvent: (evt: ChatEvent) => void } {
+export function createOpenClawAGUIMapper(onEvent: (event: Record<string, unknown>) => void): {
+  onAgentEvent: (evt: AgentEvent) => void;
+  onChatEvent: (evt: ChatEvent) => void;
+} {
   let messageId: string | null = null;
   let emittedTextContent = false;
   const activeToolCallIds = new Set<string>();
@@ -83,7 +76,7 @@ export function createOpenClawAGUIMapper(
 
   const debugLog = (label: string, payload: Record<string, unknown>) => {
     if (!debugEnabled()) return;
-    console.log("[claw:mapper]", label, payload);
+    console.info("[claw:mapper]", label, payload);
   };
 
   const emitEvent = (event: Record<string, unknown>) => {
@@ -111,7 +104,11 @@ export function createOpenClawAGUIMapper(
 
   const emitErrorAsMessage = (runId: string, error: string) => {
     ensureMessageStarted(runId);
-    emitEvent({ type: EventType.TEXT_MESSAGE_CONTENT, messageId, delta: `${ERROR_SENTINEL}${error}` });
+    emitEvent({
+      type: EventType.TEXT_MESSAGE_CONTENT,
+      messageId,
+      delta: `${ERROR_SENTINEL}${error}`,
+    });
     emitEvent({ type: EventType.TEXT_MESSAGE_END, messageId });
     emitEvent({ type: EventType.RUN_FINISHED });
   };
@@ -149,11 +146,8 @@ export function createOpenClawAGUIMapper(
         if (evt.data.phase === "start") {
           ensureMessageStarted(evt.runId);
           const toolCallId =
-            typeof evt.data.toolCallId === "string"
-              ? evt.data.toolCallId
-              : crypto.randomUUID();
-          const toolName =
-            typeof evt.data.name === "string" ? evt.data.name : "unknown";
+            typeof evt.data.toolCallId === "string" ? evt.data.toolCallId : crypto.randomUUID();
+          const toolName = typeof evt.data.name === "string" ? evt.data.name : "unknown";
           const args = stringifyToolPayload(evt.data.args ?? {});
           activeToolCallIds.add(toolCallId);
           debugLog("agent:tool:start", {
@@ -174,17 +168,18 @@ export function createOpenClawAGUIMapper(
               ...(args ? { args } : {}),
             }),
           });
-          emitEvent({ type: EventType.TOOL_CALL_START, toolCallId, toolCallName: toolName, parentMessageId: messageId });
+          emitEvent({
+            type: EventType.TOOL_CALL_START,
+            toolCallId,
+            toolCallName: toolName,
+            parentMessageId: messageId,
+          });
           emitEvent({ type: EventType.TOOL_CALL_ARGS, toolCallId, delta: args });
         } else if (evt.data.phase === "result") {
           ensureMessageStarted(evt.runId);
           const toolCallId =
-            typeof evt.data.toolCallId === "string"
-              ? evt.data.toolCallId
-              : crypto.randomUUID();
-          const resolvedResult = resolveToolResultPayload(
-            evt.data as Record<string, unknown>,
-          );
+            typeof evt.data.toolCallId === "string" ? evt.data.toolCallId : crypto.randomUUID();
+          const resolvedResult = resolveToolResultPayload(evt.data as Record<string, unknown>);
           const output =
             resolvedResult === undefined
               ? evt.data.isError
@@ -296,9 +291,7 @@ export function createOpenClawAGUIMapper(
               ...(typeof evt.usage.cacheWrite === "number"
                 ? { cacheWriteTokens: evt.usage.cacheWrite }
                 : {}),
-              ...(typeof evt.usage.total === "number"
-                ? { totalTokens: evt.usage.total }
-                : {}),
+              ...(typeof evt.usage.total === "number" ? { totalTokens: evt.usage.total } : {}),
             }),
           });
         }

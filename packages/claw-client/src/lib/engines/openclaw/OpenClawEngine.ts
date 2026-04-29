@@ -57,7 +57,7 @@ import type {
   UploadStore,
 } from "../types";
 
-const log = (...args: unknown[]) => console.log("[claw:openclaw-engine]", ...args);
+const log = (...args: unknown[]) => console.info("[claw:openclaw-engine]", ...args);
 const warn = (...args: unknown[]) => console.warn("[claw:openclaw-engine]", ...args);
 
 const FULL_VERBOSE_LEVEL = "full";
@@ -187,6 +187,15 @@ export class OpenClawEngine implements Engine {
    * without cross-contaminating their event streams. */
   private runListeners = new Map<string, RunListener>();
   private knownAgentIds = new Set<string>();
+  /** Resolves the first time `agents.list` has populated `knownAgentIds`.
+   *  `resolveChatSessionKey` returns different keys depending on whether the
+   *  threadId is recognized as an agent id, so any RPC that uses it must wait
+   *  for hydration — otherwise a cold-start `chat.history("main")` lands on
+   *  the bare `"main"` key while the post-hydration call uses the encoded
+   *  `agent:main:main:openclaw-ui`, splitting reads across two transcripts. */
+  private _agentIdsHydrated = false;
+  private _agentIdsHydratedPromise: Promise<void>;
+  private _resolveAgentIdsHydrated!: () => void;
   private notificationMethodState: "unknown" | "supported" | "unsupported" = "unknown";
 
   private _connectionState: ConnectionState = ConnectionState.DISCONNECTED;
@@ -222,6 +231,9 @@ export class OpenClawEngine implements Engine {
       ? { gatewayUrl: config.gatewayUrl, token: config.token, deviceToken: config.deviceToken }
       : getSettings();
     this.events = events;
+    this._agentIdsHydratedPromise = new Promise<void>((resolve) => {
+      this._resolveAgentIdsHydrated = resolve;
+    });
   }
 
   // ── Engine interface: stores ───────────────────────────────────────────────
@@ -450,13 +462,13 @@ export class OpenClawEngine implements Engine {
           .map((item) => {
             if (!item || typeof item !== "object") return null;
             const candidate = item as Record<string, unknown>;
-            const mimeType = typeof candidate.mimeType === "string" ? candidate.mimeType : "";
-            const fileName = typeof candidate.fileName === "string" ? candidate.fileName : "";
-            const content = typeof candidate.content === "string" ? candidate.content : "";
+            const mimeType = typeof candidate["mimeType"] === "string" ? candidate["mimeType"] : "";
+            const fileName = typeof candidate["fileName"] === "string" ? candidate["fileName"] : "";
+            const content = typeof candidate["content"] === "string" ? candidate["content"] : "";
 
             if (!mimeType || !fileName || !content) return null;
             return {
-              ...(typeof candidate.type === "string" ? { type: candidate.type } : {}),
+              ...(typeof candidate["type"] === "string" ? { type: candidate["type"] } : {}),
               mimeType,
               fileName,
               content,
@@ -858,6 +870,10 @@ export class OpenClawEngine implements Engine {
   private _setKnownAgentIds(ids: Set<string>): void {
     this.knownAgentIds = ids;
     this.events.onKnownAgentIdsChanged(ids);
+    if (!this._agentIdsHydrated) {
+      this._agentIdsHydrated = true;
+      this._resolveAgentIdsHydrated();
+    }
   }
 
   private _handleEvent = (frame: EventFrame): void => {
@@ -1068,9 +1084,7 @@ export class OpenClawEngine implements Engine {
         if (!id) continue;
         const rawModel = entry.model;
         const primary =
-          typeof rawModel === "string"
-            ? rawModel.trim()
-            : rawModel?.primary?.trim() ?? "";
+          typeof rawModel === "string" ? rawModel.trim() : (rawModel?.primary?.trim() ?? "");
         if (primary) byAgent.set(id, primary);
       }
       // Mirror openclaw's `resolveDefaultAgentId`: first configured agent,
@@ -1201,6 +1215,12 @@ export class OpenClawEngine implements Engine {
   }
 
   private async _loadHistory(sessionId: string): Promise<StoredMessage[]> {
+    // Wait for `agents.list` to populate `knownAgentIds` before resolving the
+    // session key. Otherwise a cold-start call with `sessionId === "main"`
+    // returns the bare `"main"` key (because the agent id isn't in the set
+    // yet), which addresses a different transcript on the gateway than the
+    // post-hydration encoded form `agent:main:main:openclaw-ui`.
+    await this._agentIdsHydratedPromise;
     const sessionKey = resolveChatSessionKey(sessionId, this.knownAgentIds);
     log(`loadHistory  sessionId=${sessionId}  sessionKey=${sessionKey}`);
     try {
@@ -1223,8 +1243,8 @@ export class OpenClawEngine implements Engine {
       if (!result?.session) return {};
       const { model, thinkingLevel } = result.session;
       const config: Record<string, string> = {};
-      if (model) config.model = model;
-      if (thinkingLevel) config.thinkingLevel = thinkingLevel;
+      if (model) config["model"] = model;
+      if (thinkingLevel) config["thinkingLevel"] = thinkingLevel;
       return config;
     } catch (e) {
       warn("sessions.get (config) failed:", e);

@@ -1,0 +1,24 @@
+# Dependencies
+node_modules
+.pnpm-store
+
+# Build output
+dist
+build
+.next
+.wrangler
+.open-next
+*.tsbuildinfo
+next-env.d.ts
+
+# Lockfiles
+pnpm-lock.yaml
+
+# Generated
+**/src/generated/**
+
+# Misc
+.DS_Store
+.env
+.env.*
+public

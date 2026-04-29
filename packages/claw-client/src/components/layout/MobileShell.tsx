@@ -1,5 +1,7 @@
 "use client";
 
+import { SegmentedTabs } from "@/components/ui/SegmentedTabs";
+import { ConnectionState } from "@/lib/gateway/types";
 import {
   Bell,
   Clock3,
@@ -14,8 +16,7 @@ import {
   Sun,
   X,
 } from "lucide-react";
-import { ConnectionState } from "@/lib/gateway/types";
-import { SegmentedTabs } from "@/components/ui/SegmentedTabs";
+import { useState, type ComponentType, type ReactNode } from "react";
 
 const STATUS_LABEL: Record<ConnectionState, string> = {
   [ConnectionState.DISCONNECTED]: "Disconnected",
@@ -34,10 +35,9 @@ const STATUS_DOT: Record<ConnectionState, string> = {
   [ConnectionState.PAIRING]: "bg-status-warning animate-pulse",
   [ConnectionState.UNREACHABLE]: "bg-status-error",
 };
-import { useState, type ComponentType, type ReactNode } from "react";
 
-import { CategoryTile, IconTile } from "@/components/layout/sidebar/Tile";
 import { HeaderIconButton } from "@/components/layout/HeaderIconButton";
+import { CategoryTile, IconTile } from "@/components/layout/sidebar/Tile";
 import { useBodyScrollLock } from "@/lib/hooks/useBodyScrollLock";
 import { navigate, type Route } from "@/lib/hooks/useHashRoute";
 
@@ -62,8 +62,7 @@ const TABS: TabDef[] = [
     label: "Home",
     icon: Home,
     accent: "bg-text-neutral-primary",
-    spotlight:
-      "bg-[radial-gradient(ellipse_at_top,rgba(120,120,120,0.18),transparent_60%)]",
+    spotlight: "bg-[radial-gradient(ellipse_at_top,rgba(120,120,120,0.18),transparent_60%)]",
   },
   {
     key: "agents",
@@ -71,8 +70,7 @@ const TABS: TabDef[] = [
     icon: Cpu,
     category: "agents",
     accent: "bg-cat-agent",
-    spotlight:
-      "bg-[radial-gradient(ellipse_at_top,rgba(59,130,246,0.2),transparent_60%)]",
+    spotlight: "bg-[radial-gradient(ellipse_at_top,rgba(59,130,246,0.2),transparent_60%)]",
   },
   {
     key: "apps",
@@ -80,8 +78,7 @@ const TABS: TabDef[] = [
     icon: LayoutGrid,
     category: "apps",
     accent: "bg-cat-app",
-    spotlight:
-      "bg-[radial-gradient(ellipse_at_top,rgba(34,197,94,0.2),transparent_60%)]",
+    spotlight: "bg-[radial-gradient(ellipse_at_top,rgba(34,197,94,0.2),transparent_60%)]",
   },
   {
     key: "artifacts",
@@ -89,8 +86,7 @@ const TABS: TabDef[] = [
     icon: FileText,
     category: "artifacts",
     accent: "bg-cat-artifact",
-    spotlight:
-      "bg-[radial-gradient(ellipse_at_top,rgba(236,72,153,0.22),transparent_60%)]",
+    spotlight: "bg-[radial-gradient(ellipse_at_top,rgba(236,72,153,0.22),transparent_60%)]",
   },
 ];
 
@@ -139,93 +135,92 @@ export function MobileShell({
 
   return (
     <div className="relative flex h-full w-full flex-col bg-background">
-      {topBarOverride ?? (hideDefaultTopBar ? null : (
-        <header
-          className="pointer-events-none absolute inset-x-0 top-0 z-30 flex items-start justify-between gap-xs px-ml pb-3xl [&_button]:pointer-events-auto"
-          style={{ paddingTop: "calc(env(safe-area-inset-top) + 12px)" }}
-        >
-          <HeaderIconButton onClick={() => setNavSheetOpen(true)} label="Open navigation">
-            <Menu size={18} />
-          </HeaderIconButton>
-          <div className="flex shrink-0 items-center gap-s">
-            <HeaderIconButton onClick={onOpenSearch} label="Search">
-              <Search size={18} />
+      {topBarOverride ??
+        (hideDefaultTopBar ? null : (
+          <header
+            className="pointer-events-none absolute inset-x-0 top-0 z-30 flex items-start justify-between gap-xs px-ml pb-3xl [&_button]:pointer-events-auto"
+            style={{ paddingTop: "calc(env(safe-area-inset-top) + 12px)" }}
+          >
+            <HeaderIconButton onClick={() => setNavSheetOpen(true)} label="Open navigation">
+              <Menu size={18} />
             </HeaderIconButton>
-            <HeaderIconButton
-              onClick={onOpenNotifications}
-              label="Notifications"
-              badge={unreadNotificationCount > 0}
-            >
-              <Bell size={18} />
-            </HeaderIconButton>
-          </div>
-        </header>
-      ))}
+            <div className="flex shrink-0 items-center gap-s">
+              <HeaderIconButton onClick={onOpenSearch} label="Search">
+                <Search size={18} />
+              </HeaderIconButton>
+              <HeaderIconButton
+                onClick={onOpenNotifications}
+                label="Notifications"
+                badge={unreadNotificationCount > 0}
+              >
+                <Bell size={18} />
+              </HeaderIconButton>
+            </div>
+          </header>
+        ))}
 
       <main
         className={`min-h-0 flex-1 overflow-y-auto ${
-          topBarOverride || hideDefaultTopBar
-            ? ""
-            : "pt-[calc(64px+env(safe-area-inset-top))]"
+          topBarOverride || hideDefaultTopBar ? "" : "pt-[calc(64px+env(safe-area-inset-top))]"
         }`}
       >
         {children}
       </main>
 
       {chromeless ? null : (
-      <nav
-        className="flex shrink-0 items-stretch border-t border-border-default/50 bg-background shadow-[0_-1px_4px_rgba(0,0,0,0.04)] dark:border-border-default/16 dark:shadow-[0_-1px_4px_rgba(0,0,0,0.4)]"
-        aria-label="Primary"
-        style={{
-          paddingBottom: "env(safe-area-inset-bottom)",
-          minHeight: "calc(56px + env(safe-area-inset-bottom))",
-        }}
-      >
-        {TABS.map((tab) => {
-          const isActive = activeTab === tab.key;
-          const showUnread = tab.key === "home" && unreadNotificationCount > 0;
-          return (
-            <button
-              key={tab.key}
-              type="button"
-              onClick={() => navigate({ view: tab.key } as Route)}
-              aria-current={isActive ? "page" : undefined}
-              className={`relative flex h-14 flex-1 flex-col items-center justify-center gap-2xs transition-colors ${
-                isActive
-                  ? "text-text-neutral-primary"
-                  : "text-text-neutral-tertiary hover:text-text-neutral-primary"
-              }`}
-            >
-              {isActive ? (
-                <>
-                  <span
-                    aria-hidden="true"
-                    className={`pointer-events-none absolute left-1/2 top-0 z-0 h-12 w-24 -translate-x-1/2 ${tab.spotlight}`}
-                  />
-                  <span
-                    aria-hidden="true"
-                    className={`absolute left-1/2 top-0 z-10 h-[2px] w-10 -translate-x-1/2 rounded-b-full ${tab.accent}`}
-                  />
-                </>
-              ) : null}
-              <span className="relative z-10 inline-flex items-center justify-center">
-                {tab.category ? (
-                  <CategoryTile icon={tab.icon} category={tab.category} />
-                ) : (
-                  <IconTile icon={tab.icon} />
-                )}
-                {showUnread ? (
-                  <span
-                    aria-label={`${unreadNotificationCount} unread`}
-                    className="absolute -right-1 -top-1 inline-flex h-2 w-2 rounded-full bg-text-info-primary ring-2 ring-background"
-                  />
+        <nav
+          className="flex shrink-0 items-stretch border-t border-border-default/50 bg-background shadow-[0_-1px_4px_rgba(0,0,0,0.04)] dark:border-border-default/16 dark:shadow-[0_-1px_4px_rgba(0,0,0,0.4)]"
+          aria-label="Primary"
+          style={{
+            paddingBottom: "env(safe-area-inset-bottom)",
+            minHeight: "calc(56px + env(safe-area-inset-bottom))",
+          }}
+        >
+          {TABS.map((tab) => {
+            const isActive = activeTab === tab.key;
+            const showUnread = tab.key === "home" && unreadNotificationCount > 0;
+            return (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => navigate({ view: tab.key } as Route)}
+                aria-current={isActive ? "page" : undefined}
+                className={`relative flex h-14 flex-1 flex-col items-center justify-center gap-2xs transition-colors ${
+                  isActive
+                    ? "text-text-neutral-primary"
+                    : "text-text-neutral-tertiary hover:text-text-neutral-primary"
+                }`}
+              >
+                {isActive ? (
+                  <>
+                    <span
+                      aria-hidden="true"
+                      className={`pointer-events-none absolute left-1/2 top-0 z-0 h-12 w-24 -translate-x-1/2 ${tab.spotlight}`}
+                    />
+                    <span
+                      aria-hidden="true"
+                      className={`absolute left-1/2 top-0 z-10 h-[2px] w-10 -translate-x-1/2 rounded-b-full ${tab.accent}`}
+                    />
+                  </>
                 ) : null}
-              </span>
-              <span className="font-label text-sm">{tab.label}</span>
-            </button>
-          );
-        })}
-      </nav>
+                <span className="relative z-10 inline-flex items-center justify-center">
+                  {tab.category ? (
+                    <CategoryTile icon={tab.icon} category={tab.category} />
+                  ) : (
+                    <IconTile icon={tab.icon} />
+                  )}
+                  {showUnread ? (
+                    <span
+                      aria-label={`${unreadNotificationCount} unread`}
+                      className="absolute -right-1 -top-1 inline-flex h-2 w-2 rounded-full bg-text-info-primary ring-2 ring-background"
+                    />
+                  ) : null}
+                </span>
+                <span className="font-label text-sm">{tab.label}</span>
+              </button>
+            );
+          })}
+        </nav>
       )}
 
       <MobileNavSheet
@@ -253,15 +248,19 @@ interface NavSheetItem {
 }
 
 /** Group 1 — entry points (Home, Search). Search is action-only, no hash. */
-const PRIMARY_NAV: NavSheetItem[] = [
-  { key: "home", label: "Home", icon: Home, hash: "#/home" },
-];
+const PRIMARY_NAV: NavSheetItem[] = [{ key: "home", label: "Home", icon: Home, hash: "#/home" }];
 
 /** Group 2 — content categories. */
 const CATEGORY_NAV: NavSheetItem[] = [
   { key: "agents", label: "Agents", icon: Cpu, category: "agents", hash: "#/agents" },
   { key: "apps", label: "Apps", icon: LayoutGrid, category: "apps", hash: "#/apps" },
-  { key: "artifacts", label: "Artifacts", icon: FileText, category: "artifacts", hash: "#/artifacts" },
+  {
+    key: "artifacts",
+    label: "Artifacts",
+    icon: FileText,
+    category: "artifacts",
+    hash: "#/artifacts",
+  },
   { key: "crons", label: "Cron Jobs", icon: Clock3, category: "crons", hash: "#/crons" },
 ];
 
@@ -366,9 +365,7 @@ function MobileNavSheet({
           </ul>
 
           {/* Group 2 — Categories */}
-          <ul className={`mt-m ${cardClass}`}>
-            {CATEGORY_NAV.map(renderNavItem)}
-          </ul>
+          <ul className={`mt-m ${cardClass}`}>{CATEGORY_NAV.map(renderNavItem)}</ul>
 
           {/* Group 3 — System actions */}
           <ul className={`mt-m ${cardClass}`}>

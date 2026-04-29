@@ -1,6 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { generateSecureUuid } from "openclaw/plugin-sdk/core";
+import { generateSecureUuid } from "openclaw/plugin-sdk/infra-runtime";
 
 const MAX_NOTIFICATIONS = 400;
 
@@ -88,10 +88,7 @@ export class NotificationStore {
       // like "no notifications".
       const code = (err as NodeJS.ErrnoException)?.code;
       if (code !== "ENOENT") {
-        console.warn(
-          `[claw-plugin] failed to read notifications from ${this.filePath}:`,
-          err,
-        );
+        console.warn(`[claw-plugin] failed to read notifications from ${this.filePath}:`, err);
       }
       return [];
     }

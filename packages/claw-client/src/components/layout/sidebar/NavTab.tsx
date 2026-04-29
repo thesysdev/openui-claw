@@ -52,9 +52,7 @@ export function NavTab({
       : "text-text-neutral-tertiary"
     : rowLabelClass(state);
   const weight = rowIsBold(state) ? "font-medium" : "font-normal";
-  const labelFade = collapsed
-    ? "opacity-0 max-w-0"
-    : "opacity-100 max-w-[200px]";
+  const labelFade = collapsed ? "opacity-0 max-w-0" : "opacity-100 max-w-[200px]";
 
   const body = (
     <>

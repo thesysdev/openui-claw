@@ -13,13 +13,9 @@ const SIZE_STYLES: Record<CounterSize, string> = {
 };
 
 /** `secondary` is color-independent — always renders as a muted gray chip. */
-const SECONDARY_STYLE =
-  "bg-sunk-light dark:bg-highlight-subtle text-text-neutral-tertiary";
+const SECONDARY_STYLE = "bg-sunk-light dark:bg-highlight-subtle text-text-neutral-tertiary";
 
-const COLOR_PRIMARY_SUBTLE_STYLES: Record<
-  CounterColor,
-  { primary: string; subtle: string }
-> = {
+const COLOR_PRIMARY_SUBTLE_STYLES: Record<CounterColor, { primary: string; subtle: string }> = {
   red: {
     primary: "bg-text-danger-primary text-text-white",
     subtle: "bg-danger-background text-text-danger-primary",
@@ -56,9 +52,7 @@ export function Counter({
   className = "",
 }: CounterProps) {
   const paletteCls =
-    kind === "secondary"
-      ? SECONDARY_STYLE
-      : COLOR_PRIMARY_SUBTLE_STYLES[color][kind];
+    kind === "secondary" ? SECONDARY_STYLE : COLOR_PRIMARY_SUBTLE_STYLES[color][kind];
   return (
     <span
       className={`inline-flex shrink-0 items-center justify-center rounded-full font-label font-bold leading-none ${SIZE_STYLES[size]} ${paletteCls} ${className}`}

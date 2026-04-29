@@ -52,9 +52,7 @@ export function MobileSwitcherSheet({
         style={{ paddingBottom: "max(16px, env(safe-area-inset-bottom))" }}
       >
         <div className="mx-auto mb-s mt-s h-[3px] w-10 rounded-full bg-border-default/60 dark:bg-border-default/30" />
-        <h3 className="px-ml pb-s text-sm font-medium text-text-neutral-secondary">
-          {title}
-        </h3>
+        <h3 className="px-ml pb-s text-sm font-medium text-text-neutral-secondary">{title}</h3>
         <ul className="px-2xs">
           {options.map((opt) => {
             const active = opt.id === activeId;

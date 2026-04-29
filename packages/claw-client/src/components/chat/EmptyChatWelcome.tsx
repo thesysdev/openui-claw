@@ -1,8 +1,8 @@
 "use client";
 
 import { useThread } from "@openuidev/react-headless";
-import { Sparkles } from "lucide-react";
 import { Shell } from "@openuidev/react-ui";
+import { Sparkles } from "lucide-react";
 
 import { DEFAULT_STARTERS } from "@/lib/conversation-starters";
 import { usePreferences } from "@/lib/preferences";
@@ -25,11 +25,7 @@ import { usePreferences } from "@/lib/preferences";
  * same way, so its click handlers route through `useThread.processMessage`
  * with zero extra plumbing.
  */
-export function EmptyChatWelcome({
-  agentName,
-}: {
-  agentName?: string;
-}) {
+export function EmptyChatWelcome({ agentName }: { agentName?: string }) {
   const messages = useThread((s) => s.messages);
   const isLoadingMessages = useThread((s) => s.isLoadingMessages);
   const { assistantName } = usePreferences();
@@ -50,16 +46,12 @@ export function EmptyChatWelcome({
           {greeting} <span aria-hidden>👋</span>
         </h2>
         <p className="mt-s max-w-md text-center font-body text-md text-text-neutral-secondary">
-          Ask me to build an app, schedule a recurring task, or pull data
-          from a website. I can also write artifacts (notes, tables, docs)
-          and run them on a schedule.
+          Ask me to build an app, schedule a recurring task, or pull data from a website. I can also
+          write artifacts (notes, tables, docs) and run them on a schedule.
         </p>
 
         <div className="mt-2xl w-full">
-          <Shell.ConversationStarter
-            starters={DEFAULT_STARTERS}
-            variant="long"
-          />
+          <Shell.ConversationStarter starters={DEFAULT_STARTERS} variant="long" />
         </div>
       </div>
     </div>

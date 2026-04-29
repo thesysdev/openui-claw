@@ -3,13 +3,7 @@
 import type { ReactNode } from "react";
 
 export type TagSize = "sm" | "md" | "lg";
-export type TagVariant =
-  | "neutral"
-  | "accent"
-  | "success"
-  | "warning"
-  | "danger"
-  | "info";
+export type TagVariant = "neutral" | "accent" | "success" | "warning" | "danger" | "info";
 
 // Tags sit outside the app's 12/14/20 body-type scale — they're metadata
 // chips, not running text. Using arbitrary 8/10/12 px sizes here by design.
@@ -22,16 +16,11 @@ const SIZE_STYLES: Record<TagSize, string> = {
 const VARIANT_STYLES: Record<TagVariant, string> = {
   neutral:
     "bg-sunk-light text-text-neutral-tertiary dark:text-text-neutral-tertiary/80 border border-border-default/70 dark:border-transparent",
-  accent:
-    "bg-highlight-subtle text-text-accent-primary border border-border-accent",
-  success:
-    "bg-success-background text-text-success-primary border border-border-success",
-  warning:
-    "bg-alert-background text-text-alert-primary border border-border-alert",
-  danger:
-    "bg-danger-background text-text-danger-primary border border-border-danger",
-  info:
-    "bg-info-background text-text-info-primary border border-border-info",
+  accent: "bg-highlight-subtle text-text-accent-primary border border-border-accent",
+  success: "bg-success-background text-text-success-primary border border-border-success",
+  warning: "bg-alert-background text-text-alert-primary border border-border-alert",
+  danger: "bg-danger-background text-text-danger-primary border border-border-danger",
+  info: "bg-info-background text-text-info-primary border border-border-info",
 };
 
 export interface TagProps {
@@ -42,12 +31,7 @@ export interface TagProps {
 }
 
 /** Compact inline tag / chip for status, shortcut, and metadata labels. */
-export function Tag({
-  size = "md",
-  variant = "neutral",
-  children,
-  className = "",
-}: TagProps) {
+export function Tag({ size = "md", variant = "neutral", children, className = "" }: TagProps) {
   return (
     <span
       className={`inline-flex shrink-0 items-center justify-center rounded-s font-medium leading-none ${SIZE_STYLES[size]} ${VARIANT_STYLES[variant]} ${className}`}

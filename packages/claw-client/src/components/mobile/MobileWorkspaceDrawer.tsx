@@ -1,10 +1,10 @@
 "use client";
 
+import { MobileDetailHeader } from "@/components/mobile/MobileDetailHeader";
 import {
   WorkspaceSections,
   type WorkspacePaneProps,
 } from "@/components/session/SessionWorkspacePane";
-import { MobileDetailHeader } from "@/components/mobile/MobileDetailHeader";
 import { useBodyScrollLock } from "@/lib/hooks/useBodyScrollLock";
 
 interface Props extends WorkspacePaneProps {

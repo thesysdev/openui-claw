@@ -150,10 +150,7 @@ export function MobileNotificationInboxDrawer({
 }) {
   useBodyScrollLock(open);
 
-  const unreadCount = useMemo(
-    () => notifications.filter((n) => n.unread).length,
-    [notifications],
-  );
+  const unreadCount = useMemo(() => notifications.filter((n) => n.unread).length, [notifications]);
 
   const visibleNotifications = useMemo(
     () =>
@@ -198,8 +195,8 @@ export function MobileNotificationInboxDrawer({
         {visibleNotifications.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center px-ml text-center">
             <p className="text-sm text-text-neutral-tertiary">
-              No notifications here yet. Cron runs and other background attention items will show
-              up here.
+              No notifications here yet. Cron runs and other background attention items will show up
+              here.
             </p>
           </div>
         ) : (

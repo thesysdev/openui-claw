@@ -1,7 +1,7 @@
 "use client";
 
-import { Cpu } from "lucide-react";
 import type { Thread } from "@openuidev/react-headless";
+import { Cpu } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { AgentCard, type AgentCardData } from "@/components/cards/AgentCard";
@@ -84,7 +84,10 @@ export function AgentsView({ threads, onOpenThread }: AgentsViewProps) {
               right={
                 <SortPills
                   value={sort}
-                  options={[{ key: "recent", label: "Recent" }, { key: "a-z", label: "A–Z" }]}
+                  options={[
+                    { key: "recent", label: "Recent" },
+                    { key: "a-z", label: "A–Z" },
+                  ]}
                   onChange={setSort}
                 />
               }

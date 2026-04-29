@@ -3,9 +3,9 @@
 import { CheckCircle2, Loader2, X, XCircle } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
+import { IconButton } from "@/components/layout/sidebar/IconButton";
 import { Button } from "@/components/ui/Button";
 import { SegmentedTabs } from "@/components/ui/SegmentedTabs";
-import { IconButton } from "@/components/layout/sidebar/IconButton";
 import { ConnectionState } from "@/lib/gateway/types";
 import { validateGatewayUrl } from "@/lib/gateway/url";
 import type { Settings } from "@/lib/storage";
@@ -93,13 +93,7 @@ const STATUS_BANNER: Record<
 
 type Tab = "automated" | "manual" | "preferences";
 
-export function SettingsDialog({
-  open,
-  currentSettings,
-  connectionState,
-  onClose,
-  onSave,
-}: Props) {
+export function SettingsDialog({ open, currentSettings, connectionState, onClose, onSave }: Props) {
   const [gatewayUrl, setGatewayUrl] = useState(currentSettings?.gatewayUrl ?? "");
   const [token, setToken] = useState(currentSettings?.token ?? "");
   const [tab, setTab] = useState<Tab>("automated");
@@ -183,8 +177,7 @@ export function SettingsDialog({
     // invalidate it. Letting the engine re-mint is cheap and avoids an
     // auth-failed retry round-trip.
     const credsChanged =
-      trimmedUrl !== currentSettings?.gatewayUrl ||
-      trimmedToken !== currentSettings?.token;
+      trimmedUrl !== currentSettings?.gatewayUrl || trimmedToken !== currentSettings?.token;
     const newSettings: Settings = {
       gatewayUrl: trimmedUrl,
       token: trimmedToken,
@@ -231,10 +224,7 @@ export function SettingsDialog({
               borderColor: `color-mix(in srgb, var(${banner.borderVar}) 50%, transparent)`,
             }}
           >
-            <Icon
-              size={16}
-              className={`${banner.accent} ${banner.spin ? "animate-spin" : ""}`}
-            />
+            <Icon size={16} className={`${banner.accent} ${banner.spin ? "animate-spin" : ""}`} />
           </div>
           <div className="min-w-0 flex-1">
             <p className="font-label text-sm font-medium leading-tight text-text-neutral-primary">

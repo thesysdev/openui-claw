@@ -4,7 +4,14 @@
   "private": true,
   "main": "./src/index.ts",
   "scripts": {
-    "generate": "tsx generate-prompt.ts"
+    "generate": "tsx generate-prompt.ts",
+    "lint:check": "eslint ./src",
+    "lint:fix": "eslint ./src --fix",
+    "format:check": "prettier --check ./src",
+    "format:fix": "prettier --write ./src",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests",
+    "ci": "pnpm lint:check && pnpm format:check && pnpm typecheck"
   },
   "dependencies": {
     "@openuidev/lang-core": "^0.2.2"
@@ -16,7 +23,9 @@
     "@openuidev/react-ui": "*",
     "@types/node": "^22.19.15",
     "openclaw": "*",
-    "tsx": "^4.0.0"
+    "tsx": "^4.0.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
   },
   "openclaw": {
     "extensions": [

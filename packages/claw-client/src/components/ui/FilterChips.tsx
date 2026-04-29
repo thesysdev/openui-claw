@@ -26,11 +26,7 @@ export function FilterChips<V extends string>({
   ariaLabel,
 }: FilterChipsProps<V>) {
   return (
-    <div
-      role="tablist"
-      aria-label={ariaLabel}
-      className="flex shrink-0 gap-xs overflow-x-auto"
-    >
+    <div role="tablist" aria-label={ariaLabel} className="flex shrink-0 gap-xs overflow-x-auto">
       {options.map(({ value: optValue, label, count }) => {
         const active = value === optValue;
         return (

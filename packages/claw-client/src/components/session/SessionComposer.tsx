@@ -64,8 +64,8 @@ function TextButtonSelect({
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return options;
-    return options.filter((o) =>
-      o.label.toLowerCase().includes(q) || o.value.toLowerCase().includes(q),
+    return options.filter(
+      (o) => o.label.toLowerCase().includes(q) || o.value.toLowerCase().includes(q),
     );
   }, [options, query]);
 
@@ -181,10 +181,7 @@ function TextButtonSelect({
               />
             </div>
           ) : null}
-          <div
-            ref={listRef}
-            className="max-h-[min(60vh,360px)] overflow-y-auto p-3xs"
-          >
+          <div ref={listRef} className="max-h-[min(60vh,360px)] overflow-y-auto p-3xs">
             {filtered.length === 0 ? (
               <div className="px-s py-m text-center font-body text-sm text-text-neutral-tertiary">
                 No matches
@@ -492,7 +489,6 @@ export function SessionComposer({
     await processMessage({
       role: "user",
       content,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any);
   };
 
@@ -773,52 +769,54 @@ export function SessionComposer({
               </span>
             </>
           ) : null}
-          {onModelChange ? (() => {
-            const hint = agentDefaultModelId ?? gatewayDefaultModelId;
-            const defaultModel = hint
-              ? models.find(
-                  (m) =>
-                    qualifyModel(m.id, m.provider) === hint ||
-                    m.id === hint ||
-                    hint.endsWith(`/${m.id}`),
-                ) ?? null
-              : null;
-            // openclaw's `models.list` can repeat the same qualified id (e.g.
-            // `openrouter/auto` appears once from the provider catalog and
-            // again from the configured alias entry). Dedupe so the picker
-            // doesn't show duplicates or trip React's key-uniqueness check.
-            const seen = new Set<string>();
-            const uniqueModels: typeof models = [];
-            for (const m of models) {
-              const key = qualifyModel(m.id, m.provider);
-              if (seen.has(key)) continue;
-              seen.add(key);
-              uniqueModels.push(m);
-            }
-            return (
-              <TextButtonSelect
-                value={currentModel}
-                onChange={onModelChange}
-                title="Model"
-                options={[
-                  {
-                    value: "",
-                    // When we can identify the resolved default model, label
-                    // the row "Default (Name)". Filter that same model out of
-                    // the list below so it doesn't appear twice.
-                    label: defaultModel ? `Default (${defaultModel.name})` : "Default",
-                  },
-                  ...uniqueModels
-                    .filter((m) => m !== defaultModel)
-                    .map((m) => ({
-                      value: qualifyModel(m.id, m.provider),
-                      label: m.name,
-                      group: m.provider,
-                    })),
-                ]}
-              />
-            );
-          })() : null}
+          {onModelChange
+            ? (() => {
+                const hint = agentDefaultModelId ?? gatewayDefaultModelId;
+                const defaultModel = hint
+                  ? (models.find(
+                      (m) =>
+                        qualifyModel(m.id, m.provider) === hint ||
+                        m.id === hint ||
+                        hint.endsWith(`/${m.id}`),
+                    ) ?? null)
+                  : null;
+                // openclaw's `models.list` can repeat the same qualified id (e.g.
+                // `openrouter/auto` appears once from the provider catalog and
+                // again from the configured alias entry). Dedupe so the picker
+                // doesn't show duplicates or trip React's key-uniqueness check.
+                const seen = new Set<string>();
+                const uniqueModels: typeof models = [];
+                for (const m of models) {
+                  const key = qualifyModel(m.id, m.provider);
+                  if (seen.has(key)) continue;
+                  seen.add(key);
+                  uniqueModels.push(m);
+                }
+                return (
+                  <TextButtonSelect
+                    value={currentModel}
+                    onChange={onModelChange}
+                    title="Model"
+                    options={[
+                      {
+                        value: "",
+                        // When we can identify the resolved default model, label
+                        // the row "Default (Name)". Filter that same model out of
+                        // the list below so it doesn't appear twice.
+                        label: defaultModel ? `Default (${defaultModel.name})` : "Default",
+                      },
+                      ...uniqueModels
+                        .filter((m) => m !== defaultModel)
+                        .map((m) => ({
+                          value: qualifyModel(m.id, m.provider),
+                          label: m.name,
+                          group: m.provider,
+                        })),
+                    ]}
+                  />
+                );
+              })()
+            : null}
           {onModelChange && onEffortChange ? (
             <span aria-hidden="true" className="text-text-neutral-tertiary/60">
               ·
@@ -833,10 +831,7 @@ export function SessionComposer({
                 (t) => t.value === "" || !effortOptions || effortOptions.includes(t.value),
               ).map((t) => ({
                 value: t.value,
-                label:
-                  t.value === "" && effortDefault
-                    ? `Default (${effortDefault})`
-                    : t.label,
+                label: t.value === "" && effortDefault ? `Default (${effortDefault})` : t.label,
               }))}
             />
           ) : null}

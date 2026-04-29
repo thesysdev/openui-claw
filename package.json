@@ -2,5 +2,41 @@
   "name": "claw-workspace",
   "private": true,
   "version": "0.0.0",
-  "packageManager": "pnpm@9.0.0"
+  "description": "OpenClaw UI — Generative UI client and OpenClaw plugin powered by OpenUI Lang",
+  "homepage": "https://openui.com",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/thesysdev/openclaw-ui.git"
+  },
+  "bugs": {
+    "url": "https://github.com/thesysdev/openclaw-ui/issues"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "pnpm -r build",
+    "lint": "pnpm -r run lint:check",
+    "lint:check": "pnpm -r run lint:check",
+    "lint:fix": "pnpm -r run lint:fix",
+    "format": "pnpm -r run format:check",
+    "format:check": "pnpm -r run format:check",
+    "format:fix": "pnpm -r run format:fix",
+    "typecheck": "pnpm -r run typecheck",
+    "test": "pnpm -r run test",
+    "ci": "pnpm -r run ci"
+  },
+  "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^8.56.1",
+    "@typescript-eslint/parser": "^8.56.1",
+    "eslint": "^9.0.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-prettier": "^5.5.5",
+    "eslint-plugin-react-hooks": "^7.0.1",
+    "eslint-plugin-unused-imports": "^4.4.1",
+    "prettier": "^3.2.5",
+    "prettier-plugin-organize-imports": "^3.2.4",
+    "typescript": "^5.9.3"
+  }
 }

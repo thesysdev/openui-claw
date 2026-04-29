@@ -86,10 +86,12 @@ export function useSpeechToText() {
       let combined = "";
       for (let i = event.resultIndex; i < event.results.length; i += 1) {
         const r = event.results[i];
-        combined += r[0].transcript;
+        if (!r) continue;
+        const alt = r[0];
+        if (!alt) continue;
+        combined += alt.transcript;
       }
-      const lastIsFinal =
-        event.results[event.results.length - 1]?.isFinal ?? false;
+      const lastIsFinal = event.results[event.results.length - 1]?.isFinal ?? false;
       onText(combined, lastIsFinal);
     };
     rec.onerror = () => {

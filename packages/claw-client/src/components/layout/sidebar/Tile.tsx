@@ -59,11 +59,11 @@ export function IconTile({
   /** Accepted for API compatibility; tile color does NOT change on hover. */
   hover?: boolean;
 }) {
-  const iconColor = active
-    ? "text-text-neutral-primary"
-    : "text-text-neutral-tertiary";
+  const iconColor = active ? "text-text-neutral-primary" : "text-text-neutral-tertiary";
   return (
-    <div className={`${BASE} border border-border-default/70 dark:border-border-default/16 bg-background dark:bg-elevated-light shadow-sm`}>
+    <div
+      className={`${BASE} border border-border-default/70 dark:border-border-default/16 bg-background dark:bg-elevated-light shadow-sm`}
+    >
       <Icon size={11} className={iconColor} />
     </div>
   );
@@ -90,7 +90,9 @@ export function TextTile({
       ? "text-text-neutral-primary"
       : "text-text-neutral-tertiary";
   return (
-    <div className={`${BASE} border border-border-default/70 dark:border-border-default/16 bg-background dark:bg-elevated-light shadow-sm`}>
+    <div
+      className={`${BASE} border border-border-default/70 dark:border-border-default/16 bg-background dark:bg-elevated-light shadow-sm`}
+    >
       <span className={`text-xs font-bold leading-none ${textColor}`}>
         {label.charAt(0).toUpperCase() || "?"}
       </span>
@@ -115,9 +117,7 @@ export function CategoryTile({
   subtle?: boolean;
 }) {
   const c = CATEGORY_STYLES[category];
-  const stroke = subtle
-    ? `border ${c.border}`
-    : "border border-transparent";
+  const stroke = subtle ? `border ${c.border}` : "border border-transparent";
   const shadow = subtle ? "" : "shadow-sm";
   return (
     <div className={`${BASE} ${stroke} ${c.bg} ${shadow}`}>
@@ -136,7 +136,9 @@ export function BorderTile({
   hover?: boolean;
 }) {
   return (
-    <div className={`${BASE} border border-border-default dark:border-border-default/16 bg-transparent`}>
+    <div
+      className={`${BASE} border border-border-default dark:border-border-default/16 bg-transparent`}
+    >
       <Icon size={10} className="text-text-neutral-tertiary" />
     </div>
   );

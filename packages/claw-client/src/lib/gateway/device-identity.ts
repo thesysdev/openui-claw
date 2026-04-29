@@ -1,6 +1,5 @@
 import * as ed from "@noble/ed25519";
-import { sha512 } from "@noble/hashes/sha2";
-import { sha256 } from "@noble/hashes/sha2";
+import { sha256, sha512 } from "@noble/hashes/sha2";
 
 // @noble/ed25519 v2 requires a SHA-512 implementation to be provided
 ed.etc.sha512Sync = sha512;
@@ -31,7 +30,7 @@ function openDb(): Promise<IDBDatabase> {
 }
 
 async function loadKeypair(
-  db: IDBDatabase
+  db: IDBDatabase,
 ): Promise<{ privateKey: Uint8Array; publicKey: Uint8Array } | null> {
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE_NAME, "readonly");
@@ -43,7 +42,7 @@ async function loadKeypair(
 
 async function saveKeypair(
   db: IDBDatabase,
-  keypair: { privateKey: Uint8Array; publicKey: Uint8Array }
+  keypair: { privateKey: Uint8Array; publicKey: Uint8Array },
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE_NAME, "readwrite");
@@ -79,10 +78,7 @@ export async function getOrCreateDeviceIdentity(): Promise<DeviceIdentity> {
   return { ...keypair, deviceId };
 }
 
-export async function signMessage(
-  message: string,
-  privateKey: Uint8Array
-): Promise<Uint8Array> {
+export async function signMessage(message: string, privateKey: Uint8Array): Promise<Uint8Array> {
   const msgBytes = new TextEncoder().encode(message);
   return ed.sign(msgBytes, privateKey);
 }

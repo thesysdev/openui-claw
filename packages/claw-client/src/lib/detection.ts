@@ -10,9 +10,7 @@
  * This parser handles all cases and returns segments in order.
  */
 
-export type Segment =
-  | { type: "text"; content: string }
-  | { type: "openui"; content: string };
+export type Segment = { type: "text"; content: string } | { type: "openui"; content: string };
 
 export interface ParsedResponse {
   segments: Segment[];
@@ -69,7 +67,7 @@ export function parseInlineResponse(raw: string): ParsedResponse {
       segments.push({ type: "text", content: textBefore });
     }
     // The code block.
-    const code = match[1].trim();
+    const code = match[1]?.trim() ?? "";
     if (code) {
       segments.push({ type: "openui", content: code });
       hasCode = true;
@@ -85,7 +83,7 @@ export function parseInlineResponse(raw: string): ParsedResponse {
     if (textBefore) {
       segments.push({ type: "text", content: textBefore });
     }
-    const code = unclosedMatch[1].trim();
+    const code = unclosedMatch[1]?.trim() ?? "";
     if (code) {
       segments.push({ type: "openui", content: code });
       hasCode = true;

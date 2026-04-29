@@ -1,5 +1,6 @@
 "use client";
 
+import { playCompletionChime } from "@/lib/chime";
 import {
   setPreferences,
   usePreferences,
@@ -7,7 +8,6 @@ import {
   type SendKey,
   type ThemeSkin,
 } from "@/lib/preferences";
-import { playCompletionChime } from "@/lib/chime";
 import { useState } from "react";
 
 /**

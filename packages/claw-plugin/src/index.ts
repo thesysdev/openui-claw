@@ -5,9 +5,6 @@ import { DatabaseSync } from "node:sqlite";
 import type {
   GatewayRequestHandlerOptions,
   OpenClawPluginToolContext,
-  PluginHookAgentContext,
-  PluginHookBeforePromptBuildEvent,
-  PluginHookBeforePromptBuildResult,
 } from "openclaw/plugin-sdk/core";
 import { definePluginEntry, emptyPluginConfigSchema } from "openclaw/plugin-sdk/plugin-entry";
 import { AppStore } from "./app-store";
@@ -61,7 +58,7 @@ When the composer text starts with \`Refine app "..." (id: ...)\` or \`Refine ar
 ## The bottom line
 
 Default to plain text only when a visual would be pure decoration. The moment a request smells like data, comparison, structured input, long output, or a recurring surface — read the relevant skill and render UI. Never explain that you can render UI. Just do it.`;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+
 const { jsonResult } = require("openclaw/plugin-sdk/core") as any;
 
 function sanitizeDbSegment(value: string): string {
@@ -105,12 +102,7 @@ function assertReadOnlySql(sql: string): void {
   );
 }
 
-function runStatement<T>(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  statement: any,
-  mode: "all" | "get" | "run",
-  params: unknown,
-): T {
+function runStatement<T>(statement: any, mode: "all" | "get" | "run", params: unknown): T {
   statement.setAllowBareNamedParameters?.(true);
   const normalized = normalizeSqlParams(params);
 
@@ -141,18 +133,12 @@ export default definePluginEntry({
     // `skills/openui-creator/SKILL.md`. Openclaw auto-lists those in the
     // `<available_skills>` block, so this hook only adds the two-line nudge
     // that tells the agent which skill to load when.
-    api.on(
-      "before_prompt_build",
-      (
-        _event: PluginHookBeforePromptBuildEvent,
-        ctx: PluginHookAgentContext,
-      ): PluginHookBeforePromptBuildResult | void => {
-        if (!ctx.sessionKey?.endsWith(":openclaw-ui")) {
-          return;
-        }
-        return { prependSystemContext: CLAW_PREAMBLE };
-      },
-    );
+    api.on("before_prompt_build", (_event, ctx) => {
+      if (!ctx.sessionKey?.endsWith(":openclaw-ui")) {
+        return;
+      }
+      return { prependSystemContext: CLAW_PREAMBLE };
+    });
 
     // ── Artifact store — lazy-initialized on first use ──────────────────────
     let store: ArtifactStore | null = null;
@@ -218,17 +204,21 @@ export default definePluginEntry({
       }
     };
 
+    // Tool/RPC payloads are typed as Record<string, unknown> by the SDK
+    // (gateway frames carry arbitrary JSON), so reads use bracket access to
+    // satisfy `noPropertyAccessFromIndexSignature`. Each field is still
+    // narrowed with a `typeof` check before use.
     const invokeDbQueryTool = async (args: Record<string, unknown>): Promise<unknown> => {
-      const sql = typeof args.sql === "string" ? args.sql.trim() : "";
+      const sql = typeof args["sql"] === "string" ? args["sql"].trim() : "";
       if (!sql) {
         throw new Error("db_query requires a non-empty 'sql' argument");
       }
       assertReadOnlySql(sql);
 
-      const namespace = normalizeSqlNamespace(args.namespace);
+      const namespace = normalizeSqlNamespace(args["namespace"]);
       const rows = await withDatabase(namespace, (db) => {
         const statement = db.prepare(sql);
-        const result = runStatement<unknown[]>(statement, "all", args.params);
+        const result = runStatement<unknown[]>(statement, "all", args["params"]);
         return Array.isArray(result) ? result : [];
       });
 
@@ -236,14 +226,14 @@ export default definePluginEntry({
     };
 
     const invokeDbExecuteTool = async (args: Record<string, unknown>): Promise<unknown> => {
-      const sql = typeof args.sql === "string" ? args.sql.trim() : "";
+      const sql = typeof args["sql"] === "string" ? args["sql"].trim() : "";
       if (!sql) {
         throw new Error("db_execute requires a non-empty 'sql' argument");
       }
 
-      const namespace = normalizeSqlNamespace(args.namespace);
+      const namespace = normalizeSqlNamespace(args["namespace"]);
       return withDatabase(namespace, (db) => {
-        const normalizedParams = normalizeSqlParams(args.params);
+        const normalizedParams = normalizeSqlParams(args["params"]);
 
         if (
           Array.isArray(normalizedParams)
@@ -402,7 +392,7 @@ export default definePluginEntry({
       },
     }));
 
-    api.registerTool((ctx: OpenClawPluginToolContext) => ({
+    api.registerTool(() => ({
       name: "db_query",
       label: "Query Persistent App DB",
       description:
@@ -432,7 +422,7 @@ export default definePluginEntry({
         jsonResult(await invokeDbQueryTool(params)),
     }));
 
-    api.registerTool((ctx: OpenClawPluginToolContext) => ({
+    api.registerTool(() => ({
       name: "db_execute",
       label: "Write Persistent App DB",
       description:
@@ -567,11 +557,14 @@ export default definePluginEntry({
 
     // ── Gateway RPC methods — client reads/writes ───────────────────────────
 
+    // Gateway RPC `params` is `Record<string, unknown>` (arbitrary JSON),
+    // so reads use bracket access to satisfy `noPropertyAccessFromIndexSignature`.
+    // Each field is still narrowed with a `typeof` check before use.
     api.registerGatewayMethod(
       "artifacts.list",
       async ({ params, respond }: GatewayRequestHandlerOptions) => {
         try {
-          const kind = typeof params.kind === "string" ? params.kind : undefined;
+          const kind = typeof params["kind"] === "string" ? params["kind"] : undefined;
           const items = await getStore().list(kind);
           respond(true, {
             artifacts: items.map((a) => ({
@@ -600,7 +593,7 @@ export default definePluginEntry({
       "artifacts.get",
       async ({ params, respond }: GatewayRequestHandlerOptions) => {
         try {
-          const id = typeof params.id === "string" ? params.id : "";
+          const id = typeof params["id"] === "string" ? params["id"] : "";
           const artifact = await getStore().get(id);
           respond(true, {
             artifact: artifact
@@ -627,7 +620,7 @@ export default definePluginEntry({
       "artifacts.delete",
       async ({ params, respond }: GatewayRequestHandlerOptions) => {
         try {
-          const id = typeof params.id === "string" ? params.id : "";
+          const id = typeof params["id"] === "string" ? params["id"] : "";
           await getStore().delete(id);
           respond(true, { deleted: id });
         } catch (e) {
@@ -666,7 +659,7 @@ export default definePluginEntry({
       "apps.get",
       async ({ params, respond }: GatewayRequestHandlerOptions) => {
         try {
-          const id = typeof params.id === "string" ? params.id : "";
+          const id = typeof params["id"] === "string" ? params["id"] : "";
           const app = await getAppStore().get(id);
           respond(true, { app });
         } catch (e) {
@@ -682,7 +675,7 @@ export default definePluginEntry({
       "apps.delete",
       async ({ params, respond }: GatewayRequestHandlerOptions) => {
         try {
-          const id = typeof params.id === "string" ? params.id : "";
+          const id = typeof params["id"] === "string" ? params["id"] : "";
           await getAppStore().delete(id);
           respond(true, { deleted: id });
         } catch (e) {
@@ -698,7 +691,7 @@ export default definePluginEntry({
       "apps.versions",
       async ({ params, respond }: GatewayRequestHandlerOptions) => {
         try {
-          const id = typeof params.id === "string" ? params.id : "";
+          const id = typeof params["id"] === "string" ? params["id"] : "";
           const app = await getAppStore().get(id);
           if (!app) {
             respond(false, undefined, {
@@ -727,8 +720,8 @@ export default definePluginEntry({
       "apps.restore",
       async ({ params, respond }: GatewayRequestHandlerOptions) => {
         try {
-          const id = typeof params.id === "string" ? params.id : "";
-          const idx = typeof params.versionIndex === "number" ? params.versionIndex : -1;
+          const id = typeof params["id"] === "string" ? params["id"] : "";
+          const idx = typeof params["versionIndex"] === "number" ? params["versionIndex"] : -1;
           const app = await getAppStore().restore(id, idx);
           respond(true, { id: app.id, updatedAt: app.updatedAt });
         } catch (e) {
@@ -744,14 +737,14 @@ export default definePluginEntry({
       "uploads.put",
       async ({ params, respond }: GatewayRequestHandlerOptions) => {
         try {
-          const sessionKey = typeof params.sessionKey === "string" ? params.sessionKey : "";
-          const name = typeof params.name === "string" ? params.name : "attachment";
+          const sessionKey = typeof params["sessionKey"] === "string" ? params["sessionKey"] : "";
+          const name = typeof params["name"] === "string" ? params["name"] : "attachment";
           const mimeType =
-            typeof params.mimeType === "string" && params.mimeType.length > 0
-              ? params.mimeType
+            typeof params["mimeType"] === "string" && params["mimeType"].length > 0
+              ? params["mimeType"]
               : "application/octet-stream";
-          const content = typeof params.content === "string" ? params.content : "";
-          const size = typeof params.size === "number" ? params.size : undefined;
+          const content = typeof params["content"] === "string" ? params["content"] : "";
+          const size = typeof params["size"] === "number" ? params["size"] : undefined;
           if (!content) {
             respond(false, undefined, {
               message: "uploads.put requires base64 content",
@@ -774,7 +767,8 @@ export default definePluginEntry({
       "uploads.list",
       async ({ params, respond }: GatewayRequestHandlerOptions) => {
         try {
-          const sessionKey = typeof params.sessionKey === "string" ? params.sessionKey : undefined;
+          const sessionKey =
+            typeof params["sessionKey"] === "string" ? params["sessionKey"] : undefined;
           const uploads = await getUploadStore().list(sessionKey);
           respond(true, { uploads });
         } catch (e) {
@@ -790,7 +784,7 @@ export default definePluginEntry({
       "uploads.get",
       async ({ params, respond }: GatewayRequestHandlerOptions) => {
         try {
-          const id = typeof params.id === "string" ? params.id : "";
+          const id = typeof params["id"] === "string" ? params["id"] : "";
           const upload = await getUploadStore().get(id);
           if (!upload) {
             respond(false, undefined, {
@@ -813,7 +807,7 @@ export default definePluginEntry({
       "uploads.delete",
       async ({ params, respond }: GatewayRequestHandlerOptions) => {
         try {
-          const id = typeof params.id === "string" ? params.id : "";
+          const id = typeof params["id"] === "string" ? params["id"] : "";
           await getUploadStore().delete(id);
           respond(true, { deleted: id });
         } catch (e) {
@@ -829,7 +823,7 @@ export default definePluginEntry({
       "uploads.deleteBySession",
       async ({ params, respond }: GatewayRequestHandlerOptions) => {
         try {
-          const sessionKey = typeof params.sessionKey === "string" ? params.sessionKey : "";
+          const sessionKey = typeof params["sessionKey"] === "string" ? params["sessionKey"] : "";
           if (!sessionKey) {
             respond(false, undefined, {
               message: "uploads.deleteBySession requires sessionKey",
@@ -867,8 +861,8 @@ export default definePluginEntry({
       "notifications.read",
       async ({ params, respond }: GatewayRequestHandlerOptions) => {
         try {
-          const ids = Array.isArray(params.ids)
-            ? params.ids.filter((value: unknown): value is string => typeof value === "string")
+          const ids = Array.isArray(params["ids"])
+            ? params["ids"].filter((value: unknown): value is string => typeof value === "string")
             : undefined;
           const updated = await getNotificationStore().markRead(ids);
           respond(true, { updated });
@@ -885,16 +879,20 @@ export default definePluginEntry({
       "notifications.upsert",
       async ({ params, respond }: GatewayRequestHandlerOptions) => {
         try {
+          const kind = params["kind"];
+          const title = params["title"];
+          const message = params["message"];
+          const target = params["target"];
           if (
             !params ||
             typeof params !== "object" ||
             Array.isArray(params) ||
-            typeof params.kind !== "string" ||
-            typeof params.title !== "string" ||
-            typeof params.message !== "string" ||
-            !params.target ||
-            typeof params.target !== "object" ||
-            Array.isArray(params.target)
+            typeof kind !== "string" ||
+            typeof title !== "string" ||
+            typeof message !== "string" ||
+            !target ||
+            typeof target !== "object" ||
+            Array.isArray(target)
           ) {
             respond(false, undefined, {
               message: "Invalid notification payload",
@@ -903,19 +901,20 @@ export default definePluginEntry({
             return;
           }
 
+          const dedupeKey = params["dedupeKey"];
+          const source = params["source"];
+          const metadata = params["metadata"];
           const notification = await getNotificationStore().upsert({
-            kind: params.kind,
-            title: params.title,
-            message: params.message,
-            target: params.target as Parameters<NotificationStore["upsert"]>[0]["target"],
-            ...(typeof params.dedupeKey === "string" ? { dedupeKey: params.dedupeKey } : {}),
-            ...(params.source && typeof params.source === "object" && !Array.isArray(params.source)
-              ? { source: params.source as Parameters<NotificationStore["upsert"]>[0]["source"] }
+            kind,
+            title,
+            message,
+            target: target as Parameters<NotificationStore["upsert"]>[0]["target"],
+            ...(typeof dedupeKey === "string" ? { dedupeKey } : {}),
+            ...(source && typeof source === "object" && !Array.isArray(source)
+              ? { source: source as Parameters<NotificationStore["upsert"]>[0]["source"] }
               : {}),
-            ...(params.metadata &&
-            typeof params.metadata === "object" &&
-            !Array.isArray(params.metadata)
-              ? { metadata: params.metadata as Record<string, unknown> }
+            ...(metadata && typeof metadata === "object" && !Array.isArray(metadata)
+              ? { metadata: metadata as Record<string, unknown> }
               : {}),
           });
           respond(true, { notification });
@@ -933,9 +932,9 @@ export default definePluginEntry({
     // exec/read are handled directly. Other tools are not yet proxied.
 
     const invokeExecTool = async (args: Record<string, unknown>): Promise<unknown> => {
-      const command = typeof args.command === "string" ? args.command : "";
+      const command = typeof args["command"] === "string" ? args["command"] : "";
       if (!command) throw new Error("exec requires a 'command' argument");
-      const timeoutMs = typeof args.timeout_ms === "number" ? args.timeout_ms : 30_000;
+      const timeoutMs = typeof args["timeout_ms"] === "number" ? args["timeout_ms"] : 30_000;
       api.logger.info(`[openclaw-ui-plugin] invokeTool(exec): command=${command.slice(0, 120)}`);
       try {
         const result = await api.runtime.system.runCommandWithTimeout(["sh", "-c", command], {
@@ -966,7 +965,7 @@ export default definePluginEntry({
     };
 
     const invokeReadTool = async (args: Record<string, unknown>): Promise<unknown> => {
-      const filePath = typeof args.file_path === "string" ? args.file_path : "";
+      const filePath = typeof args["file_path"] === "string" ? args["file_path"] : "";
       if (!filePath) throw new Error("read requires a 'file_path' argument");
       api.logger.info(`[openclaw-ui-plugin] invokeTool(read): path=${filePath}`);
       const { readFile } = await import("node:fs/promises");
@@ -977,7 +976,7 @@ export default definePluginEntry({
     const invokeTool = async (
       toolName: string,
       toolArgs: Record<string, unknown>,
-      sessionKey: string,
+      _sessionKey: string,
     ): Promise<unknown> => {
       switch (toolName) {
         case "exec":
@@ -1000,14 +999,14 @@ export default definePluginEntry({
     api.registerGatewayMethod(
       "tools.invoke",
       async ({ params, respond }: GatewayRequestHandlerOptions) => {
-        const toolName = typeof params.tool_name === "string" ? params.tool_name : "";
+        const toolName = typeof params["tool_name"] === "string" ? params["tool_name"] : "";
         const toolArgs =
-          params.tool_args != null &&
-          typeof params.tool_args === "object" &&
-          !Array.isArray(params.tool_args)
-            ? (params.tool_args as Record<string, unknown>)
+          params["tool_args"] != null &&
+          typeof params["tool_args"] === "object" &&
+          !Array.isArray(params["tool_args"])
+            ? (params["tool_args"] as Record<string, unknown>)
             : {};
-        const sessionKey = typeof params.sessionKey === "string" ? params.sessionKey : "";
+        const sessionKey = typeof params["sessionKey"] === "string" ? params["sessionKey"] : "";
 
         if (!toolName) {
           respond(false, undefined, {

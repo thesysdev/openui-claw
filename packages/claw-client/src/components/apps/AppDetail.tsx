@@ -1,25 +1,19 @@
 "use client";
 
+import { TitleSwitcher, type TitleSwitcherItem } from "@/components/chat/TitleSwitcher";
+import { TopBar } from "@/components/chat/TopBar";
+import { DetailTopBar } from "@/components/layout/DetailTopBar";
+import { IconButton } from "@/components/layout/sidebar/IconButton";
+import { TextTile } from "@/components/layout/sidebar/Tile";
+import { Button } from "@/components/ui/Button";
+import { SegmentedTabs } from "@/components/ui/SegmentedTabs";
 import type { AppRecord, AppStore } from "@/lib/engines/types";
-import {
-  buildContinueConversationPayload,
-  handleOpenUrlAction,
-} from "@/lib/renderer-actions";
+import { buildContinueConversationPayload, handleOpenUrlAction } from "@/lib/renderer-actions";
 import type { ActionEvent } from "@openuidev/react-lang";
 import { Renderer } from "@openuidev/react-lang";
 import { Callout } from "@openuidev/react-ui";
 import { openuiLibrary } from "@openuidev/react-ui/genui-lib";
 import { Bug, Code2, Eye, Pin, Sparkles, Trash2, X } from "lucide-react";
-import { SegmentedTabs } from "@/components/ui/SegmentedTabs";
-import { TopBar } from "@/components/chat/TopBar";
-import {
-  TitleSwitcher,
-  type TitleSwitcherItem,
-} from "@/components/chat/TitleSwitcher";
-import { Button } from "@/components/ui/Button";
-import { IconButton } from "@/components/layout/sidebar/IconButton";
-import { TextTile } from "@/components/layout/sidebar/Tile";
-import { DetailTopBar } from "@/components/layout/DetailTopBar";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AppDebugPanel } from "./AppDebugPanel";
 import { useToolInvocationLog } from "./useToolInvocationLog";
@@ -39,8 +33,9 @@ export type AppContinueConversationHandler = (payload: {
 function normalizeToolResult(result: unknown): unknown {
   if (result && typeof result === "object" && !Array.isArray(result)) {
     const candidate = result as Record<string, unknown>;
-    if (typeof candidate.stdout === "string") {
-      const trimmed = candidate.stdout.trim();
+    const stdout = candidate["stdout"];
+    if (typeof stdout === "string") {
+      const trimmed = stdout.trim();
       if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
         try {
           return JSON.parse(trimmed);
@@ -260,9 +255,7 @@ export function AppDetail({
               icon={Bug}
               onClick={() => setDebugOpen((v) => !v)}
               title="Toggle debug panel"
-              className={
-                debugOpen ? "bg-alert-background text-text-alert-primary" : ""
-              }
+              className={debugOpen ? "bg-alert-background text-text-alert-primary" : ""}
             >
               Debug
             </Button>
@@ -288,19 +281,10 @@ export function AppDetail({
             )}
             {confirmDelete ? (
               <>
-                <Button
-                  variant="borderless"
-                  size="sm"
-                  onClick={() => setConfirmDelete(false)}
-                >
+                <Button variant="borderless" size="sm" onClick={() => setConfirmDelete(false)}>
                   Cancel
                 </Button>
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  disabled={deleting}
-                  onClick={handleDelete}
-                >
+                <Button variant="destructive" size="sm" disabled={deleting} onClick={handleDelete}>
                   {deleting ? "Deleting…" : "Confirm delete"}
                 </Button>
               </>

@@ -122,12 +122,12 @@ export function CronTrayHost({
       });
       if (!onUpdateCronJob) return;
       const serverPatch: Record<string, unknown> = {};
-      if (edits.name !== undefined) serverPatch.name = edits.name;
+      if (edits.name !== undefined) serverPatch["name"] = edits.name;
       if (edits.prompt !== undefined) {
-        serverPatch.payload = { ...(j.payload ?? {}), message: edits.prompt };
+        serverPatch["payload"] = { ...(j.payload ?? {}), message: edits.prompt };
       }
       if (edits.scheduleExpr && edits.scheduleExpr !== j.schedule?.expr) {
-        serverPatch.schedule = nextSchedule;
+        serverPatch["schedule"] = nextSchedule;
       }
       if (Object.keys(serverPatch).length === 0) return;
       const ok = await onUpdateCronJob(j.id, serverPatch);

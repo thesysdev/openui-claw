@@ -37,9 +37,7 @@ export function SectionTab({
   const state = hovered ? "hover" : "rest";
   const gap = collapsed ? "gap-0" : "gap-s";
   const justify = collapsed ? "justify-center" : "justify-start";
-  const labelFade = collapsed
-    ? "opacity-0 max-w-0"
-    : "opacity-100 max-w-[200px]";
+  const labelFade = collapsed ? "opacity-0 max-w-0" : "opacity-100 max-w-[200px]";
 
   return (
     <div
@@ -55,9 +53,7 @@ export function SectionTab({
         <CategoryTile icon={icon} category={category} subtle />
         <span
           className={`flex-1 text-left text-xs font-medium overflow-hidden whitespace-nowrap ${
-            hovered
-              ? "text-text-neutral-secondary"
-              : "text-text-neutral-tertiary"
+            hovered ? "text-text-neutral-secondary" : "text-text-neutral-tertiary"
           } ${labelFade} transition-[opacity,max-width,color] duration-300 ease-out`}
         >
           {label}

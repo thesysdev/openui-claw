@@ -53,7 +53,6 @@ export function CronDetailTray({
   onToggleEnabled,
   onSaveEdits,
   onDelete,
-  onDuplicate,
   onOpenThread,
   mobile,
 }: CronDetailTrayProps) {
@@ -285,67 +284,69 @@ function DetailsPanel({
 
       {/* Actions: Run now / Pause / Delete (kebab covers these on mobile). */}
       {mobile ? null : (
-      <section>
-        <h3 className="mb-s font-label text-sm font-medium text-text-neutral-tertiary">Actions</h3>
-        {confirmDelete && onDelete ? (
-          <div className="flex items-center justify-between gap-s rounded-m border border-border-default/50 bg-sunk-light/50 px-m py-s dark:border-border-default/16 dark:bg-foreground">
-            <span className="font-body text-sm text-text-neutral-secondary">
-              Delete this cron job? Runs will stop immediately.
-            </span>
-            <div className="flex shrink-0 items-center gap-xs">
-              <Button
-                variant="secondary"
-                size="md"
-                className={actionBtn}
-                onClick={() => onConfirmDelete(false)}
-              >
-                Cancel
-              </Button>
-              <Button
-                variant="secondary"
-                size="md"
-                className={actionBtn}
-                icon={Trash2}
-                onClick={onDelete}
-              >
-                Delete
-              </Button>
+        <section>
+          <h3 className="mb-s font-label text-sm font-medium text-text-neutral-tertiary">
+            Actions
+          </h3>
+          {confirmDelete && onDelete ? (
+            <div className="flex items-center justify-between gap-s rounded-m border border-border-default/50 bg-sunk-light/50 px-m py-s dark:border-border-default/16 dark:bg-foreground">
+              <span className="font-body text-sm text-text-neutral-secondary">
+                Delete this cron job? Runs will stop immediately.
+              </span>
+              <div className="flex shrink-0 items-center gap-xs">
+                <Button
+                  variant="secondary"
+                  size="md"
+                  className={actionBtn}
+                  onClick={() => onConfirmDelete(false)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="md"
+                  className={actionBtn}
+                  icon={Trash2}
+                  onClick={onDelete}
+                >
+                  Delete
+                </Button>
+              </div>
             </div>
-          </div>
-        ) : (
-          <div className="flex flex-wrap items-center gap-xs">
-            <Button
-              variant="secondary"
-              size="md"
-              className={actionBtn}
-              icon={RotateCw}
-              onClick={onRunNow}
-            >
-              Run now
-            </Button>
-            <Button
-              variant="secondary"
-              size="md"
-              className={actionBtn}
-              icon={job.enabled ? Pause : Play}
-              onClick={onTogglePause}
-            >
-              {job.enabled ? "Pause" : "Resume"}
-            </Button>
-            {onDelete ? (
+          ) : (
+            <div className="flex flex-wrap items-center gap-xs">
               <Button
                 variant="secondary"
                 size="md"
                 className={actionBtn}
-                icon={Trash2}
-                onClick={() => onConfirmDelete(true)}
+                icon={RotateCw}
+                onClick={onRunNow}
               >
-                Delete
+                Run now
               </Button>
-            ) : null}
-          </div>
-        )}
-      </section>
+              <Button
+                variant="secondary"
+                size="md"
+                className={actionBtn}
+                icon={job.enabled ? Pause : Play}
+                onClick={onTogglePause}
+              >
+                {job.enabled ? "Pause" : "Resume"}
+              </Button>
+              {onDelete ? (
+                <Button
+                  variant="secondary"
+                  size="md"
+                  className={actionBtn}
+                  icon={Trash2}
+                  onClick={() => onConfirmDelete(true)}
+                >
+                  Delete
+                </Button>
+              ) : null}
+            </div>
+          )}
+        </section>
       )}
 
       {/* ── Prompt · editable block ── */}
@@ -515,19 +516,6 @@ function HistoryPanel({
 // ─────────────────────────────────────────────────────────────────────────────
 // Building blocks
 // ─────────────────────────────────────────────────────────────────────────────
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="flex flex-col gap-xs">
-      <span className="font-label text-sm font-medium text-text-neutral-tertiary">{label}</span>
-      {children}
-    </div>
-  );
-}
-
-function FieldHint({ children }: { children: React.ReactNode }) {
-  return <span className="font-body text-sm text-text-neutral-tertiary">{children}</span>;
-}
 
 /** Inline-editable single-line field. Shows pencil on hover; click to edit. */
 function InlineText({

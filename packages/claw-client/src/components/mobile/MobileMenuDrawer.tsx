@@ -45,13 +45,7 @@ function ItemIconTile({
  * separators between items, each row inset 20px from the container with a
  * leading icon tile.
  */
-export function MobileMenuDrawer({
-  open,
-  onClose,
-  header,
-  items,
-  title,
-}: MobileMenuDrawerProps) {
+export function MobileMenuDrawer({ open, onClose, header, items, title }: MobileMenuDrawerProps) {
   useBodyScrollLock(open);
   if (!open) return null;
   return (
@@ -69,9 +63,7 @@ export function MobileMenuDrawer({
       >
         <div className="mx-auto mb-s mt-s h-[3px] w-10 rounded-full bg-border-default/60 dark:bg-border-default/30" />
         {title ? (
-          <h3 className="px-l pb-m text-sm font-medium text-text-neutral-tertiary">
-            {title}
-          </h3>
+          <h3 className="px-l pb-m text-sm font-medium text-text-neutral-tertiary">{title}</h3>
         ) : null}
         {header ? <div className="px-l pb-s">{header}</div> : null}
         <ul className="divide-y divide-border-default/50 px-l pt-xs dark:divide-border-default/16">
@@ -87,14 +79,10 @@ export function MobileMenuDrawer({
                     onClose();
                   }}
                   className={`flex w-full items-center gap-m rounded-lg py-m text-left font-body text-sm font-medium transition-colors active:bg-sunk-light disabled:cursor-not-allowed disabled:opacity-50 dark:active:bg-elevated ${
-                    item.destructive
-                      ? "text-text-danger-primary"
-                      : "text-text-neutral-secondary"
+                    item.destructive ? "text-text-danger-primary" : "text-text-neutral-secondary"
                   }`}
                 >
-                  {Icon ? (
-                    <ItemIconTile icon={Icon} destructive={item.destructive} />
-                  ) : null}
+                  {Icon ? <ItemIconTile icon={Icon} destructive={item.destructive} /> : null}
                   <span className="truncate">{item.label}</span>
                 </button>
               </li>

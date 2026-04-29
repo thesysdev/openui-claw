@@ -1,16 +1,10 @@
 "use client";
 
 import { ArrowLeft, Cpu, PanelRightOpen, Pencil, Plus, Trash2 } from "lucide-react";
-import {
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-  type ReactNode,
-} from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 
-import { IconButton } from "@/components/layout/sidebar/IconButton";
 import { TopBar } from "@/components/chat/TopBar";
+import { IconButton } from "@/components/layout/sidebar/IconButton";
 import type { ClawThread } from "@/types/claw-thread";
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -77,13 +71,7 @@ function useOutsideClose(
   }, [ref, onClose, active]);
 }
 
-function DropdownPanel({
-  children,
-  width = 200,
-}: {
-  children: ReactNode;
-  width?: number;
-}) {
+function DropdownPanel({ children, width = 200 }: { children: ReactNode; width?: number }) {
   return (
     <div
       style={{ minWidth: width }}
@@ -114,9 +102,7 @@ function MenuAction({ icon: Icon, label, onClick, destructive }: MenuActionProps
     >
       <Icon
         size={13}
-        className={
-          destructive ? "text-text-danger-primary" : "text-text-neutral-tertiary"
-        }
+        className={destructive ? "text-text-danger-primary" : "text-text-neutral-tertiary"}
       />
       <span className="font-body text-sm">{label}</span>
     </button>

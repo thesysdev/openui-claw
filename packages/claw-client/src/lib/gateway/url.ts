@@ -1,6 +1,4 @@
-export type GatewayUrlValidation =
-  | { ok: true }
-  | { ok: false; error: string };
+export type GatewayUrlValidation = { ok: true } | { ok: false; error: string };
 
 /**
  * Client-side gateway URL check. Catches the common typos (missing protocol,

@@ -1,13 +1,7 @@
 "use client";
 
 import { Pencil, Trash2 } from "lucide-react";
-import {
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-  type ComponentType,
-} from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ComponentType } from "react";
 
 import { MobileSwitcherSheet } from "@/components/mobile/MobileSwitcherSheet";
 import { useIsMobile } from "@/lib/hooks/useIsMobile";
@@ -61,9 +55,7 @@ function ActionRow({ icon: Icon, label, onClick, destructive }: ActionRowProps) 
     >
       <Icon
         size={13}
-        className={
-          destructive ? "text-text-danger-primary" : "text-text-neutral-tertiary"
-        }
+        className={destructive ? "text-text-danger-primary" : "text-text-neutral-tertiary"}
       />
       <span className="font-body text-sm">{label}</span>
     </button>
@@ -239,13 +231,7 @@ export function TitleSwitcher({
   );
 }
 
-function PeerRow({
-  item,
-  onClick,
-}: {
-  item: TitleSwitcherItem;
-  onClick: () => void;
-}) {
+function PeerRow({ item, onClick }: { item: TitleSwitcherItem; onClick: () => void }) {
   return (
     <button
       type="button"
