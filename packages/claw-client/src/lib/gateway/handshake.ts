@@ -1,8 +1,8 @@
-import type { ConnectParams } from "./types";
-import { GATEWAY_CLIENT_IDS, GATEWAY_CLIENT_MODES, GATEWAY_CLIENT_CAPS } from "./types";
+import type { Settings } from "../storage";
 import type { DeviceIdentity } from "./device-identity";
 import { signMessage, toBase64Url } from "./device-identity";
-import type { Settings } from "../storage";
+import type { ConnectParams } from "./types";
+import { GATEWAY_CLIENT_CAPS, GATEWAY_CLIENT_IDS, GATEWAY_CLIENT_MODES } from "./types";
 
 const PROTOCOL_VERSION = 3;
 const CLIENT_ID = GATEWAY_CLIENT_IDS.CONTROL_UI;
@@ -20,7 +20,7 @@ function buildV3Payload(
   clientMode: string,
   signedAtMs: number,
   token: string,
-  nonce: string
+  nonce: string,
 ): string {
   const scopesCsv = SCOPES.join(",");
   const platformNorm = "web";
@@ -43,17 +43,11 @@ function buildV3Payload(
 export async function buildConnectParams(
   nonce: string,
   settings: Settings,
-  device: DeviceIdentity
+  device: DeviceIdentity,
 ): Promise<ConnectParams> {
   const signedAtMs = Date.now();
   const token = settings.deviceToken ?? settings.token ?? "";
-  const payload = buildV3Payload(
-    device.deviceId,
-    CLIENT_MODE,
-    signedAtMs,
-    token,
-    nonce
-  );
+  const payload = buildV3Payload(device.deviceId, CLIENT_MODE, signedAtMs, token, nonce);
   const signatureBytes = await signMessage(payload, device.privateKey);
 
   return {
@@ -68,9 +62,7 @@ export async function buildConnectParams(
     },
     role: ROLE,
     scopes: SCOPES,
-    auth: settings.deviceToken
-      ? { deviceToken: settings.deviceToken }
-      : { token: settings.token },
+    auth: settings.deviceToken ? { deviceToken: settings.deviceToken } : { token: settings.token },
     device: {
       id: device.deviceId,
       publicKey: toBase64Url(device.publicKey),

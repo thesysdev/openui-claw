@@ -47,10 +47,10 @@ import {
   sessionRouteIdFromSessionKey,
   useGateway,
 } from "@/lib/chat/useGateway";
-import type { CompactSessionResult } from "@/lib/engines/openclaw/OpenClawEngine";
 import { isTabHidden, playCompletionChime } from "@/lib/chime";
 import type { CommandContext, CommandMessageSnapshot } from "@/lib/commands";
 import type { CronJobRecord, CronRunEntry, CronStatusRecord } from "@/lib/cron";
+import type { CompactSessionResult } from "@/lib/engines/openclaw/OpenClawEngine";
 import type {
   AppRecord,
   AppStore,
@@ -67,6 +67,7 @@ import { useIsMobile } from "@/lib/hooks/useIsMobile";
 import { qualifyModel } from "@/lib/models";
 import type { NotificationRecord } from "@/lib/notifications";
 import { apply as applyPreferences, getPreferences } from "@/lib/preferences";
+import { extractAgentIdFromKey } from "@/lib/session-keys";
 import {
   EMPTY_THREAD_WORKSPACE,
   deriveThreadWorkspaceFromMessages,
@@ -78,7 +79,6 @@ import {
   type ThreadUpload,
   type ThreadWorkspaceState,
 } from "@/lib/session-workspace";
-import { extractAgentIdFromKey } from "@/lib/session-keys";
 import { buildAppSiblings, buildArtifactSiblings, makeAgentNameResolver } from "@/lib/siblings";
 import { getSettings, type Settings } from "@/lib/storage";
 import { UploadsProvider, type UploadsSeed } from "@/lib/uploads-context";
@@ -222,8 +222,6 @@ function ThreadArea({
   onRefreshSummaries,
   pendingPreviewOpen,
   onConsumePendingPreview,
-  onRefineApp,
-  onRefineArtifact,
   onAppContinueConversation,
   workspacePaneCollapsed,
   onToggleWorkspacePaneCollapsed,
@@ -383,13 +381,11 @@ function ThreadArea({
   // differs from the active thread.
   const paneArtifacts = useMemo(() => {
     if (!paneLinkedArtifact) return sessionArtifacts;
-    if (sessionArtifacts.some((a) => a.id === paneLinkedArtifact.artifactId)) return sessionArtifacts;
+    if (sessionArtifacts.some((a) => a.id === paneLinkedArtifact.artifactId))
+      return sessionArtifacts;
     const found = artifactList.find((a) => a.id === paneLinkedArtifact.artifactId);
     return found ? [...sessionArtifacts, found] : sessionArtifacts;
   }, [sessionArtifacts, paneLinkedArtifact, artifactList]);
-
-  const workspaceCount =
-    paneUploads.length + (paneLinkedApp ? 1 : 0) + (paneLinkedArtifact ? 1 : 0);
 
   useEffect(() => {
     const wasRunning = previousRunningRef.current;
@@ -676,9 +672,7 @@ function ThreadArea({
           setCommandToast({ message: "Compaction failed", kind: "error" });
         } else if (!result.compacted) {
           setCommandToast({
-            message: result.reason
-              ? `Nothing to compact (${result.reason})`
-              : "Nothing to compact",
+            message: result.reason ? `Nothing to compact (${result.reason})` : "Nothing to compact",
             kind: "info",
           });
         } else {
@@ -760,9 +754,7 @@ function ThreadArea({
               id,
               name,
             }));
-            const sessions = allThreads.filter(
-              (t) => (t.clawAgentId ?? t.id) === currentAgentId,
-            );
+            const sessions = allThreads.filter((t) => (t.clawAgentId ?? t.id) === currentAgentId);
             const onNewSession = async () => {
               const newId = await createSession(currentAgentId);
               if (newId) navigate({ view: "chat", sessionId: newId });
@@ -788,9 +780,7 @@ function ThreadArea({
                       ) ?? allThreads.find((t) => (t.clawAgentId ?? t.id) === a.id);
                     if (target) navigate({ view: "chat", sessionId: target.id });
                   }}
-                  onSelectSession={(threadId) =>
-                    navigate({ view: "chat", sessionId: threadId })
-                  }
+                  onSelectSession={(threadId) => navigate({ view: "chat", sessionId: threadId })}
                   onNewSession={onNewSession}
                   onOpenWorkspace={() => setMobileWorkspaceOpen(true)}
                   onDeleteSession={async () => {
@@ -800,9 +790,7 @@ function ThreadArea({
                   onDeleteAgent={async () => {
                     const main =
                       allThreads.find(
-                        (t) =>
-                          (t.clawAgentId ?? t.id) === currentAgentId &&
-                          t.clawKind === "main",
+                        (t) => (t.clawAgentId ?? t.id) === currentAgentId && t.clawKind === "main",
                       ) ?? allThreads.find((t) => (t.clawAgentId ?? t.id) === currentAgentId);
                     const target = main?.id;
                     if (target) {
@@ -834,9 +822,7 @@ function ThreadArea({
                     ) ?? allThreads.find((t) => (t.clawAgentId ?? t.id) === a.id);
                   if (target) navigate({ view: "chat", sessionId: target.id });
                 }}
-                onSelectSession={(threadId) =>
-                  navigate({ view: "chat", sessionId: threadId })
-                }
+                onSelectSession={(threadId) => navigate({ view: "chat", sessionId: threadId })}
                 onNewSession={onNewSession}
                 // On mobile, the workspace pane is a drawer instead of the
                 // permanent right-rail. Surface a toggle in the chat header
@@ -897,11 +883,9 @@ function ThreadArea({
                   // configured default agent so a single-agent setup still
                   // surfaces its model as `Default (X)`.
                   const targetAgentId = activeAgentId ?? defaultAgentId;
-                  return targetAgentId ? agentModelById.get(targetAgentId) ?? null : null;
+                  return targetAgentId ? (agentModelById.get(targetAgentId) ?? null) : null;
                 })()}
-                currentModel={
-                  meta?.model ? qualifyModel(meta.model, meta.modelProvider ?? "") : ""
-                }
+                currentModel={meta?.model ? qualifyModel(meta.model, meta.modelProvider ?? "") : ""}
                 currentEffort={meta?.thinkingLevel ?? ""}
                 effortDefault={meta?.thinkingDefault ?? null}
                 effortOptions={meta?.thinkingOptions ?? null}
@@ -925,7 +909,7 @@ function ThreadArea({
                   // about totalTokens vs inputTokens vs contextTokens.
                   const totalFresh = meta?.totalTokensFresh !== false;
                   const used = totalFresh
-                    ? meta?.totalTokens ?? meta?.inputTokens
+                    ? (meta?.totalTokens ?? meta?.inputTokens)
                     : meta?.inputTokens;
                   return {
                     contextTokens: used ?? undefined,
@@ -946,7 +930,7 @@ function ThreadArea({
               <>
                 <Shell.ScrollArea>
                   <EmptyChatWelcome agentName={activeAgentName} />
-                  {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                  {}
                   <Shell.Messages
                     assistantMessage={AssistantMessage}
                     userMessage={UserMessage as any}
@@ -1345,7 +1329,6 @@ interface ChatAppInnerProps {
 function ChatAppInner({
   connectionState,
   onSettingsClick,
-  onSettingsSave,
   createSession,
   renameSession,
   deleteSession,
@@ -1383,7 +1366,6 @@ function ChatAppInner({
   onUpsertNotification,
   cronJobs,
   cronRuns,
-  cronStatus,
   onRefreshCronData,
   onUpdateCronJob,
   onRunCronJob,
@@ -1402,7 +1384,6 @@ function ChatAppInner({
   const dispatchChatProcessMessage = useThread((state) => state.processMessage);
 
   const [mobileNotificationInboxOpen, setMobileNotificationInboxOpen] = useState(false);
-  const [notificationPaneCollapsed, setNotificationPaneCollapsed] = useState(false);
   const [workspacePaneCollapsed, setWorkspacePaneCollapsed] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [cronTrayJobId, setCronTrayJobId] = useState<string | null>(null);
@@ -1480,10 +1461,7 @@ function ChatAppInner({
         workspace.linkedApp?.sessionKey ?? workspace.linkedArtifact?.sessionKey;
       if (!sourceSessionKey) return;
 
-      const sourceThreadId = sessionRouteIdFromSessionKey(
-        sourceSessionKey,
-        knownAgentIds.current,
-      );
+      const sourceThreadId = sessionRouteIdFromSessionKey(sourceSessionKey, knownAgentIds.current);
 
       if (threadId !== sourceThreadId) {
         hidden.add(threadId);
@@ -1872,7 +1850,9 @@ function ChatAppInner({
       // over the server-set `createdAt`, which can drift on every upsert and
       // make hours-old runs look brand-new on reload.
       const runAtMs =
-        typeof notification.metadata?.runAtMs === "number" ? notification.metadata.runAtMs : null;
+        typeof notification.metadata?.["runAtMs"] === "number"
+          ? notification.metadata["runAtMs"]
+          : null;
       const eventTime = runAtMs ?? Date.parse(notification.createdAt);
       if (Number.isFinite(eventTime) && eventTime < loadTime) return false;
       return true;
@@ -2617,10 +2597,8 @@ export default function ChatApp() {
   return (
     <ThemeProvider mode={themeMode}>
       <ChatProvider
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         fetchThreadList={adaptedFetchThreadList as any}
         loadThread={adaptedLoadThread}
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         processMessage={processMessage as any}
         streamProtocol={openClawAdapter()}
       >

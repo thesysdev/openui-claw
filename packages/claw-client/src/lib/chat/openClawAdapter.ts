@@ -23,12 +23,20 @@ export function openClawAdapter(): StreamProtocolAdapter {
           const line = buffer.slice(0, nl).trim();
           buffer = buffer.slice(nl + 1);
           if (line) {
-            try { yield JSON.parse(line) as AGUIEvent; } catch { /* skip malformed */ }
+            try {
+              yield JSON.parse(line) as AGUIEvent;
+            } catch {
+              /* skip malformed */
+            }
           }
         }
       }
       if (buffer.trim()) {
-        try { yield JSON.parse(buffer.trim()) as AGUIEvent; } catch { /* skip */ }
+        try {
+          yield JSON.parse(buffer.trim()) as AGUIEvent;
+        } catch {
+          /* skip */
+        }
       }
     },
   };

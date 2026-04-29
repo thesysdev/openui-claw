@@ -1,15 +1,8 @@
 "use client";
 
-import {
-  AlertTriangle,
-  BellRing,
-  CheckCircle2,
-  Inbox,
-  PanelRightOpen,
-  X,
-} from "lucide-react";
-import { useMemo } from "react";
 import type { NotificationRecord } from "@/lib/notifications";
+import { AlertTriangle, BellRing, CheckCircle2, Inbox, PanelRightOpen, X } from "lucide-react";
+import { useMemo } from "react";
 
 /**
  * Per-card category tag — kept (visual scanning aid on the card itself) but
@@ -148,9 +141,7 @@ function NotificationCard({
         )}
       </div>
 
-      <p className="mt-s text-sm leading-5 text-text-neutral-secondary">
-        {notification.message}
-      </p>
+      <p className="mt-s text-sm leading-5 text-text-neutral-secondary">{notification.message}</p>
 
       <div className="mt-ml flex items-center justify-between gap-m">
         <div className="min-w-0 text-xs text-text-neutral-tertiary">
@@ -202,9 +193,7 @@ function NotificationInboxContent({
           <div className="min-w-0">
             <div className="flex items-center gap-s">
               <BellRing className="h-ml w-ml text-text-neutral-tertiary" />
-              <h2 className="text-sm font-bold text-text-neutral-primary">
-                Notifications
-              </h2>
+              <h2 className="text-sm font-bold text-text-neutral-primary">Notifications</h2>
               {unreadCount > 0 ? (
                 <span className="rounded-full bg-text-neutral-primary px-s py-3xs text-2xs font-bold text-background">
                   {unreadCount}
@@ -230,7 +219,6 @@ function NotificationInboxContent({
             ) : null}
           </div>
         </div>
-
       </div>
 
       <div className="flex-1 overflow-y-auto px-ml py-ml">
@@ -300,9 +288,7 @@ export function NotificationInboxDrawer({
               <PanelRightOpen className="h-ml w-ml" />
             </div>
             <div>
-              <div className="text-sm font-bold text-text-neutral-primary">
-                Notifications
-              </div>
+              <div className="text-sm font-bold text-text-neutral-primary">Notifications</div>
               <div className="text-xs text-text-neutral-tertiary">
                 Inbox and background activity
               </div>

@@ -1,0 +1,41 @@
+name: Build & Check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    name: Build, lint, format, typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v2
+        with:
+          version: 9.15.4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: "pnpm-lock.yaml"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm -r run lint:check
+
+      - name: Format check
+        run: pnpm -r run format:check
+
+      - name: Typecheck
+        run: pnpm -r run typecheck
+
+      - name: Build
+        run: pnpm -r build

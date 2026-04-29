@@ -1,11 +1,42 @@
+# OS
+.DS_Store
+
+# IDEs and editors
+.idea/
+*.swp
+*.swo
+*.sublime-workspace
+
+# VSCode
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# Cursor
+.cursor/plans
+.cursor/agents
+
+# Claude
+Claude.md
+.claude/
+CLAUDE.local.md
+.workspace/
+
 # Dependencies
 node_modules/
 .pnpm-store/
+.pnpm-debug.log
 
 # Next.js
 .next/
 out/
 next-env.d.ts
+
+# Cloudflare / OpenNext
+.wrangler/
+.open-next/
 
 # Build outputs
 dist/
@@ -20,14 +51,9 @@ build/
 .env.local
 .env.*.local
 
-# Editor
-.DS_Store
-.idea/
-*.swp
-*.swo
-
-# pnpm
-.pnpm-debug.log
+# Logs
+*.log
 
 # Future Plans
 PLAN*
+draft/

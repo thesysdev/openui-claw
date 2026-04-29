@@ -30,11 +30,10 @@ export interface ArtifactCardProps {
  */
 export function ArtifactCard({ artifact, onClick }: ArtifactCardProps) {
   const Icon = ICON_BY_KIND[artifact.kind] ?? ScrollText;
-  const chipSpec =
-    CHIP_BY_KIND[artifact.kind] ?? {
-      label: artifact.kind || "File",
-      className: "text-text-neutral-tertiary bg-foreground",
-    };
+  const chipSpec = CHIP_BY_KIND[artifact.kind] ?? {
+    label: artifact.kind || "File",
+    className: "text-text-neutral-tertiary bg-foreground",
+  };
   const chip = (
     <span
       className={`inline-block shrink-0 rounded-s px-xs py-[1px] font-label text-sm font-medium ${chipSpec.className}`}

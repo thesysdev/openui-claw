@@ -1,7 +1,7 @@
 "use client";
 
-import { CornerDownLeft, EllipsisVertical, Pencil, Pin, PinOff, Trash2 } from "lucide-react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
+import { CornerDownLeft, EllipsisVertical, Pencil, Pin, PinOff, Trash2 } from "lucide-react";
 import { forwardRef } from "react";
 
 export interface SessionRowProps {
@@ -106,11 +106,7 @@ export const SessionRow = forwardRef<HTMLInputElement, SessionRowProps>(
               {label}
             </button>
             {pinned ? (
-              <Pin
-                size={11}
-                className="shrink-0 text-text-neutral-tertiary"
-                aria-label="Pinned"
-              />
+              <Pin size={11} className="shrink-0 text-text-neutral-tertiary" aria-label="Pinned" />
             ) : null}
             {isExtra && !busy && (onRename || onDelete || onTogglePin) && (
               <DropdownMenu.Root>

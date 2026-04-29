@@ -182,7 +182,6 @@ export function useGateway({ onAuthFailed }: { onAuthFailed: () => void }) {
       void engine.disconnect();
     };
     // Only run once on mount
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const reconnect = useCallback((newSettings: Settings) => {
@@ -221,10 +220,7 @@ export function useGateway({ onAuthFailed }: { onAuthFailed: () => void }) {
 
         if (!serverTitle || isOpaqueSessionTitle(serverTitle, sessionKey)) {
           const derivedTitle = deriveThreadTitleFromMessages(messages);
-          if (
-            derivedTitle &&
-            attemptedAutoTitlesRef.current.get(sessionKey) !== derivedTitle
-          ) {
+          if (derivedTitle && attemptedAutoTitlesRef.current.get(sessionKey) !== derivedTitle) {
             // Mark optimistically *before* awaiting so we don't fire two
             // patches in parallel for the same title; clear on failure so a
             // retry isn't permanently blocked.

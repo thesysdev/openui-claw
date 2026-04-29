@@ -81,7 +81,7 @@ function toHomeNotif(n: NotificationRecord): HomeNotif {
   // Prefer the underlying event's true timestamp when known
   // (`metadata.runAtMs` for cron runs) — otherwise the server-set `createdAt`
   // can drift on every upsert, surfacing stale runs as "just now".
-  const runAtMs = typeof n.metadata?.runAtMs === "number" ? n.metadata.runAtMs : null;
+  const runAtMs = typeof n.metadata?.["runAtMs"] === "number" ? n.metadata["runAtMs"] : null;
   return {
     id: n.id,
     type: notifTypeFromKind(n.kind),

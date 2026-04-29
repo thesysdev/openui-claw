@@ -1,5 +1,7 @@
 "use client";
 
+import type { AppSummary, ArtifactSummary } from "@/lib/engines/types";
+import type { LinkedAppContext, ThreadUpload } from "@/lib/session-workspace";
 import {
   ChevronRight,
   Database,
@@ -11,22 +13,18 @@ import {
   X,
 } from "lucide-react";
 import { useState, type ReactNode } from "react";
-import type { AppSummary, ArtifactSummary } from "@/lib/engines/types";
-import type { ThreadUpload, LinkedAppContext } from "@/lib/session-workspace";
 
-import { IconButton } from "@/components/layout/sidebar/IconButton";
 import { TopBar } from "@/components/chat/TopBar";
+import { IconButton } from "@/components/layout/sidebar/IconButton";
 import { NavTab } from "@/components/layout/sidebar/NavTab";
-import { Tag } from "@/components/layout/sidebar/Tag";
 import { SectionTab } from "@/components/layout/sidebar/SectionTab";
+import { Tag } from "@/components/layout/sidebar/Tag";
 import { BorderTile, TextTile } from "@/components/layout/sidebar/Tile";
 
 // Edge-to-edge separator: stretches past the pane's `px-s` padding so the
 // 1px rule hits both side walls of the rail.
 function EdgeSeparator() {
-  return (
-    <div className="-mx-s my-s h-px bg-border-default/50 dark:bg-border-default/16" />
-  );
+  return <div className="-mx-s my-s h-px bg-border-default/50 dark:bg-border-default/16" />;
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -97,9 +95,7 @@ function Section({
       <SectionTab
         category={category}
         icon={icon}
-        label={
-          count > 0 ? `${label.toUpperCase()} · ${count}` : label.toUpperCase()
-        }
+        label={count > 0 ? `${label.toUpperCase()} · ${count}` : label.toUpperCase()}
         open={open}
         collapsed={collapsed}
         hovered={hoveredId === `${id}-head`}
@@ -161,23 +157,19 @@ export function WorkspaceSections({
     artifacts: true,
     context: true,
   });
-  const [expandedMap, setExpandedMap] = useState<
-    Partial<Record<"apps" | "artifacts", boolean>>
-  >({});
+  const [expandedMap, setExpandedMap] = useState<Partial<Record<"apps" | "artifacts", boolean>>>(
+    {},
+  );
   const [hoveredId, setHoveredId] = useState<string | null>(null);
 
-  const toggle = (k: keyof typeof openMap) =>
-    setOpenMap((p) => ({ ...p, [k]: !p[k] }));
-  const toggleExpand = (k: "apps" | "artifacts") =>
-    setExpandedMap((p) => ({ ...p, [k]: !p[k] }));
+  const toggle = (k: keyof typeof openMap) => setOpenMap((p) => ({ ...p, [k]: !p[k] }));
+  const toggleExpand = (k: "apps" | "artifacts") => setExpandedMap((p) => ({ ...p, [k]: !p[k] }));
 
   const scopedApps = apps;
   const scopedArtifacts = artifacts;
 
   const visibleApps = expandedMap.apps ? scopedApps : scopedApps.slice(0, 3);
-  const visibleArts = expandedMap.artifacts
-    ? scopedArtifacts
-    : scopedArtifacts.slice(0, 3);
+  const visibleArts = expandedMap.artifacts ? scopedArtifacts : scopedArtifacts.slice(0, 3);
 
   const contextCount = uploads.length + (linkedApp ? 1 : 0);
 
@@ -256,8 +248,7 @@ export function WorkspaceSections({
           <>
             {visibleArts.map((artifact) => {
               const rowId = `art-${artifact.id}`;
-              const isActive =
-                activePreviewId === `session-artifact:${artifact.id}`;
+              const isActive = activePreviewId === `session-artifact:${artifact.id}`;
               return (
                 <NavTab
                   key={artifact.id}
@@ -281,11 +272,7 @@ export function WorkspaceSections({
             {scopedArtifacts.length > 3 ? (
               <NavTab
                 tile={<BorderTile icon={ChevronRight} />}
-                label={
-                  expandedMap.artifacts
-                    ? "View less"
-                    : `View all ${scopedArtifacts.length}`
-                }
+                label={expandedMap.artifacts ? "View less" : `View all ${scopedArtifacts.length}`}
                 muted
                 hovered={hoveredId === "arts-viewall"}
                 onClick={() => toggleExpand("artifacts")}
@@ -326,32 +313,32 @@ export function WorkspaceSections({
           />
         ) : (
           <>
-            {linkedApp ? (() => {
-              const isActive =
-                activePreviewId === `session-app:${linkedApp.appId}`;
-              return (
-                <NavTab
-                  tile={
-                    <TextTile
+            {linkedApp
+              ? (() => {
+                  const isActive = activePreviewId === `session-app:${linkedApp.appId}`;
+                  return (
+                    <NavTab
+                      tile={
+                        <TextTile
+                          label={linkedApp.title}
+                          active={isActive}
+                          category={isActive ? "apps" : null}
+                        />
+                      }
                       label={linkedApp.title}
                       active={isActive}
-                      category={isActive ? "apps" : null}
+                      hovered={hoveredId === `ctx-linked`}
+                      onClick={() => onOpenApp(linkedApp.appId)}
+                      onMouseEnter={() => setHoveredId("ctx-linked")}
+                      onMouseLeave={() => setHoveredId(null)}
+                      trailing={<TypeTag label="App" />}
                     />
-                  }
-                  label={linkedApp.title}
-                  active={isActive}
-                  hovered={hoveredId === `ctx-linked`}
-                  onClick={() => onOpenApp(linkedApp.appId)}
-                  onMouseEnter={() => setHoveredId("ctx-linked")}
-                  onMouseLeave={() => setHoveredId(null)}
-                  trailing={<TypeTag label="App" />}
-                />
-              );
-            })() : null}
+                  );
+                })()
+              : null}
             {uploads.map((upload) => {
               const rowId = `upload-${upload.id}`;
-              const isActive =
-                activePreviewId === `session-upload:${upload.id}`;
+              const isActive = activePreviewId === `session-upload:${upload.id}`;
               return (
                 <NavTab
                   key={upload.id}
@@ -389,13 +376,7 @@ export function WorkspaceSections({
   );
 }
 
-function EmptyBox({
-  label,
-  action,
-}: {
-  label: string;
-  action?: ReactNode;
-}) {
+function EmptyBox({ label, action }: { label: string; action?: ReactNode }) {
   return (
     <div className="my-xs rounded-m border border-dashed border-border-default/70 px-s py-l text-center text-sm text-text-neutral-tertiary dark:border-border-default">
       <p>{label}</p>
@@ -410,9 +391,7 @@ function EmptyBox({
 
 export function SessionWorkspacePane({ onCollapse, ...props }: WorkspacePaneProps) {
   return (
-    <aside
-      className="hidden h-full w-[260px] shrink-0 flex-col overflow-y-auto border-l border-border-default/50 bg-transparent dark:border-border-default/16 lg:flex"
-    >
+    <aside className="hidden h-full w-[260px] shrink-0 flex-col overflow-y-auto border-l border-border-default/50 bg-transparent dark:border-border-default/16 lg:flex">
       <TopBar
         actions={
           onCollapse ? (
@@ -426,9 +405,7 @@ export function SessionWorkspacePane({ onCollapse, ...props }: WorkspacePaneProp
           ) : null
         }
       >
-        <span className="font-label text-md font-medium text-text-neutral-primary">
-          Workspace
-        </span>
+        <span className="font-label text-md font-medium text-text-neutral-primary">Workspace</span>
       </TopBar>
       <WorkspaceSections {...props} onCollapse={onCollapse} />
     </aside>
@@ -449,9 +426,7 @@ export function SessionWorkspaceDrawer({
 }) {
   return (
     <div
-      className={`fixed inset-0 z-50 flex lg:hidden ${
-        open ? "" : "pointer-events-none"
-      }`}
+      className={`fixed inset-0 z-50 flex lg:hidden ${open ? "" : "pointer-events-none"}`}
       aria-hidden={!open}
     >
       <button

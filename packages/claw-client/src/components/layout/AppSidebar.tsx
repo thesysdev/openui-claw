@@ -25,7 +25,6 @@ import {
   Moon,
   PanelLeft,
   PanelLeftClose,
-  Plus,
   Search,
   Settings,
   Sun,
@@ -38,11 +37,11 @@ import { ExpandCollapse } from "./sidebar/ExpandCollapse";
 import { IconButton } from "./sidebar/IconButton";
 import { Logo } from "./sidebar/Logo";
 import { NavTab, UnreadBadge } from "./sidebar/NavTab";
-import { SectionSeparator } from "./sidebar/Separator";
 import { SectionTab } from "./sidebar/SectionTab";
+import { SectionSeparator } from "./sidebar/Separator";
 import { SessionRow } from "./sidebar/SessionRow";
 import { Tag } from "./sidebar/Tag";
-import { BorderTile, CategoryTile, IconTile, TextTile } from "./sidebar/Tile";
+import { BorderTile, IconTile, TextTile } from "./sidebar/Tile";
 
 // ─── Connection status styling ───────────────────────────────────────────────
 
@@ -123,13 +122,8 @@ export function AppSidebar({
   onToggleThemeMode,
 }: Props) {
   // ── Data hooks ──
-  const {
-    threads,
-    isLoadingThreads,
-    selectedThreadId,
-    loadThreads,
-    selectThread,
-  } = useThreadList();
+  const { threads, isLoadingThreads, selectedThreadId, loadThreads, selectThread } =
+    useThreadList();
   const threadsCast = threads as ClawThread[];
 
   const route = useHashRoute();
@@ -209,7 +203,10 @@ export function AppSidebar({
       displayThreads.length > 0 &&
       !selectedThreadId
     ) {
-      selectThread(displayThreads[0].id);
+      const firstThread = displayThreads[0];
+      if (firstThread) {
+        selectThread(firstThread.id);
+      }
     }
   }, [route, isLoadingThreads, displayThreads, selectedThreadId, selectThread]);
 
@@ -346,9 +343,7 @@ export function AppSidebar({
       onOpenCommandPalette();
       return;
     }
-    window.dispatchEvent(
-      new KeyboardEvent("keydown", { key: "k", metaKey: true, bubbles: true }),
-    );
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", metaKey: true, bubbles: true }));
   }, [onOpenCommandPalette]);
 
   const nc = navCollapsed;
@@ -390,7 +385,11 @@ export function AppSidebar({
           onMouseEnter={() => setHov("search")}
           onMouseLeave={() => setHov(null)}
           title="Search"
-          trailing={<Tag size="sm" variant="neutral">⌘K</Tag>}
+          trailing={
+            <Tag size="sm" variant="neutral">
+              ⌘K
+            </Tag>
+          }
         />
       </div>
 
@@ -431,9 +430,7 @@ export function AppSidebar({
           <ExpandCollapse open={sectionsOpen.agents} duration={0.4}>
             <div className="pb-3xs">
               {isLoadingThreads && groups.length === 0 ? (
-                <p className="px-s py-xs text-xs text-text-neutral-tertiary">
-                  Loading agents…
-                </p>
+                <p className="px-s py-xs text-xs text-text-neutral-tertiary">Loading agents…</p>
               ) : recentGroups.length === 0 ? (
                 nc ? null : (
                   <div className="mx-s my-xs rounded-m border border-dashed border-border-default/70 px-s py-xl text-center text-sm text-text-neutral-tertiary dark:border-border-default">
@@ -578,7 +575,14 @@ export function AppSidebar({
                   return (
                     <NavTab
                       key={app.id}
-                      tile={<TextTile label={app.title} active={isActive} hover={isH} category={isActive ? "apps" : null} />}
+                      tile={
+                        <TextTile
+                          label={app.title}
+                          active={isActive}
+                          hover={isH}
+                          category={isActive ? "apps" : null}
+                        />
+                      }
                       label={app.title}
                       href={appHash(app.id)}
                       active={isActive}
@@ -640,7 +644,14 @@ export function AppSidebar({
                   return (
                     <NavTab
                       key={a.id}
-                      tile={<TextTile label={a.title} active={isActive} hover={isH} category={isActive ? "artifacts" : null} />}
+                      tile={
+                        <TextTile
+                          label={a.title}
+                          active={isActive}
+                          hover={isH}
+                          category={isActive ? "artifacts" : null}
+                        />
+                      }
                       label={a.title}
                       href={artifactHash(a.id)}
                       active={isActive}
@@ -693,7 +704,6 @@ export function AppSidebar({
             title="Cron Jobs"
           />
         </div>
-
       </div>
 
       {/* ── Footer: theme toggle + combined status/settings button ── */}

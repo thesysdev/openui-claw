@@ -149,15 +149,15 @@ export function CronsView({
     });
     if (!onUpdateCronJob) return;
     const serverPatch: Record<string, unknown> = {};
-    if (edits.name !== undefined) serverPatch.name = edits.name;
+    if (edits.name !== undefined) serverPatch["name"] = edits.name;
     if (edits.prompt !== undefined) {
       // openclaw stores the agent prompt under payload.message; mirror that
       // to match the gateway shape so the agent picks up the new prompt on
       // its next run.
-      serverPatch.payload = { ...(job.payload ?? {}), message: edits.prompt };
+      serverPatch["payload"] = { ...(job.payload ?? {}), message: edits.prompt };
     }
     if (edits.scheduleExpr && edits.scheduleExpr !== job.schedule?.expr) {
-      serverPatch.schedule = nextSchedule;
+      serverPatch["schedule"] = nextSchedule;
     }
     if (Object.keys(serverPatch).length === 0) return;
     const ok = await onUpdateCronJob(job.id, serverPatch);

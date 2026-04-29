@@ -32,9 +32,7 @@ export function rowStateClass(state: RowState): string {
 /** Text color for a row label given its state. */
 export function rowLabelClass(state: RowState, accentOnActive = false): string {
   if (state === "active" || state === "expanded") {
-    return accentOnActive
-      ? "text-text-accent-primary"
-      : "text-text-neutral-primary";
+    return accentOnActive ? "text-text-accent-primary" : "text-text-neutral-primary";
   }
   if (state === "hover") return "text-text-neutral-primary";
   return "text-text-neutral-secondary";

@@ -15,7 +15,10 @@ export interface GreetingProps {
   subtitle?: string;
 }
 
-export function Greeting({ name, subtitle = "What would you like to work on today?" }: GreetingProps) {
+export function Greeting({
+  name,
+  subtitle = "What would you like to work on today?",
+}: GreetingProps) {
   const g = timeGreeting();
   return (
     <div className="mb-3xl">

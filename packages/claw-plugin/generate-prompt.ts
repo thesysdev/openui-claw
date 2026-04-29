@@ -26,7 +26,7 @@ import {
   openuiExamples,
   openuiLibrary,
   openuiPromptOptions,
-} from "../../../packages/react-ui/src/genui-lib";
+} from "@openuidev/react-ui/genui-lib";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const generatedDir = join(__dirname, "src", "generated");

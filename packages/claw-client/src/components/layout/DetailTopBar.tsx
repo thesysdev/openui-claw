@@ -58,13 +58,7 @@ export function DetailTopBar({
           />
         ) : null}
         {onShare ? (
-          <IconButton
-            icon={Share2}
-            variant="tertiary"
-            size="md"
-            title="Share"
-            onClick={onShare}
-          />
+          <IconButton icon={Share2} variant="tertiary" size="md" title="Share" onClick={onShare} />
         ) : null}
         {onCustomize ? (
           <Button
@@ -77,13 +71,7 @@ export function DetailTopBar({
             Customize
           </Button>
         ) : null}
-        <IconButton
-          icon={X}
-          variant="secondary"
-          size="md"
-          title="Close"
-          onClick={onClose}
-        />
+        <IconButton icon={X} variant="secondary" size="md" title="Close" onClick={onClose} />
       </div>
     </div>
   );

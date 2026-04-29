@@ -1,5 +1,6 @@
 "use client";
 
+import { useThread } from "@openuidev/react-headless";
 import {
   CornerDownLeft,
   Cpu,
@@ -9,11 +10,10 @@ import {
   SearchCheck,
   TrendingUp,
 } from "lucide-react";
-import { useThread } from "@openuidev/react-headless";
 import type { ComponentType } from "react";
 
-import { DEFAULT_STARTERS } from "@/lib/conversation-starters";
 import type { ConversationStarter } from "@/lib/conversation-starters";
+import { DEFAULT_STARTERS } from "@/lib/conversation-starters";
 import { usePreferences } from "@/lib/preferences";
 
 interface Props {
@@ -79,8 +79,8 @@ export function EmptyAgentHero({ agentName, composer }: Props) {
             Hi, I&apos;m {displayName}
           </h2>
           <p className="max-w-md text-center font-body text-sm text-text-neutral-tertiary">
-            Ask me to build an app, schedule tasks, pull data from a site, and
-            run everything automatically.
+            Ask me to build an app, schedule tasks, pull data from a site, and run everything
+            automatically.
           </p>
         </div>
 

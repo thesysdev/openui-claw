@@ -1,7 +1,6 @@
 import { CLAW_SUFFIX, extractExtraSlotId, isMainSession } from "@/lib/session-keys";
 
-const OPAQUE_UUID_REGEX =
-  /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/i;
+const OPAQUE_UUID_REGEX = /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/i;
 const SHORT_OPAQUE_SEGMENT_REGEX = /^[0-9a-f]{8,}$/i;
 
 function firstNonEmpty(...values: Array<string | null | undefined>): string | null {
@@ -73,11 +72,7 @@ export function resolveSessionTitle(params: {
   derivedTitle?: string | null;
   fallbackId: string;
 }): string {
-  const explicitTitle = firstNonEmpty(
-    params.label,
-    params.displayName,
-    params.derivedTitle,
-  );
+  const explicitTitle = firstNonEmpty(params.label, params.displayName, params.derivedTitle);
 
   if (explicitTitle && !isOpaqueSessionTitle(explicitTitle, params.fallbackId)) {
     return explicitTitle;

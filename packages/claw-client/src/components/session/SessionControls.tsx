@@ -1,10 +1,10 @@
 "use client";
 
-import { useCallback } from "react";
-import { Brain, Cpu } from "lucide-react";
-import type { ModelChoice, SessionRow } from "@/types/gateway-responses";
 import { qualifyModel } from "@/lib/models";
 import { THINKING_LEVELS } from "@/lib/thinking-levels";
+import type { ModelChoice, SessionRow } from "@/types/gateway-responses";
+import { Brain, Cpu } from "lucide-react";
+import { useCallback } from "react";
 
 function formatK(n: number): string {
   return n >= 1000 ? `${Math.round(n / 100) / 10}k` : String(n);
@@ -24,28 +24,28 @@ export function ComposerToolbar({ meta, models, onPatch, sessionKey }: Props) {
   const thinkingDefault = meta?.thinkingDefault ?? null;
   const thinkingOptions = meta?.thinkingOptions ?? null;
 
-  const currentModelValue = meta?.model
-    ? qualifyModel(meta.model, meta.modelProvider ?? "")
-    : "";
+  const currentModelValue = meta?.model ? qualifyModel(meta.model, meta.modelProvider ?? "") : "";
 
   const usedTokens = meta?.totalTokens ?? null;
   const contextTokens = meta?.contextTokens ?? null;
 
-  const usagePct = usedTokens !== null && contextTokens
-    ? Math.min(100, (usedTokens / contextTokens) * 100)
-    : null;
+  const usagePct =
+    usedTokens !== null && contextTokens ? Math.min(100, (usedTokens / contextTokens) * 100) : null;
 
   const usageColor =
-    usagePct === null ? "" :
-    usagePct >= 90 ? "var(--color-status-error)" :
-    usagePct >= 70 ? "var(--color-status-warning)" :
-    "var(--color-status-online)";
+    usagePct === null
+      ? ""
+      : usagePct >= 90
+        ? "var(--color-status-error)"
+        : usagePct >= 70
+          ? "var(--color-status-warning)"
+          : "var(--color-status-online)";
 
   const handleThinkingChange = useCallback(
     (e: React.ChangeEvent<HTMLSelectElement>) => {
       onPatch(sessionKey, { thinkingLevel: e.target.value || null });
     },
-    [onPatch, sessionKey]
+    [onPatch, sessionKey],
   );
 
   const handleModelChange = useCallback(
@@ -53,7 +53,7 @@ export function ComposerToolbar({ meta, models, onPatch, sessionKey }: Props) {
       const nextModelId = e.target.value;
       onPatch(sessionKey, { model: nextModelId || null });
     },
-    [onPatch, sessionKey]
+    [onPatch, sessionKey],
   );
 
   return (
@@ -71,9 +71,7 @@ export function ComposerToolbar({ meta, models, onPatch, sessionKey }: Props) {
                 (t) => t.value === "" || !thinkingOptions || thinkingOptions.includes(t.value),
               ).map((t) => (
                 <option key={t.value} value={t.value}>
-                  {t.value === "" && thinkingDefault
-                    ? `Default (${thinkingDefault})`
-                    : t.label}
+                  {t.value === "" && thinkingDefault ? `Default (${thinkingDefault})` : t.label}
                 </option>
               ))}
             </select>
@@ -96,34 +94,50 @@ export function ComposerToolbar({ meta, models, onPatch, sessionKey }: Props) {
           </div>
         </div>
 
-        {usedTokens !== null && contextTokens !== null && (() => {
-          const r = 7;
-          const circ = 2 * Math.PI * r;
-          const dash = ((usagePct ?? 0) / 100) * circ;
-          return (
-            <div
-              className="composer-toolbar__context-usage"
-              title={`${usedTokens.toLocaleString()} / ${contextTokens.toLocaleString()} tokens (${Math.round(usagePct!)}%)`}
-            >
-              <svg width="18" height="18" viewBox="0 0 18 18" className="composer-toolbar__context-ring">
-                <circle cx="9" cy="9" r={r} fill="none" stroke="rgb(var(--color-border-default))" strokeWidth="2" />
-                <circle
-                  cx="9" cy="9" r={r}
-                  fill="none"
-                  stroke={usageColor}
-                  strokeWidth="2"
-                  strokeDasharray={`${dash} ${circ}`}
-                  strokeLinecap="round"
-                  transform="rotate(-90 9 9)"
-                  style={{ transition: "stroke-dasharray 0.3s ease, stroke 0.3s ease" }}
-                />
-              </svg>
-              <span className="composer-toolbar__context-label">
-                {formatK(usedTokens)}/{formatK(contextTokens)}
-              </span>
-            </div>
-          );
-        })()}
+        {usedTokens !== null &&
+          contextTokens !== null &&
+          (() => {
+            const r = 7;
+            const circ = 2 * Math.PI * r;
+            const dash = ((usagePct ?? 0) / 100) * circ;
+            return (
+              <div
+                className="composer-toolbar__context-usage"
+                title={`${usedTokens.toLocaleString()} / ${contextTokens.toLocaleString()} tokens (${Math.round(usagePct!)}%)`}
+              >
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 18 18"
+                  className="composer-toolbar__context-ring"
+                >
+                  <circle
+                    cx="9"
+                    cy="9"
+                    r={r}
+                    fill="none"
+                    stroke="rgb(var(--color-border-default))"
+                    strokeWidth="2"
+                  />
+                  <circle
+                    cx="9"
+                    cy="9"
+                    r={r}
+                    fill="none"
+                    stroke={usageColor}
+                    strokeWidth="2"
+                    strokeDasharray={`${dash} ${circ}`}
+                    strokeLinecap="round"
+                    transform="rotate(-90 9 9)"
+                    style={{ transition: "stroke-dasharray 0.3s ease, stroke 0.3s ease" }}
+                  />
+                </svg>
+                <span className="composer-toolbar__context-label">
+                  {formatK(usedTokens)}/{formatK(contextTokens)}
+                </span>
+              </div>
+            );
+          })()}
       </div>
     </div>
   );

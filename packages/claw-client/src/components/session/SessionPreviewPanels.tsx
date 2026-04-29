@@ -1,9 +1,6 @@
 "use client";
 
-import {
-  AppDetail,
-  type AppContinueConversationHandler,
-} from "@/components/apps/AppDetail";
+import { AppDetail, type AppContinueConversationHandler } from "@/components/apps/AppDetail";
 import { ArtifactContentView } from "@/components/artifacts/ArtifactContentView";
 import { ArtifactDetail } from "@/components/artifacts/ArtifactDetail";
 import type {

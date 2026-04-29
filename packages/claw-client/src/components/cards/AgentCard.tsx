@@ -79,9 +79,7 @@ export function AgentCard({ agent, onClick }: AgentCardProps) {
       </div>
       <div className="mt-3xs flex items-center gap-xs">
         <StatusDot className={STATUS_DOT_CLASS[status]} size={6} />
-        <span className="font-body text-xs text-text-neutral-tertiary">
-          {STATUS_LABEL[status]}
-        </span>
+        <span className="font-body text-xs text-text-neutral-tertiary">{STATUS_LABEL[status]}</span>
       </div>
     </button>
   );

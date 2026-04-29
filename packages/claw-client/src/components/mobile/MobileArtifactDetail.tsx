@@ -74,10 +74,7 @@ export function MobileArtifactDetail({
   if (notFound || !record) {
     return (
       <div className="flex h-full flex-1 flex-col bg-background">
-        <MobileDetailHeader
-          onBack={onClose}
-          title={{ label: "Not found" }}
-        />
+        <MobileDetailHeader onBack={onClose} title={{ label: "Not found" }} />
         <div className="flex flex-1 items-center justify-center">
           <p className="text-sm text-text-neutral-secondary">Artifact not found</p>
         </div>
@@ -99,10 +96,7 @@ export function MobileArtifactDetail({
         actions={
           <>
             {onRefine ? (
-              <MobileButton
-                variant="secondary"
-                onClick={() => void onRefine(record)}
-              >
+              <MobileButton variant="secondary" onClick={() => void onRefine(record)}>
                 <Sparkles size={14} />
                 Refine
               </MobileButton>

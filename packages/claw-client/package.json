@@ -6,10 +6,13 @@
     "build": "next build",
     "dev": "next dev --port 18790",
     "start": "next start --port 18790",
-    "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview --port 18790",
-    "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
-    "upload": "opennextjs-cloudflare build && opennextjs-cloudflare upload",
-    "cf-typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts"
+    "lint:check": "eslint ./src",
+    "lint:fix": "eslint ./src --fix",
+    "format:check": "prettier --check ./src",
+    "format:fix": "prettier --write ./src",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests",
+    "ci": "pnpm lint:check && pnpm format:check && pnpm typecheck && pnpm build"
   },
   "dependencies": {
     "@noble/ed25519": "^2.3.0",
@@ -38,6 +41,7 @@
     "postcss": "^8.5.8",
     "tailwindcss": "^3.4.19",
     "typescript": "^5.9.3",
+    "vitest": "^4.0.18",
     "wrangler": "^4.78.0"
   }
 }

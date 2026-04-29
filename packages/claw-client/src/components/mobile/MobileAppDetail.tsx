@@ -1,33 +1,31 @@
 "use client";
 
-import { Code2, Eye, Layers, MoreVertical, Sparkles, Trash2 } from "lucide-react";
+import type { ActionEvent } from "@openuidev/react-lang";
 import { Renderer } from "@openuidev/react-lang";
 import { Callout } from "@openuidev/react-ui";
 import { openuiLibrary } from "@openuidev/react-ui/genui-lib";
-import type { ActionEvent } from "@openuidev/react-lang";
+import { Code2, Eye, Layers, MoreVertical, Sparkles, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import {
-  buildContinueConversationPayload,
-  handleOpenUrlAction,
-} from "@/lib/renderer-actions";
-import type { AppRecord, AppStore } from "@/lib/engines/types";
+import type { AppContinueConversationHandler } from "@/components/apps/AppDetail";
+import type { TitleSwitcherItem } from "@/components/chat/TitleSwitcher";
 import { HeaderIconButton } from "@/components/layout/HeaderIconButton";
 import { MobileButton } from "@/components/mobile/MobileButton";
 import { MobileDetailHeader } from "@/components/mobile/MobileDetailHeader";
 import { MobileMenuDrawer } from "@/components/mobile/MobileMenuDrawer";
 import { MobileSwitcherSheet } from "@/components/mobile/MobileSwitcherSheet";
 import { SegmentedTabs } from "@/components/ui/SegmentedTabs";
-import type { AppContinueConversationHandler } from "@/components/apps/AppDetail";
-import type { TitleSwitcherItem } from "@/components/chat/TitleSwitcher";
+import type { AppRecord, AppStore } from "@/lib/engines/types";
+import { buildContinueConversationPayload, handleOpenUrlAction } from "@/lib/renderer-actions";
 
 type ViewMode = "preview" | "code";
 
 function normalizeToolResult(result: unknown): unknown {
   if (result && typeof result === "object" && !Array.isArray(result)) {
     const candidate = result as Record<string, unknown>;
-    if (typeof candidate.stdout === "string") {
-      const trimmed = candidate.stdout.trim();
+    const stdout = candidate["stdout"];
+    if (typeof stdout === "string") {
+      const trimmed = stdout.trim();
       if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
         try {
           return JSON.parse(trimmed);
@@ -110,8 +108,7 @@ export function MobileAppDetail({
       exec: async (args: Record<string, unknown>) => invokeScopedTool("exec", args),
       read: async (args: Record<string, unknown>) => invokeScopedTool("read", args),
       db_query: async (args: Record<string, unknown>) => invokeScopedTool("db_query", args),
-      db_execute: async (args: Record<string, unknown>) =>
-        invokeScopedTool("db_execute", args),
+      db_execute: async (args: Record<string, unknown>) => invokeScopedTool("db_execute", args),
     };
   }, [apps, record?.sessionKey]);
 
@@ -135,10 +132,7 @@ export function MobileAppDetail({
   if (notFound || !record) {
     return (
       <div className="flex h-full flex-1 flex-col bg-background">
-        <MobileDetailHeader
-          onBack={onClose}
-          title={{ label: "Not found" }}
-        />
+        <MobileDetailHeader onBack={onClose} title={{ label: "Not found" }} />
         <div className="flex flex-1 items-center justify-center">
           <p className="text-sm text-text-neutral-secondary">App not found</p>
         </div>
@@ -157,10 +151,7 @@ export function MobileAppDetail({
         actions={
           <>
             {onRefine ? (
-              <MobileButton
-                variant="secondary"
-                onClick={() => void onRefine(record)}
-              >
+              <MobileButton variant="secondary" onClick={() => void onRefine(record)}>
                 <Sparkles size={14} />
                 Refine
               </MobileButton>

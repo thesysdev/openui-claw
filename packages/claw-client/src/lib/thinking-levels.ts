@@ -8,14 +8,7 @@
  * module keeps them aligned.
  */
 
-export type ThinkingLevel =
-  | ""
-  | "off"
-  | "minimal"
-  | "low"
-  | "medium"
-  | "high"
-  | "xhigh";
+export type ThinkingLevel = "" | "off" | "minimal" | "low" | "medium" | "high" | "xhigh";
 
 export interface ThinkingLevelOption {
   value: ThinkingLevel;

@@ -1,8 +1,8 @@
-import type { Metadata, Viewport } from "next";
+import { ServiceWorkerRegistrar } from "@/components/ServiceWorkerRegistrar";
 import "@openuidev/react-ui/components.css";
 import "@openuidev/react-ui/styles/index.css";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
-import { ServiceWorkerRegistrar } from "@/components/ServiceWorkerRegistrar";
 
 export const metadata: Metadata = {
   title: "Claw",
@@ -26,11 +26,7 @@ export const viewport: Viewport = {
   ],
 };
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className="h-full" suppressHydrationWarning>
       <body className="h-full bg-background antialiased">
