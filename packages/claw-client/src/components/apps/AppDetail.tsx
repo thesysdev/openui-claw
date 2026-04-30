@@ -390,7 +390,7 @@ export function AppDetail({
             }}
           />
         ) : (
-          <pre className="overflow-auto rounded-2xl bg-inverted-background p-ml text-sm text-text-white">
+          <pre className="overflow-auto rounded-2xl bg-inverted-background p-ml text-sm text-background">
             {record.content}
           </pre>
         )}

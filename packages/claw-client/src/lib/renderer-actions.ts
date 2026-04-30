@@ -24,18 +24,13 @@ export function handleOpenUrlAction(event: ActionEvent): boolean {
   if (event.type !== BuiltinActionType.OpenUrl) return false;
   const url = event.params?.["url"] as string | undefined;
   if (typeof window !== "undefined" && url) {
-    const win = window.open(url, "_blank", "noopener,noreferrer");
-    if (!win) {
-      // Popup blocker rejected — fall back to anchor click so the browser
-      // treats it as a first-party navigation from the same user gesture.
-      const a = document.createElement("a");
-      a.href = url;
-      a.target = "_blank";
-      a.rel = "noopener noreferrer";
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-    }
+    // `window.open(..., "noopener")` returns null on success per spec — the new
+    // browsing context is intentionally hidden from the opener. Treating that
+    // null as "popup blocked" and falling back to a synthetic anchor click
+    // opens a second tab on every navigation. Trust window.open instead; the
+    // call happens in the same user-gesture window, so popup blockers will
+    // honor it.
+    window.open(url, "_blank", "noopener,noreferrer");
   }
   return true;
 }

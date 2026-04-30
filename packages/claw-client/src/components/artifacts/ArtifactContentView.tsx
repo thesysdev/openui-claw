@@ -82,7 +82,7 @@ export function ArtifactContentView({
 
   if ((resolvedKind === "code" || resolvedKind === "text") && textContent) {
     return (
-      <pre className="h-full overflow-auto rounded-b-xl bg-inverted-background p-ml text-sm text-text-white">
+      <pre className="h-full overflow-auto rounded-b-xl bg-inverted-background p-ml text-sm text-background">
         {textContent}
       </pre>
     );
@@ -126,7 +126,7 @@ export function ArtifactContentView({
           </div>
         </div>
         {textContent ? (
-          <pre className="max-h-[420px] overflow-auto rounded-xl bg-inverted-background p-ml text-sm text-text-white">
+          <pre className="max-h-[420px] overflow-auto rounded-xl bg-inverted-background p-ml text-sm text-background">
             {textContent}
           </pre>
         ) : (

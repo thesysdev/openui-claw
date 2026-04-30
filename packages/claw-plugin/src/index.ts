@@ -43,7 +43,7 @@ Read this skill (\`read\` the file at \`skills/openui-creator/SKILL.md\`) **befo
 
 - "**briefing**", "**dashboard**", "**command center**", "**war room**", "**monitor**", "**tracker**", "**hub**", "**inbox**", "**control panel**", "**review queue**", "**daily digest**", "**health check**", "**status board**" — any persistent surface they'll open repeatedly.
 - Anything that needs **live data (Query)**, **mutations / action buttons** that fire back to you, or **stateful controls** that survive across page reloads.
-- Killer use cases this is built for: morning briefings (weather + calendar + email triage), social media monitoring (live feed + sentiment + recommended actions), trading desks (portfolio heatmap + position cards), SEO command centers (rankings + content gaps), DevOps boards (PRs + deploys + tickets), founder dashboards (MRR + churn + runway), relationship hubs (contact timelines + drafted replies). When asked for any of these, **build an app, not a chat reply**.
+- Killer use cases this is built for: morning briefings (weather + calendar + email triage), social media monitoring (live feed + sentiment + recommended actions), trading desks (position cards + risk analysis + price history), SEO command centers (rankings + content gaps), DevOps boards (PRs + deploys + tickets), founder dashboards (MRR + churn + runway), relationship hubs (contact timelines + drafted replies). When asked for any of these, **build an app, not a chat reply**.
 
 ## Refine flow
 
