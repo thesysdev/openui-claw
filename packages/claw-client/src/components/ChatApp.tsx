@@ -49,6 +49,7 @@ import {
 } from "@/lib/chat/useGateway";
 import { isTabHidden, playCompletionChime } from "@/lib/chime";
 import type { CommandContext, CommandMessageSnapshot } from "@/lib/commands";
+import { DEFAULT_STARTERS } from "@/lib/conversation-starters";
 import type { CronJobRecord, CronRunEntry, CronStatusRecord } from "@/lib/cron";
 import type { CompactSessionResult } from "@/lib/engines/openclaw/OpenClawEngine";
 import type {
@@ -65,7 +66,6 @@ import { ConnectionState } from "@/lib/gateway/types";
 import { navigate, useHashRoute } from "@/lib/hooks/useHashRoute";
 import { useIsMobile } from "@/lib/hooks/useIsMobile";
 import { qualifyModel } from "@/lib/models";
-import { DEFAULT_STARTERS } from "@/lib/conversation-starters";
 import type { NotificationRecord } from "@/lib/notifications";
 import { apply as applyPreferences, getPreferences } from "@/lib/preferences";
 import { extractAgentIdFromKey } from "@/lib/session-keys";
@@ -839,18 +839,14 @@ function ThreadArea({
                 onRenameAgent={async (next) => {
                   const main =
                     allThreads.find(
-                      (t) =>
-                        (t.clawAgentId ?? t.id) === currentAgentId &&
-                        t.clawKind === "main",
+                      (t) => (t.clawAgentId ?? t.id) === currentAgentId && t.clawKind === "main",
                     ) ?? allThreads.find((t) => (t.clawAgentId ?? t.id) === currentAgentId);
                   if (main) await renameSession(main.id, next);
                 }}
                 onDeleteAgent={async () => {
                   const main =
                     allThreads.find(
-                      (t) =>
-                        (t.clawAgentId ?? t.id) === currentAgentId &&
-                        t.clawKind === "main",
+                      (t) => (t.clawAgentId ?? t.id) === currentAgentId && t.clawKind === "main",
                     ) ?? allThreads.find((t) => (t.clawAgentId ?? t.id) === currentAgentId);
                   const target = main?.id;
                   if (target) {
@@ -1942,9 +1938,7 @@ function ChatAppInner({
     // Fallbacks (offline / no defaultAgentId yet): any main thread,
     // else the first available thread, so the home composer always
     // has a target session for uploads + processMessage.
-    return (
-      allHere.find((t) => t.clawKind === "main")?.id ?? allHere[0]?.id ?? null
-    );
+    return allHere.find((t) => t.clawKind === "main")?.id ?? allHere[0]?.id ?? null;
   }, [threads, defaultAgentId]);
 
   useEffect(() => {
@@ -2044,47 +2038,43 @@ function ChatAppInner({
           onUploadsSent={(uploadIds) => {
             if (homeMainThreadId) onMarkUploadsSent(homeMainThreadId, uploadIds);
           }}
-        commandContext={() => ({
-          threadId: homeMainThreadId,
-          messages: [],
-          toast: () => {},
-          downloadBlob: () => {},
-        })}
-        gatewayCommands={[]}
-        onDispatchGatewayCommand={async () => false}
-        models={availableModels}
-        gatewayDefaultModelId={gatewayDefaultModelId}
-        agentDefaultModelId={(() => {
-          const targetAgentId = defaultAgentId;
-          return targetAgentId ? (agentModelById.get(targetAgentId) ?? null) : null;
-        })()}
-        currentModel={meta?.model ? qualifyModel(meta.model, meta.modelProvider ?? "") : ""}
-        currentEffort={meta?.thinkingLevel ?? ""}
-        effortDefault={meta?.thinkingDefault ?? null}
-        effortOptions={meta?.thinkingOptions ?? null}
-        onModelChange={
-          sessionKey
-            ? (value) => {
-                void patchSession(sessionKey, { model: value || null });
-              }
-            : undefined
-        }
-        onEffortChange={
-          sessionKey
-            ? (value) => {
-                void patchSession(sessionKey, { thinkingLevel: value || null });
-              }
-            : undefined
-        }
+          commandContext={() => ({
+            threadId: homeMainThreadId,
+            messages: [],
+            toast: () => {},
+            downloadBlob: () => {},
+          })}
+          gatewayCommands={[]}
+          onDispatchGatewayCommand={async () => false}
+          models={availableModels}
+          gatewayDefaultModelId={gatewayDefaultModelId}
+          agentDefaultModelId={(() => {
+            const targetAgentId = defaultAgentId;
+            return targetAgentId ? (agentModelById.get(targetAgentId) ?? null) : null;
+          })()}
+          currentModel={meta?.model ? qualifyModel(meta.model, meta.modelProvider ?? "") : ""}
+          currentEffort={meta?.thinkingLevel ?? ""}
+          effortDefault={meta?.thinkingDefault ?? null}
+          effortOptions={meta?.thinkingOptions ?? null}
+          onModelChange={
+            sessionKey
+              ? (value) => {
+                  void patchSession(sessionKey, { model: value || null });
+                }
+              : undefined
+          }
+          onEffortChange={
+            sessionKey
+              ? (value) => {
+                  void patchSession(sessionKey, { thinkingLevel: value || null });
+                }
+              : undefined
+          }
           // Skip the rotating placeholder + TAB-to-fill UX on mobile — the
           // overlay assumes a hardware keyboard and the TAB tag has no
           // affordance on touch.
-          rotatingPlaceholders={
-            isMobile ? undefined : DEFAULT_STARTERS.map((s) => s.displayText)
-          }
-          rotatingPlaceholderFillWith={
-            isMobile ? undefined : DEFAULT_STARTERS.map((s) => s.prompt)
-          }
+          rotatingPlaceholders={isMobile ? undefined : DEFAULT_STARTERS.map((s) => s.displayText)}
+          rotatingPlaceholderFillWith={isMobile ? undefined : DEFAULT_STARTERS.map((s) => s.prompt)}
         />
       </>
     );

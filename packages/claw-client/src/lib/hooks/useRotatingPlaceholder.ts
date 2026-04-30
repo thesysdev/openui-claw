@@ -102,9 +102,7 @@ export function useRotatingPlaceholder({
   }, [active, hasContent, isFocused, intervalMs]);
 
   const current = active ? (items[idx % items.length] ?? null) : null;
-  const fillText = active
-    ? (fillWith?.[idx % items.length] ?? current)
-    : null;
+  const fillText = active ? (fillWith?.[idx % items.length] ?? current) : null;
 
   const tokens = useMemo(() => (current ? tokenize(current) : []), [current]);
   const wordCount = useMemo(

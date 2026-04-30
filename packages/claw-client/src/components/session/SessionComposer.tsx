@@ -240,7 +240,23 @@ function extensionVariant(ext: string): TagVariant {
   if (["xlsx", "xls", "csv", "tsv", "numbers"].includes(e)) return "success";
   if (["pptx", "ppt", "key"].includes(e)) return "warning";
   if (
-    ["js", "jsx", "ts", "tsx", "py", "rb", "go", "rs", "java", "c", "cpp", "h", "swift", "kt", "php"].includes(e)
+    [
+      "js",
+      "jsx",
+      "ts",
+      "tsx",
+      "py",
+      "rb",
+      "go",
+      "rs",
+      "java",
+      "c",
+      "cpp",
+      "h",
+      "swift",
+      "kt",
+      "php",
+    ].includes(e)
   )
     return "accent";
   if (["json", "yaml", "yml", "xml", "html", "css", "scss", "toml"].includes(e)) return "info";
@@ -266,9 +282,7 @@ function UploadChip({ label, onRemove }: { label: string; onRemove?: () => void 
           {ext.toUpperCase()}
         </Tag>
       ) : null}
-      <span className="max-w-[160px] truncate text-sm text-text-neutral-secondary">
-        {name}
-      </span>
+      <span className="max-w-[160px] truncate text-sm text-text-neutral-secondary">{name}</span>
       {onRemove ? (
         <button
           type="button"
@@ -440,7 +454,6 @@ export function SessionComposer({
   const cancelMessage = useThread((state) => state.cancelMessage);
   const isRunning = useThread((state) => state.isRunning);
   const isLoadingMessages = useThread((state) => state.isLoadingMessages);
-  const threadMessages = useThread((state) => state.messages);
   const prefs = usePreferences();
   const stt = useSpeechToText();
   const sttBaselineRef = useRef("");
@@ -845,11 +858,7 @@ export function SessionComposer({
               variant={stt.listening ? "primary" : "tertiary"}
               size="md"
               title={stt.listening ? "Stop dictation" : "Dictate (speech-to-text)"}
-              className={
-                stt.listening
-                  ? ""
-                  : "hover:!bg-transparent dark:hover:!bg-transparent"
-              }
+              className={stt.listening ? "" : "hover:!bg-transparent dark:hover:!bg-transparent"}
               onClick={() => {
                 if (stt.listening) {
                   stt.stop();

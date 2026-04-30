@@ -222,9 +222,7 @@ export function MobileHomeView({
       </div>
 
       {/* Sticky composer footer — same SessionComposer used in chat. */}
-      {composer ? (
-        <div className="shrink-0 bg-background px-ml pb-s pt-xs">{composer}</div>
-      ) : null}
+      {composer ? <div className="shrink-0 bg-background px-ml pb-s pt-xs">{composer}</div> : null}
     </div>
   );
 }

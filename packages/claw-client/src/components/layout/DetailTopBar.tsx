@@ -2,9 +2,9 @@
 
 import { RotateCw, Share2, Sparkles, Trash2, X } from "lucide-react";
 
+import { TitleSwitcher } from "@/components/chat/TitleSwitcher";
 import { IconButton } from "@/components/layout/sidebar/IconButton";
 import { Button } from "@/components/ui/Button";
-import { TitleSwitcher } from "@/components/chat/TitleSwitcher";
 
 export interface DetailTopBarProps {
   /** Title shown on the left — app or artifact name. */
