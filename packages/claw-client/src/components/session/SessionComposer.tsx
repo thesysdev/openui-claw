@@ -1,6 +1,7 @@
 "use client";
 
 import { IconButton } from "@/components/layout/sidebar/IconButton";
+import { Tag } from "@/components/layout/sidebar/Tag";
 import { ContextRing, type ContextBreakdownItem } from "@/components/ui/ContextRing";
 import {
   dispatchSlashCommand,
@@ -11,6 +12,10 @@ import {
 } from "@/lib/commands";
 import { wrapContent, wrapContext } from "@/lib/content-parser";
 import type { GatewayCommand } from "@/lib/engines/types";
+import {
+  ROTATING_WORD_STAGGER_MS,
+  useRotatingPlaceholder,
+} from "@/lib/hooks/useRotatingPlaceholder";
 import { useSpeechToText } from "@/lib/hooks/useSpeechToText";
 import { qualifyModel } from "@/lib/models";
 import type {
@@ -21,7 +26,7 @@ import type {
 import { buildThreadContextPayload } from "@/lib/session-workspace";
 import type { ModelChoice } from "@/types/gateway-responses";
 import { useThread } from "@openuidev/react-headless";
-import { CornerDownLeft, Mic, Plus, RotateCw, Square, X } from "lucide-react";
+import { CornerDownLeft, Mic, Plus, Square, X } from "lucide-react";
 
 import { MobileSwitcherSheet } from "@/components/mobile/MobileSwitcherSheet";
 import { useIsMobile } from "@/lib/hooks/useIsMobile";
@@ -221,10 +226,49 @@ function TextButtonSelect({
   );
 }
 
+/** Map a file extension to one of the `Tag` variants. Pickers stay
+ *  conservative: documents get info-blue, images green, code accent
+ *  (purple/indigo), spreadsheets success-green, slides warning-amber,
+ *  PDFs danger-red, archives neutral-gray. Anything unrecognized falls
+ *  through to neutral. */
+type TagVariant = "neutral" | "accent" | "success" | "warning" | "danger" | "info";
+function extensionVariant(ext: string): TagVariant {
+  const e = ext.toLowerCase();
+  if (e === "pdf") return "danger";
+  if (["png", "jpg", "jpeg", "webp", "gif", "svg", "heic", "avif"].includes(e)) return "success";
+  if (["doc", "docx", "txt", "md", "rtf"].includes(e)) return "info";
+  if (["xlsx", "xls", "csv", "tsv", "numbers"].includes(e)) return "success";
+  if (["pptx", "ppt", "key"].includes(e)) return "warning";
+  if (
+    ["js", "jsx", "ts", "tsx", "py", "rb", "go", "rs", "java", "c", "cpp", "h", "swift", "kt", "php"].includes(e)
+  )
+    return "accent";
+  if (["json", "yaml", "yml", "xml", "html", "css", "scss", "toml"].includes(e)) return "info";
+  return "neutral";
+}
+
+function splitFileName(label: string): { name: string; ext: string } {
+  const dotIdx = label.lastIndexOf(".");
+  if (dotIdx <= 0 || dotIdx === label.length - 1) return { name: label, ext: "" };
+  return { name: label.slice(0, dotIdx), ext: label.slice(dotIdx + 1) };
+}
+
 function UploadChip({ label, onRemove }: { label: string; onRemove?: () => void }) {
+  const { name, ext } = splitFileName(label);
+  const variant = extensionVariant(ext);
   return (
-    <span className="inline-flex max-w-full items-center gap-1 rounded-full border border-border-default bg-foreground px-2.5 py-1 text-sm font-medium text-text-neutral-secondary">
-      <span className="max-w-[180px] truncate sm:max-w-none">{label}</span>
+    <span
+      title={label}
+      className="inline-flex max-w-full items-center gap-xs rounded-md border border-border-default/60 bg-background p-xs text-sm shadow-sm dark:border-border-default/30 dark:bg-elevated-light"
+    >
+      {ext ? (
+        <Tag size="md" variant={variant}>
+          {ext.toUpperCase()}
+        </Tag>
+      ) : null}
+      <span className="max-w-[160px] truncate text-sm text-text-neutral-secondary">
+        {name}
+      </span>
       {onRemove ? (
         <button
           type="button"
@@ -268,7 +312,7 @@ function SlashMenu({
   }, [activeIndex]);
   if (entries.length === 0) return null;
   return (
-    <div className="mx-2 mt-2 mb-2 max-h-72 overflow-y-auto rounded-2xl border border-border-default bg-background shadow-lg">
+    <div className="absolute bottom-full left-0 right-0 z-20 mb-xs max-h-64 overflow-y-auto rounded-xl border border-border-default/70 bg-background p-3xs shadow-xl dark:border-border-default/30 dark:bg-elevated">
       {entries.map((entry, index) => (
         <button
           key={`${entry.source}:${entry.name}`}
@@ -276,21 +320,23 @@ function SlashMenu({
           type="button"
           onClick={() => onSelect(entry)}
           onMouseEnter={() => onHover(index)}
-          className={`flex w-full items-start gap-3 px-3 py-2 text-left text-sm transition-colors ${
-            index === activeIndex ? "bg-info-background" : "hover:bg-sunk-light"
+          className={`flex w-full items-center gap-s rounded-m px-s py-xs text-left transition-colors ${
+            index === activeIndex
+              ? "bg-info-background"
+              : "hover:bg-sunk-light dark:hover:bg-highlight-subtle"
           }`}
         >
-          <span className="font-mono text-sm font-semibold text-text-info-primary">
+          <span className="shrink-0 font-mono text-sm font-medium text-text-info-primary">
             /{entry.name}
           </span>
-          <span className="flex-1 text-sm text-text-neutral-secondary">
+          <span className="min-w-0 flex-1 truncate text-right font-body text-sm text-text-neutral-tertiary">
             {entry.description}
             {entry.argHint ? (
-              <span className="ml-1 text-text-neutral-tertiary">{entry.argHint}</span>
+              <span className="ml-2xs text-text-neutral-tertiary/70">{entry.argHint}</span>
             ) : null}
           </span>
           {entry.source === "gateway" ? (
-            <span className="rounded-full bg-foreground px-2 py-0.5 text-sm uppercase tracking-wide text-text-neutral-tertiary">
+            <span className="shrink-0 rounded-s bg-sunk-light px-2xs py-3xs font-label text-[10px] font-medium uppercase tracking-wide text-text-neutral-tertiary">
               gateway
             </span>
           ) : null}
@@ -323,6 +369,9 @@ export function SessionComposer({
   contextTokens,
   contextLimit,
   contextBreakdown,
+  rotatingPlaceholders,
+  rotatingPlaceholderFillWith,
+  rotateIntervalMs = 3000,
 }: {
   uploads: ThreadUpload[];
   linkedApp: LinkedAppContext | null;
@@ -372,6 +421,20 @@ export function SessionComposer({
    * be sent to the LLM. Return `false` to fall through to `chat.send`.
    */
   onDispatchGatewayCommand?: (name: string, args: string) => Promise<boolean>;
+  /** When set, the placeholder cycles through these strings while the
+   *  textarea is empty. Used on the home page to surface conversation
+   *  starters as auto-completes. */
+  rotatingPlaceholders?: ReadonlyArray<string>;
+  /** Optional parallel array (same length + ordering as
+   *  `rotatingPlaceholders`). When the user presses Tab, the textarea
+   *  fills with the entry from this array instead of the displayed
+   *  placeholder — lets the home composer show a concise hint while
+   *  still sending the model a richer prompt. Falls back to the
+   *  displayed placeholder when the entry is missing. */
+  rotatingPlaceholderFillWith?: ReadonlyArray<string>;
+  /** Milliseconds between rotation steps. Default 3000. Ignored when the
+   *  user prefers reduced motion — only the first item is shown. */
+  rotateIntervalMs?: number;
 }) {
   const processMessage = useThread((state) => state.processMessage);
   const cancelMessage = useThread((state) => state.cancelMessage);
@@ -386,6 +449,18 @@ export function SessionComposer({
   const [isDragOver, setIsDragOver] = useState(false);
   const dragDepthRef = useRef(0);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+
+  // Rotating-placeholder UX (home composer only — `rotatingPlaceholders`
+  // is undefined for chat). The hook owns the cycle interval, the
+  // per-word streaming, and the snap-to-end-on-focus behavior.
+  const [composerFocused, setComposerFocused] = useState(false);
+  const rotation = useRotatingPlaceholder({
+    items: rotatingPlaceholders ?? [],
+    fillWith: rotatingPlaceholderFillWith,
+    intervalMs: rotateIntervalMs,
+    hasContent: textContent.length > 0,
+    isFocused: composerFocused,
+  });
 
   const pendingUploads = useMemo(
     () => uploads.filter((upload) => upload.status === "pending"),
@@ -458,38 +533,6 @@ export function SessionComposer({
     setTextContent(`/${entry.name}${entry.argHint ? " " : ""}`);
     setSlashActiveIndex(0);
     textareaRef.current?.focus();
-  };
-
-  // Find the last user message in the current thread — used to "regenerate"
-  // (re-send the same text, let the model produce a fresh assistant turn).
-  const lastUserMessage = useMemo(() => {
-    for (let i = threadMessages.length - 1; i >= 0; i -= 1) {
-      const msg = threadMessages[i] as { role?: string; content?: unknown };
-      if (msg?.role === "user") return msg;
-    }
-    return null;
-  }, [threadMessages]);
-
-  const canRegenerate =
-    !isRunning && !isLoadingMessages && lastUserMessage != null && textContent.length === 0;
-
-  const handleRegenerate = async () => {
-    if (!lastUserMessage) return;
-    const content =
-      typeof lastUserMessage.content === "string"
-        ? lastUserMessage.content
-        : Array.isArray(lastUserMessage.content)
-          ? (lastUserMessage.content as Array<{ text?: unknown }>)
-              .map((part) =>
-                part && typeof part === "object" && typeof part.text === "string" ? part.text : "",
-              )
-              .join("")
-          : "";
-    if (!content.trim()) return;
-    await processMessage({
-      role: "user",
-      content,
-    } as any);
   };
 
   const isCommandInput = textContent.trimStart().startsWith("/");
@@ -614,7 +657,7 @@ export function SessionComposer({
 
   return (
     <div
-      className={`openclaw-ui-session-composer relative mb-1 w-full rounded-xl bg-sunk-light p-[2px] dark:bg-foreground sm:mb-3 ${
+      className={`openclaw-ui-session-composer relative mb-1 w-full rounded-xl bg-foreground p-[2px] sm:mb-3 ${
         isDragOver ? "ring-2 ring-text-accent-primary ring-offset-2" : ""
       }`}
       onDragEnter={handleDragEnter}
@@ -639,9 +682,9 @@ export function SessionComposer({
       )}
 
       {/* Bordered input card — only the textarea + send/stop button live here. */}
-      <div className="overflow-hidden rounded-lg border border-border-default/40 bg-background shadow-md dark:border-border-default/20">
+      <div className="overflow-hidden rounded-lg bg-background shadow-md">
         {pendingUploads.length > 0 && (
-          <div className="flex flex-wrap items-center gap-2 border-b border-border-default px-4 py-3">
+          <div className="flex flex-wrap items-center gap-xs p-s">
             {pendingUploads.map((upload) => (
               <UploadChip
                 key={upload.id}
@@ -652,72 +695,130 @@ export function SessionComposer({
           </div>
         )}
 
-        <div className="flex items-end gap-2 px-3 py-2">
-          <textarea
-            ref={textareaRef}
-            value={textContent}
-            onChange={(event) => setTextContent(event.target.value)}
-            onPaste={handlePaste}
-            rows={1}
-            placeholder={
-              isCommandInput
-                ? ""
-                : effectiveSendKey(prefs) === "mod-enter"
-                  ? "Type / for commands · ⌘↵ to send"
-                  : "Type / for commands"
-            }
-            className="max-h-48 flex-1 resize-none bg-transparent py-1 text-sm leading-6 text-text-neutral-primary outline-none placeholder:text-text-neutral-tertiary"
-            onKeyDown={(event) => {
-              if (slashMatches.length > 0) {
-                if (event.key === "ArrowDown") {
-                  event.preventDefault();
-                  setSlashActiveIndex((idx) => Math.min(slashMatches.length - 1, idx + 1));
-                  return;
-                }
-                if (event.key === "ArrowUp") {
-                  event.preventDefault();
-                  setSlashActiveIndex((idx) => Math.max(0, idx - 1));
-                  return;
-                }
-                if (event.key === "Tab") {
-                  const chosen = slashMatches[slashActiveIndex];
-                  if (chosen) {
+        <div className="flex items-end gap-xs pl-s pr-2xs py-2xs">
+          <div className="relative flex flex-1 items-end">
+            <textarea
+              ref={textareaRef}
+              value={textContent}
+              onChange={(event) => setTextContent(event.target.value)}
+              onPaste={handlePaste}
+              onFocus={() => setComposerFocused(true)}
+              onBlur={() => setComposerFocused(false)}
+              rows={1}
+              // Suppress the native placeholder while a rotating overlay is
+              // active — the overlay carries both the rotating text + the
+              // [Tab] chip and we don't want a double-print.
+              placeholder={
+                rotation.current || isCommandInput
+                  ? ""
+                  : effectiveSendKey(prefs) === "mod-enter"
+                    ? "Type / for commands · ⌘↵ to send"
+                    : "Type / for commands"
+              }
+              className="max-h-48 w-full resize-none bg-transparent py-2xs text-sm leading-5 text-text-neutral-primary outline-none placeholder:text-text-neutral-tertiary"
+              onKeyDown={(event) => {
+                if (slashMatches.length > 0) {
+                  if (event.key === "ArrowDown") {
                     event.preventDefault();
-                    applySlashCompletion(chosen);
+                    setSlashActiveIndex((idx) => Math.min(slashMatches.length - 1, idx + 1));
                     return;
                   }
+                  if (event.key === "ArrowUp") {
+                    event.preventDefault();
+                    setSlashActiveIndex((idx) => Math.max(0, idx - 1));
+                    return;
+                  }
+                  if (event.key === "Tab") {
+                    const chosen = slashMatches[slashActiveIndex];
+                    if (chosen) {
+                      event.preventDefault();
+                      applySlashCompletion(chosen);
+                      return;
+                    }
+                  }
+                  if (event.key === "Escape") {
+                    event.preventDefault();
+                    setTextContent("");
+                    return;
+                  }
+                  // Enter falls through to submission — literal text wins.
                 }
-                if (event.key === "Escape") {
+                // Rotating-placeholder Tab-fill: empty textarea + no slash
+                // menu open → accept the current placeholder. Cursor lands
+                // at the end (set after state flush via the autoFocus hop
+                // below — `setSelectionRange` on the next tick).
+                if (
+                  event.key === "Tab" &&
+                  !event.shiftKey &&
+                  rotation.fillText &&
+                  textContent.length === 0 &&
+                  slashMatches.length === 0
+                ) {
                   event.preventDefault();
-                  setTextContent("");
+                  const fill = rotation.fillText;
+                  setTextContent(fill);
+                  requestAnimationFrame(() => {
+                    const ta = textareaRef.current;
+                    if (!ta) return;
+                    ta.setSelectionRange(fill.length, fill.length);
+                  });
                   return;
                 }
-                // Enter falls through to submission — literal text wins.
-              }
-              if (event.key === "Enter" && !event.shiftKey) {
-                const mode = effectiveSendKey(prefs);
-                const wantsMod = mode === "mod-enter";
-                const hasMod = event.metaKey || event.ctrlKey;
-                if (wantsMod && !hasMod) return; // let newline insert
-                if (!wantsMod && hasMod) return; // ⌘↵ ignored in plain mode
-                event.preventDefault();
-                void handleSubmit();
-              }
-            }}
-          />
-          {canRegenerate ? (
-            <IconButton
-              icon={RotateCw}
-              variant="tertiary"
-              size="md"
-              title="Regenerate last response"
-              onClick={() => void handleRegenerate()}
+                if (event.key === "Enter" && !event.shiftKey) {
+                  const mode = effectiveSendKey(prefs);
+                  const wantsMod = mode === "mod-enter";
+                  const hasMod = event.metaKey || event.ctrlKey;
+                  if (wantsMod && !hasMod) return; // let newline insert
+                  if (!wantsMod && hasMod) return; // ⌘↵ ignored in plain mode
+                  event.preventDefault();
+                  void handleSubmit();
+                }
+              }}
             />
-          ) : null}
+            {rotation.current && textContent.length === 0 ? (
+              // `inset-0` + `items-center` + same py/leading as the
+              // textarea → the placeholder sits on the exact same
+              // baseline as typed text. Each word's `wordIndex`
+              // drives its `animation-delay`; the TAB chip waits
+              // for `streamDone` before fading in.
+              <div
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-0 flex items-center gap-xs py-2xs"
+              >
+                <span className="min-w-0 truncate text-sm leading-5 text-text-neutral-tertiary/70">
+                  {rotation.tokens.map((token, i) =>
+                    token.wordIndex < 0 ? (
+                      <span key={`${rotation.rotationKey}-${i}`}>{token.text}</span>
+                    ) : (
+                      <span
+                        key={`${rotation.rotationKey}-${i}`}
+                        className="claw-word-blur-in inline-block"
+                        style={{
+                          animationDelay: `${token.wordIndex * ROTATING_WORD_STAGGER_MS}ms`,
+                        }}
+                      >
+                        {token.text}
+                      </span>
+                    ),
+                  )}
+                </span>
+                {rotation.streamDone ? (
+                  <Tag
+                    key={`tab-${rotation.rotationKey}`}
+                    size="md"
+                    variant="neutral"
+                    className="claw-fade-in opacity-70"
+                  >
+                    TAB
+                  </Tag>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
           <IconButton
             icon={isRunning ? Square : CornerDownLeft}
-            variant="primary"
-            size="lg"
+            variant="ghost"
+            size="md"
             title={
               isRunning ? "Stop" : parsedCommand ? `Run /${parsedCommand.command.name}` : "Send"
             }
@@ -736,6 +837,7 @@ export function SessionComposer({
             size="md"
             title="Add context / attach files"
             onClick={onPickFiles}
+            className="hover:!bg-transparent dark:hover:!bg-transparent"
           />
           {stt.supported ? (
             <IconButton
@@ -743,6 +845,11 @@ export function SessionComposer({
               variant={stt.listening ? "primary" : "tertiary"}
               size="md"
               title={stt.listening ? "Stop dictation" : "Dictate (speech-to-text)"}
+              className={
+                stt.listening
+                  ? ""
+                  : "hover:!bg-transparent dark:hover:!bg-transparent"
+              }
               onClick={() => {
                 if (stt.listening) {
                   stt.stop();

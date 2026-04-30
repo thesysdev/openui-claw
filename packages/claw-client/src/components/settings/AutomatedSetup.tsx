@@ -25,7 +25,7 @@ export function AutomatedSetup() {
         </label>
         <pre
           className="overflow-auto whitespace-pre-wrap break-all rounded-lg border border-border-default bg-sunk-light p-m font-mono text-sm text-text-neutral-secondary dark:border-border-default/16 dark:bg-elevated"
-          style={{ height: 200 }}
+          style={{ height: 120 }}
         >
           {INSTALL_COMMAND}
         </pre>

@@ -21,7 +21,7 @@ export function Greeting({
 }: GreetingProps) {
   const g = timeGreeting();
   return (
-    <div className="mb-3xl">
+    <div className="mb-l">
       <h1 className="font-heading text-2xl font-bold text-text-neutral-primary leading-heading">
         {g}
         {name ? `, ${name}` : ""}

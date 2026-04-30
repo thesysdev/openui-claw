@@ -16,7 +16,7 @@ import {
   Table2,
   Trash2,
 } from "lucide-react";
-import { useMemo } from "react";
+import { useMemo, type ReactNode } from "react";
 
 import { AgentCard, type AgentCardData } from "@/components/cards/AgentCard";
 import { IconButton } from "@/components/layout/sidebar/IconButton";
@@ -154,6 +154,15 @@ export interface HomeViewProps {
   onMarkNotifRead?: (notifId: string) => void;
   onMarkAllNotifsRead?: () => void | Promise<void>;
   onOpenCron?: (jobId: string) => void;
+  /**
+   * Welcome composer shown above the dashboard. Built by `ChatApp` from the
+   * same `SessionComposer` used in chat — so the user gets identical
+   * controls (model picker, thinking effort, send button) on the landing
+   * page. Submissions land in the default agent's main thread (the parent
+   * arranges that by selecting the right thread before the composer
+   * mounts).
+   */
+  composer?: ReactNode;
 }
 
 export function HomeView({
@@ -171,6 +180,7 @@ export function HomeView({
   onMarkNotifRead,
   onMarkAllNotifsRead,
   onOpenCron,
+  composer,
 }: HomeViewProps) {
   const agents = useMemo(() => buildAgents(threads as ClawThread[]), [threads]);
   const homeNotifs = useMemo(() => notifications.map(toHomeNotif), [notifications]);
@@ -193,12 +203,13 @@ export function HomeView({
 
   return (
     <div className="flex h-full flex-1 overflow-hidden bg-background">
-      {/* ── Main scroll area ── */}
-      <div className="flex-1 overflow-y-auto">
-        <div className="mx-auto max-w-[1080px] px-3xl py-3xl">
-          <Greeting name={userName} />
+      {/* ── Main column: scrollable content + sticky composer footer ── */}
+      <div className="flex min-w-0 flex-1 flex-col">
+        <div className="flex-1 overflow-y-auto">
+          <div className="mx-auto max-w-[1080px] px-3xl pb-l pt-3xl">
+            <Greeting name={userName} />
 
-          {/* Top agents */}
+            {/* Top agents */}
           <section className="mb-2xl">
             <SectionHeader
               title="Top agents"
@@ -341,7 +352,15 @@ export function HomeView({
               </div>
             )}
           </section>
+          </div>
         </div>
+
+        {/* Sticky composer footer — same SessionComposer used in chat. */}
+        {composer ? (
+          <div className="shrink-0 bg-background">
+            <div className="mx-auto max-w-[1080px] px-3xl pb-ml pt-s">{composer}</div>
+          </div>
+        ) : null}
       </div>
 
       {/* ── Notifications panel ── */}

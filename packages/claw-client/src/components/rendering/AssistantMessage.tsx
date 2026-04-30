@@ -410,7 +410,7 @@ function ThinkingPanel({
         className="overflow-hidden transition-[max-height,opacity] duration-300 ease-out"
         style={{ maxHeight: open ? 10000 : 0, opacity: open ? 1 : 0 }}
       >
-        <div className="mt-xs space-y-xs rounded-lg bg-sunk-light p-m dark:bg-sunk-deep">
+        <div className="mt-xs space-y-xs rounded-4xl bg-foreground p-m dark:bg-sunk-deep">
           {children}
         </div>
       </div>

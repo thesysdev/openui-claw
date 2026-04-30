@@ -26,9 +26,11 @@ import {
   PanelLeft,
   PanelLeftClose,
   Search,
-  Settings,
   Sun,
+  Wifi,
+  WifiOff,
 } from "lucide-react";
+import type { ComponentType } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { togglePinnedThread, usePinnedThreadIds } from "@/lib/session-pins";
@@ -61,6 +63,20 @@ const STATUS_LABEL: Record<ConnectionState, string> = {
   [ConnectionState.AUTH_FAILED]: "Auth failed",
   [ConnectionState.PAIRING]: "Pairing…",
   [ConnectionState.UNREACHABLE]: "Unreachable",
+};
+
+// Wi-Fi icon variant per connection state. Connecting / pairing keep the
+// `Wifi` glyph and add a pulse on top to signal activity.
+const STATUS_ICON: Record<
+  ConnectionState,
+  { icon: ComponentType<{ size?: number; className?: string }>; pulse?: boolean }
+> = {
+  [ConnectionState.CONNECTED]: { icon: Wifi },
+  [ConnectionState.CONNECTING]: { icon: Wifi, pulse: true },
+  [ConnectionState.PAIRING]: { icon: Wifi, pulse: true },
+  [ConnectionState.DISCONNECTED]: { icon: WifiOff },
+  [ConnectionState.AUTH_FAILED]: { icon: WifiOff },
+  [ConnectionState.UNREACHABLE]: { icon: WifiOff },
 };
 
 // ─── Agent grouping ──────────────────────────────────────────────────────────
@@ -712,45 +728,51 @@ export function AppSidebar({
           nc ? "justify-center" : ""
         }`}
       >
-        {nc ? (
-          <IconButton
-            icon={Settings}
-            variant="tertiary"
-            size="md"
-            title="Open settings"
-            onClick={onSettingsClick}
-          />
-        ) : (
-          <>
-            <button
-              type="button"
-              onClick={onSettingsClick}
-              title="Open settings"
-              aria-label={`${STATUS_LABEL[connectionState]} — open settings`}
-              className="group flex min-w-0 flex-1 items-center justify-between gap-s rounded-m px-s py-2xs text-left transition-colors hover:bg-sunk dark:hover:bg-sunk-light"
-            >
-              <span className="flex min-w-0 items-center gap-s">
-                <span
-                  className={`inline-block h-s w-s shrink-0 rounded-full ${DOT_CLASS[connectionState]}`}
-                />
-                <span className="truncate font-label text-sm font-regular text-text-neutral-primary">
-                  {STATUS_LABEL[connectionState]}
-                </span>
-              </span>
-              <Settings
-                size={14}
-                className="shrink-0 text-text-neutral-tertiary group-hover:text-text-neutral-primary"
-              />
-            </button>
+        {(() => {
+          const status = STATUS_ICON[connectionState];
+          const StatusIcon = status.icon;
+          return nc ? (
             <IconButton
-              icon={isDark ? Sun : Moon}
+              icon={StatusIcon}
               variant="tertiary"
               size="md"
-              title={isDark ? "Switch to light mode" : "Switch to dark mode"}
-              onClick={onToggleThemeMode}
+              title={`${STATUS_LABEL[connectionState]} — open settings`}
+              onClick={onSettingsClick}
             />
-          </>
-        )}
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={onSettingsClick}
+                title="Open settings"
+                aria-label={`${STATUS_LABEL[connectionState]} — open settings`}
+                className="group flex min-w-0 flex-1 items-center justify-between gap-s rounded-m px-s py-2xs text-left transition-colors hover:bg-sunk dark:hover:bg-sunk-light"
+              >
+                <span className="flex min-w-0 items-center gap-s">
+                  <span
+                    className={`inline-block h-s w-s shrink-0 rounded-full ${DOT_CLASS[connectionState]}`}
+                  />
+                  <span className="truncate font-label text-sm font-regular text-text-neutral-primary">
+                    {STATUS_LABEL[connectionState]}
+                  </span>
+                </span>
+                <StatusIcon
+                  size={14}
+                  className={`shrink-0 text-text-neutral-tertiary group-hover:text-text-neutral-primary ${
+                    status.pulse ? "animate-pulse" : ""
+                  }`}
+                />
+              </button>
+              <IconButton
+                icon={isDark ? Sun : Moon}
+                variant="tertiary"
+                size="md"
+                title={isDark ? "Switch to light mode" : "Switch to dark mode"}
+                onClick={onToggleThemeMode}
+              />
+            </>
+          );
+        })()}
       </div>
     </aside>
   );

@@ -79,16 +79,19 @@ const config: Config = {
         "border-interactive": "var(--color-border-interactive)",
         "border-interactive-emphasis": "var(--color-border-interactive-emphasis)",
         "border-interactive-selected": "var(--color-border-interactive-selected)",
-        "border-accent": "var(--color-border-accent)",
+        "border-accent": "rgb(var(--color-border-accent) / <alpha-value>)",
         "border-accent-emphasis": "var(--color-border-accent-emphasis)",
         "border-accent-selected": "var(--color-border-accent-selected)",
-        "border-info": "var(--color-border-info)",
+        // rgb(var(...) / <alpha-value>) so `/N` modifiers (e.g.
+        // `border-border-success/40`) resolve correctly. The base CSS
+        // tokens below are stored as space-separated rgb channels.
+        "border-info": "rgb(var(--color-border-info) / <alpha-value>)",
         "border-info-emphasis": "var(--color-border-info-emphasis)",
-        "border-alert": "var(--color-border-alert)",
+        "border-alert": "rgb(var(--color-border-alert) / <alpha-value>)",
         "border-alert-emphasis": "var(--color-border-alert-emphasis)",
-        "border-success": "var(--color-border-success)",
+        "border-success": "rgb(var(--color-border-success) / <alpha-value>)",
         "border-success-emphasis": "var(--color-border-success-emphasis)",
-        "border-danger": "var(--color-border-danger)",
+        "border-danger": "rgb(var(--color-border-danger) / <alpha-value>)",
         "border-danger-emphasis": "var(--color-border-danger-emphasis)",
 
         // ── Chat-specific ──
