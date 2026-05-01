@@ -7,7 +7,9 @@ You are about to create or edit a durable app using openui-lang. The app is pers
 
 Wrap openui-lang code in triple-backtick fences tagged `openui-lang` when you preview it inline; `app_create`/`app_update` themselves take RAW code (no fences) in the `code` / `patch` argument.
 
-CRITICAL — Query tool name: The app runtime's `toolProvider` maps tool names directly to plugin handlers. Supported direct tool names are `exec`, `read`, `db_query`, and `db_execute`. Always use `Query("exec", {command: "..."})`, `Query("read", ...)`, `Query("db_query", ...)`, or `Mutation("db_execute", ...)` — never the `tools_invoke` wrapper.
+CRITICAL — Query tool name: The app runtime's `toolProvider` maps tool names directly to plugin handlers. Supported direct tool names are `exec`, `read`, `db_query`, and `db_execute`. Always use `Query("exec", {command: "..."})`, `Query("read", ...)`, `Query("db_query", ...)`, or `Mutation("db_execute", ...)` — never the `tools_invoke` wrapper. **DO NOT invent other tool names.** There is no "fetch", "api", "http", "search", or "invoke" tool.
+
+For KPIs on large or complex datasets, prefer SQL aggregation in a `Query("db_query", {sql: "SELECT COUNT(*) as total, SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as active ..."})` over many `@Count/@Sum/@Filter` chains in the UI. Use `@First(query.rows)` to unwrap single-row aggregate results.
 
 Durable-object timing: call `app_create` or `app_update` as soon as the payload is ready. Do not wait for your final narrative paragraph before saving. After save succeeds, you can keep streaming explanation, follow-ups, or next steps in the same turn.
 
@@ -16,6 +18,32 @@ Durable-object timing: call `app_create` or `app_update` as soon as the payload 
 Tables are COLUMN-oriented. `Table([Col("Label", dataArray), Col("Count", countArray, "number")])` — the second `Col` argument is data, not a type label.
 
 Multi-line statements are OK inside brackets `()`, `[]`, `{}` and ternaries — newlines are ignored by the parser.
+
+## Structured Workflow (follow this order)
+
+Before writing any app code, follow these 5 steps:
+
+1. **PLAN the data model.** What tables/queries do you need? What mutations? Do any mutations depend on each other (e.g. need last_insert_rowid from a prior insert)? If yes, redesign — each @Run(mutation) is a SEPARATE DB call with no shared transaction.
+
+2. **TEST the data pipeline.** Run the actual commands/queries with `exec` or `db_query`. Get the real JSON shape. Verify the output is valid JSON. If writing a script, save it with `write`, then run it with `exec` and confirm it works. **Test with ALL parameter combinations** — empty data, error cases, missing fields. The app runtime has NO feedback loop; broken scripts show blank data silently.
+
+3. **DESIGN the layout.** Pick the right component for each data type:
+   - 2-4 summary metrics → KPI Card grid (Stack row, max 3 cards per row)
+   - List of 4+ items with comparable fields → Table (NOT cards)
+   - Time series → LineChart / AreaChart
+   - Proportions / breakdown → PieChart (flat arrays!) or donut
+   - Category comparison → BarChart / HorizontalBarChart
+   - External links in data → @OpenUrl (NOT @ToAssistant)
+
+   **Modal check:** add a Modal drill-down ONLY when the row has data the Table can't show, OR an action that needs more than one click. If the Modal would just re-display the same columns, skip it. (Full criteria: see "When to add a Table + Modal drill-down" below.)
+
+4. **WIRE interactivity.** For each interactive element:
+   - Filters: $binding → Select → pass $binding in Query args (EVERY relevant Query must reference it)
+   - Per-row actions: $state variable + top-level Mutation + @Set($state, row.id) → @Run(mutation)
+   - Forms: $bindings on fields used in Mutations, @Reset after submit
+   - **Enrichment check:** Does the data need AI classification, triage, sentiment analysis, or draft generation? If yes → do NOT write naive keyword heuristics in a script. Use the **cron agentTurn → DB → app** pattern: a cron job runs an LLM agent that analyzes data and writes enriched results to SQLite, and the app reads from the DB. See the Agent-enriched apps section below.
+
+5. **BUILD the app.** Write root = Stack(...) FIRST for streaming, then components.
 
 ## Syntax Rules
 
@@ -36,6 +64,17 @@ Multi-line statements are OK inside brackets `()`, `[]`, `{}` and ternaries — 
 15. Ternary: `condition ? valueIfTrue : valueIfFalse`
 16. Parentheses for grouping: `(a + b) * c`
 - Strings use double quotes with backslash escaping
+17. Line comments: `//` is stripped by the parser. Use to annotate sections in large apps.
+```
+// KPI section
+kpiRow = Stack([kpi1, kpi2, kpi3], "row", "m", "stretch")
+```
+18. Computed values: any expression can be assigned to a variable and reused. This works with query-derived data, $reactive variables, and @-functions.
+```
+totalEngagement = data.likes + data.retweets + data.replies
+engagementRate = @Round(totalEngagement * 100 / data.views, 2)
+avgWeekly = @Round(@Avg(npm.packages.weekly), 0)
+```
 
 ## Component Signatures
 
@@ -149,6 +188,75 @@ TagBlock(tags: string[]) — tags is an array of strings
 Tag(text: string, icon?: string, size?: "sm" | "md" | "lg", variant?: "neutral" | "info" | "success" | "warning" | "danger") — Styled tag/badge with optional icon and variant
 - Color-mapped Tag: Tag(value, null, "sm", value == "high" ? "danger" : value == "medium" ? "warning" : "neutral")
 
+## Layout Decision Matrix
+
+**Choose the right component for your data:**
+- **KPI summary (2-4 metrics):** `Stack([Card([TextContent("Label", "small"), TextContent(value, "large-heavy")], "sunk"), ...], "row", "m", "stretch")` — max 3 Cards per row
+- **Data list (4+ items, comparable fields):** `Table([Col(...), Col(...)])` with @Each for styled cells (Tag, Button). Add a Modal drill-down only when criteria below are met.
+- **Feed (chronological items with actions):** Stack column of Cards via @Each, each card has action Buttons
+- **Category breakdown:** PieChart (flat arrays!) or HorizontalBarChart
+- **Trend over time:** LineChart or AreaChart
+- **Comparison across categories:** BarChart (grouped or stacked)
+- **Multi-dimension comparison:** RadarChart
+
+**Table + Modal detail pattern (most common for dashboards):**
+```
+$selectedId = ""
+$showDetail = false
+table = Table([
+  Col("Name", data.rows.name),
+  Col("Status", @Each(data.rows, "r", Tag(r.status, null, "sm", r.status == "active" ? "success" : "danger"))),
+  Col("", @Each(data.rows, "r", Button("Details", Action([@Set($selectedId, "" + r.id), @Set($showDetail, true)]), "secondary", "normal", "extra-small")))
+])
+selected = @First(@Filter(data.rows, "id", "==", $selectedId))
+detail = Modal("Details", $showDetail, [
+  CardHeader(selected.name),
+  MarkDownRenderer(selected.description),
+  Buttons([Button("Open ↗", Action([@OpenUrl(selected.url)]), "primary"), Button("Close", Action([@Set($showDetail, false)]), "secondary")])
+], "md")
+```
+
+**Conditional Tag coloring (use for status/priority/severity):**
+`Tag(item.priority, null, "sm", item.priority == "urgent" ? "danger" : item.priority == "high" ? "warning" : item.priority == "medium" ? "info" : "neutral")`
+
+**Conditional alert bar (war room / command center pattern):**
+Show alerts at the top of the dashboard that change based on live data:
+```
+activeIncidents = @Filter(incidents, "status", "!=", "resolved")
+alertBar = @Count(activeIncidents) > 0 ? Callout("warning", "🔥 " + @Count(activeIncidents) + " Active Incident(s)", @First(activeIncidents).title) : Callout("success", "✅ All Clear", "No active incidents")
+root = Stack([header, alertBar, kpiRow, tabs])
+```
+Place alertBar between header and KPI row. Use Callout (auto-dismissable) or TextCallout (persistent) depending on urgency.
+
+**Null-safe display (handle loading/missing data gracefully):**
+```
+TextContent(gh.stars ? "" + gh.stars : "—", "large-heavy")
+@Count(data.rows) > 0 ? Table([...]) : TextContent("No data yet", "small")
+@Count(trend) > 1 ? AreaChart(trend.day, [Series("Views", trend.count)]) : Callout("info", "Building history…", "More data points needed.")
+```
+Always guard charts that need 2+ data points. Use `"—"` as fallback for KPI values.
+
+**When to add a Table + Modal drill-down:**
+Add a Modal ONLY when the row has data the table can't show, OR an action that needs more than one click. If the modal would just re-display the same columns in a popup, skip it — that's decoration, not value.
+
+Add a Modal when:
+- Row has long-form content the cell truncates (full tweet text, agent diagnosis, PR description, email body)
+- Row needs multiple actions in sequence (Draft Reply → Edit → Send; Acknowledge → Assign → Resolve)
+- Row has nested data (timeline, related items, sub-tickets) that doesn't fit a column
+
+Skip the Modal when:
+- The table already shows everything (id, title, status, date) and the only action is "open URL" → just put a `Button("↗", Action([@OpenUrl(row.url)]))` in the last Col
+- The user only ever wants to navigate away (use `@OpenUrl` directly)
+
+**Rich KPI cards with sub-indicators:**
+```
+kpiPRs = Card([TextContent("Open PRs", "small"), TextContent("" + @Count(prs), "large-heavy"), Stack([
+  @Count(@Filter(prs, "ci", "==", "failing")) > 0 ? Tag("CI failing", null, "sm", "danger") : Tag("All passing", null, "sm", "success"),
+  Tag("" + @Count(@Filter(prs, "status", "==", "review")) + " in review", null, "sm", "info")
+], "row", "xs")], "sunk")
+```
+Use Stack row of Tags below the KPI value to show breakdowns at a glance.
+
 ## Built-in Functions
 
 Data functions prefixed with `@` to distinguish from components. These are the ONLY functions available — do NOT invent new ones.
@@ -247,6 +355,111 @@ viewBtn = Button("View", Action([@OpenUrl("https://example.com")]))
 - @Run(queryRef) re-fetches the query (fire-and-forget, cannot fail)
 - Do NOT invent custom button action types for tool/query behavior. For refresh, always use `Action([@Run(queryRef), ...])`.
 
+### Action Decision Tree
+- Button navigates to a URL → `@OpenUrl(url)` — NEVER use @ToAssistant for navigation
+- Button writes data (create/update/delete) → `@Run(mutationRef)` — requires top-level Mutation
+- Button needs AI reasoning/response → `@ToAssistant("message")` (see below)
+- Button changes UI state (show/hide) → `@Set($variable, value)`
+- Button resets form → `@Reset($var1, $var2)`
+
+**@ToAssistant — when the action genuinely needs AI:**
+Use ONLY when the button requires LLM analysis, not data fetching or navigation:
+```
+Button("Analyze Spike", Action([@ToAssistant("Analyze the traffic spike on " + data.topPage + " — what caused it?")]))
+Button("Draft Reply", Action([@ToAssistant("Draft a reply to this tweet by @" + t.author + ": " + t.text)]))
+Button("Diagnose", Action([@ToAssistant("Deploy " + d.service + " failed: " + d.error + ". Suggest a fix.")]))
+```
+Include context inline — the agent receives ONLY the @ToAssistant string, not the app state.
+
+When Query data includes URLs (e.g. item.url, pr.html_url), ALWAYS wire them to @OpenUrl:
+`Col("", @Each(data.rows, "r", Button("Open ↗", Action([@OpenUrl(r.url)]), "tertiary", "normal", "extra-small")))`
+
+## Common Mistakes
+
+❌ WRONG: `PieChart([Slice("A", 10), Slice("B", 20)])` → renders [object Object]
+✅ RIGHT: `PieChart(["A", "B"], [10, 20], "donut")`
+Why: PieChart takes TWO flat arrays (labels[], values[]), NOT an array of Slice objects. Same for RadialChart and SingleStackedBarChart.
+
+❌ WRONG: `@Run(Mutation("db_execute", {sql: "DELETE ..."}))`
+✅ RIGHT:
+```
+$delId = ""
+delMut = Mutation("db_execute", {sql: "DELETE FROM items WHERE id = " + $delId, namespace: "myapp"})
+Col("Actions", @Each(data.rows, "t", Button("🗑️", Action([@Set($delId, "" + t.id), @Run(delMut), @Run(data)]), "tertiary", "destructive", "extra-small")))
+```
+Why: @Run requires a reference to a top-level declared statement, never an inline call. For per-row operations, route the row id through a $state variable.
+
+❌ WRONG: `Button("Open PR", Action([@ToAssistant("Open PR #" + pr.id)]))`
+✅ RIGHT: `Button("Open PR", Action([@OpenUrl(pr.url)]))`
+Why: Navigation uses @OpenUrl. @ToAssistant is ONLY for actions that need AI reasoning (e.g. rollback analysis, explanations).
+
+❌ WRONG: Two Mutations where the second depends on the first's `last_insert_rowid()`
+✅ RIGHT: Combine into a single SQL statement, or remove the dependency and compute splits/relations differently.
+Why: Each @Run(mutation) executes as a separate DB call — there is no shared transaction, connection, or state between them.
+
+❌ WRONG: Filter Select visible in UI but Query args are hardcoded
+✅ RIGHT: `Query("tool", {status: $filterStatus, priority: $filterPriority}, {rows: []})` — $bindings in args
+Why: If a filter is visible, EVERY relevant Query MUST reference it, or the filter does nothing.
+
+❌ WRONG: 7+ Cards crammed into a single horizontal Stack row
+✅ RIGHT: 3–4 KPI Cards per row (use 2 rows for 5–8 metrics). For 8+ comparable items, use a Table instead.
+Why: Too many cards in one row makes text truncate. Use multiple `Stack` rows of 3–4 cards each, or switch to Table for data lists.
+
+❌ WRONG: Card grid for data lists (5+ items with name/status/priority columns)
+✅ RIGHT: Table with Col() per field + @Each for styled cells (Tags, Buttons) + Modal for drill-down details.
+Why: Tables are scannable and sortable. Cards are for 2-4 KPI summaries or visually distinct items, not data lists.
+
+❌ WRONG: `@Map(data.rows, ...)` or `@GroupBy(data.rows, ...)` or `@Reduce(...)`
+✅ RIGHT: Use ONLY the documented @-functions: @Count, @Sum, @Avg, @Min, @Max, @Round, @Abs, @Floor, @Ceil, @Filter, @Sort, @First, @Last, @Each
+Why: These are the only built-in functions. Any other @-function will silently fail.
+
+❌ WRONG: `TextContent("" + data.stars, "large-heavy")` — shows "undefined" or "null" when data hasn't loaded
+✅ RIGHT: `TextContent(data.stars ? "" + data.stars : "—", "large-heavy")`
+Why: Query defaults render immediately, but nested fields may be undefined. Use ternary guards for KPI values.
+
+❌ WRONG: `AreaChart(data.trend.day, [Series(...)])` with no empty guard
+✅ RIGHT: `@Count(data.trend) > 0 ? AreaChart(data.trend.day, [Series(...)]) : TextContent("Loading…", "small")`
+Why: Charts with empty arrays render blank. Always guard with @Count and show a placeholder.
+
+❌ WRONG: Unsafe string concatenation in Mutation("exec") with user input
+```
+mut = Mutation("exec", {command: "node scripts/action.js '{\"text\":\"" + $userInput + "\"}'"})
+```
+If `$userInput` contains quotes, newlines, `$`, or backticks → broken command or shell injection.
+✅ RIGHT: Route user text through db_execute params (SQL-safe), then have the script read from DB:
+```
+saveDraft = Mutation("db_execute", {sql: "INSERT OR REPLACE INTO pending (id, payload) VALUES ($id, $text)", params: {id: $targetId, text: $userInput}, namespace: "myapp"})
+execAction = Mutation("exec", {command: "node scripts/process-pending.js"})
+submitBtn = Button("Send", Action([@Run(saveDraft), @Run(execAction), @Run(data), @Reset($userInput)]))
+```
+Direct concat is fine for machine values (IDs, enums): `"node script.js " + $issueId`. Only user free-text is dangerous.
+
+❌ WRONG: Toast Callout declared but never triggered
+```
+$showOk = false
+actionBtn = Button("Do It", Action([@Run(mut), @Run(data)]), "primary")
+toast = Callout("success", "Done!", "Action completed.", $showOk)
+```
+✅ RIGHT: Add `@Set($showOk, true)` to the Action chain:
+```
+actionBtn = Button("Do It", Action([@Run(mut), @Run(data), @Set($showOk, true)]), "primary")
+```
+Callout with `$visible` binding needs `@Set($visible, true)` to appear. It auto-dismisses after 3s.
+
+❌ WRONG: Success-only feedback, errors swallowed silently
+```
+result = Mutation("exec", {command: "node scripts/create.js"})
+toast = result.status == "success" ? Callout("success", "Created!", "Done.") : null
+```
+✅ RIGHT: Show both success (auto-dismiss) and error (persistent):
+```
+$showOk = false
+successToast = Callout("success", "Created!", "Done.", $showOk)
+errorBanner = result.status == "error" ? Callout("error", "Failed", result.error != null ? result.error : "Something went wrong.") : null
+submitBtn = Button("Create", Action([@Run(result), @Run(data), @Set($showOk, true)]), "primary")
+```
+External calls fail (expired auth, rate limits, network). Always pair success toast with error state.
+
 ## Interactive Filters
 
 To let the user filter data with a dropdown:
@@ -257,6 +470,20 @@ To let the user filter data with a dropdown:
 5. When the user changes the Select, $dateRange updates and the Query automatically re-fetches
 
 FILTER WIRING RULE: If a $binding filter is visible in the UI, EVERY relevant Query MUST reference that $binding in its args. Never show a filter dropdown while hardcoding the query args.
+
+**Complete multi-filter example (2 filters + table + chart, fully wired):**
+```
+$status = "all"
+$priority = "all"
+filters = Stack([
+  FormControl("Status", Select("status", [SelectItem("all", "All"), SelectItem("open", "Open"), SelectItem("closed", "Closed")], null, null, $status)),
+  FormControl("Priority", Select("priority", [SelectItem("all", "All"), SelectItem("high", "High"), SelectItem("medium", "Medium"), SelectItem("low", "Low")], null, null, $priority))
+], "row", "m")
+filtered = $status == "all" ? ($priority == "all" ? data.rows : @Filter(data.rows, "priority", "==", $priority)) : ($priority == "all" ? @Filter(data.rows, "status", "==", $status) : @Filter(@Filter(data.rows, "status", "==", $status), "priority", "==", $priority))
+table = Table([Col("Title", filtered.title), Col("Status", @Each(filtered, "r", Tag(r.status, null, "sm", r.status == "open" ? "success" : "neutral")))])
+chart = PieChart(["Open", "Closed"], [@Count(@Filter(filtered, "status", "==", "open")), @Count(@Filter(filtered, "status", "==", "closed"))], "donut")
+```
+Key: the "all" option uses a ternary to skip filtering. Both table and chart use `filtered` so they respond to the same filters.
 
 Rules for $variables:
 - $variables hold simple values (strings or numbers), NOT arrays or objects
@@ -333,47 +560,211 @@ During streaming, the output is re-parsed on every chunk. Undefined references a
 
 Always write the root = Stack(...) statement first so the UI shell appears immediately, even before child data has streamed in.
 
+## Recipe Book
+
+Blueprints for high-value app patterns. Each recipe lists: data sources, agent enrichment, DB schema, layout, and key interactions.
+
+### Recipe: Growth / Analytics Dashboard
+**Use case:** Track product metrics — GitHub stars, NPM downloads, social mentions, web traffic — in one place with historical trends.
+- **Data:** Multiple `Query("exec", ...)` calling separate scripts per source (GitHub API, NPM registry, Twitter/X API, PostHog). Separate scripts = independent refresh rates.
+- **Enrichment:** Cron every 3–4h stores snapshots in SQLite. Daily cron runs full analysis (sentiment, trend deltas) via agentTurn.
+- **DB:** `metrics_snapshots` (date, stars, downloads, pageviews), `tweet_log` (tweet_id UNIQUE, text, author, sentiment, likes, views)
+- **Layout:** 4–8 KPI cards (2 rows) → Tabs (Overview | NPM | GitHub | Traffic | Social | History) → Charts + Tables per tab
+- **Interactions:** Refresh button (@Run all queries), "📸 Save Snapshot" mutation, @OpenUrl for external links, History tab reads from DB snapshots
+
+### Recipe: Social Media War Room
+**Use case:** Monitor Twitter/Reddit/HN mentions with sentiment analysis, recommended actions, and inline reply buttons.
+- **Data:** Script fetches mentions via API (GetX, Twitter API, etc.) → returns tweets with engagement metrics
+- **Enrichment:** Cron runs agent that classifies sentiment (positive/negative/neutral), drafts replies for negative mentions, stores enriched data in DB
+- **DB:** `mentions` (id UNIQUE, text, author, sentiment, draft_reply, recommended_action, platform)
+- **Layout:** Alert bar (negative sentiment spike) → KPI cards (mentions, impressions, likes, sentiment ratio) → Tabs: Feed (Table with sentiment Tags) | Top Voices (author leaderboard) | Analytics (charts)
+- **Interactions:** "View ↑" (@OpenUrl to tweet), "Post Reply" (Mutation exec calling post script), "Like + Bookmark" (Mutation exec). For negative mentions with cron-drafted replies: show draft_reply in a Modal TextArea (pre-filled via $binding), user edits inline, taps "Post" → Mutation fires.
+- **Key pattern:** Pre-drafted reply review: `Modal("Reply", $showReply, [TextArea("reply", ..., null, $draftReply), Buttons([Button("Post", Action([@Run(postMut), ...]))])])`
+
+### Recipe: DevOps Command Center
+**Use case:** PRs, deploys, tickets, incidents — all in one surface with agent diagnosis and external mutations.
+- **Data:** Scripts calling GitHub CLI (PRs, Actions), Linear API (tickets), custom incident tracker
+- **Enrichment:** Agent generates PR summaries, incident diagnosis, and suggested fixes — stored as fields in script JSON output
+- **DB:** Optional — for incident history tracking
+- **Layout:** Alert bar (active incidents) → KPI cards with sub-indicator Tags → Tabs (PRs | Deploys | Tickets | Incidents) → Tables with Table+Modal detail pattern
+- **Interactions:** Filters ($prStatus, $ticketPriority), Table+Modal drill-down, @OpenUrl to GitHub/Linear, "Create Ticket" form in Modal with Mutation("exec") to Linear API, success Callout toast
+
+### Recipe: Daily Briefing
+**Use case:** Morning dashboard with weather, calendar, email/message triage, and actionable buttons.
+- **Data:** Two staggered cron jobs: (1) **Sync** — fetches raw data via API scripts, upserts into DB preserving existing enrichment; (2) **Enrich** — LLM agent reads un-enriched rows from DB, classifies/summarizes, writes results back.
+- **Enrichment:** Cron classifies priority + category, writes a 1-line summary per item. Enforce strict enum values in the cron prompt (e.g. "MUST be exactly one of: high, medium, low") to prevent non-standard values that break filters.
+- **DB:** Items table with enrichment columns (priority, category, summary, enriched_at). `enriched_at IS NULL` = pending.
+- **Layout:** KPI cards (row) → Tabs per data source. Show enrichment status per row (⏳ pending / ✓ done). Banner when items are awaiting enrichment.
+- **Interactions:** Reply (Modal form → Mutation), Snooze/Archive (Mutation exec + db_execute), Create (Modal form → Mutation exec → external API)
+- **Key pattern:** `stats.pending > 0 ? Callout("info", "Processing", stats.pending + " items awaiting AI enrichment.") : null`
+
+### Recipe: Finance / Portfolio Dashboard
+**Use case:** Portfolio overview with risk analysis, position monitoring, strategy performance, and news filtered to held assets.
+- **Data:** Scripts fetching portfolio positions (brokerage API or CSV), market prices (Yahoo Finance / Alpha Vantage), news (RSS/API). Each script = separate Query with independent refresh rates (prices fast, news slower).
+- **Enrichment:** Cron runs agent that analyzes positions for: correlation risk ("positions X and Y are 85% correlated"), macro event exposure ("earnings tomorrow for 3 of your holdings"), strategy drift. Stores risk_flags and agent_reasoning per position in DB.
+- **DB:** `positions` (symbol, qty, avg_cost, current_price, pnl, risk_flags, agent_reasoning, enriched_at), `price_snapshots` (date, symbol, price) for history
+- **Layout:** Alert bar (risk warnings from enrichment) → KPI cards (total value, day P&L, top gainer, top loser) → Tabs (Positions | Performance | News | Risk). Positions tab: Table with colored P&L Tags (green/red), risk_flags as warning Tags. Performance tab: AreaChart of portfolio value over time from snapshots.
+- **Interactions:** "Why?" button on risk warnings (@ToAssistant with agent_reasoning context), @OpenUrl to trading platform, news detail Modal with MarkDownRenderer
+- **Key pattern:** Risk warning cards use enrichment data: `Card([CardHeader("⚠️ Risk Alert"), MarkDownRenderer(riskItem.agent_reasoning)], "sunk")`
+
 ## Examples
 
-Example 1 — Table (column-oriented):
+### Example 1 — CRUD App (Expense Tracker with SQLite)
 
-root = Stack([title, tbl])
-title = TextContent("Top Languages", "large-heavy")
-tbl = Table([Col("Language", langs), Col("Users (M)", users), Col("Year", years)])
-langs = ["Python", "JavaScript", "Java", "TypeScript", "Go"]
-users = [15.7, 14.2, 12.1, 8.5, 5.2]
-years = [1991, 1995, 1995, 2012, 2009]
+E2E workflow: User asked "build me a trip expense tracker with splitwise."
 
-Example 2 — Bar chart:
+Agent workflow:
+1. PLAN: Need expenses table + people table. Splits calculated dynamically (no cross-mutation dependency).
+2. TEST: Created schema with db_execute, inserted test row, verified db_query returns {rows: [...]}.
+3. DESIGN: KPI cards (3 max per row) for totals, Table for expense list, PieChart (flat arrays!) for categories, Modal for add expense form.
+4. WIRE: Per-row delete uses $deleteId + top-level Mutation. Form uses $bindings for all fields.
 
-root = Stack([title, chart])
-title = TextContent("Q4 Revenue", "large-heavy")
-chart = BarChart(labels, [s1, s2], "grouped")
-labels = ["Oct", "Nov", "Dec"]
-s1 = Series("Product A", [120, 150, 180])
-s2 = Series("Product B", [90, 110, 140])
+```openui-lang
+root = Stack([header, kpiRow, tabs])
+header = CardHeader("Trip Tracker", "Budget: $2,000")
 
-Example 3 — Form with validation:
+people = Query("db_query", {sql: "SELECT id, name FROM people ORDER BY name", namespace: "trip"}, {rows: []})
+expenses = Query("db_query", {sql: "SELECT id, description, amount, category, paid_by FROM expenses ORDER BY created_at DESC", namespace: "trip"}, {rows: []})
 
-root = Stack([title, form])
-title = TextContent("Contact Us", "large-heavy")
-form = Form("contact", btns, [nameField, emailField, countryField, msgField])
-nameField = FormControl("Name", Input("name", "Your name", "text", { required: true, minLength: 2 }))
-emailField = FormControl("Email", Input("email", "you@example.com", "email", { required: true, email: true }))
-countryField = FormControl("Country", Select("country", countryOpts, "Select...", { required: true }))
-msgField = FormControl("Message", TextArea("message", "Tell us more...", 4, { required: true, minLength: 10 }))
-countryOpts = [SelectItem("us", "United States"), SelectItem("uk", "United Kingdom"), SelectItem("de", "Germany")]
-btns = Buttons([Button("Submit", Action([@ToAssistant("Submit")]), "primary"), Button("Cancel", Action([@ToAssistant("Cancel")]), "secondary")])
+kpiRow = Stack([kpiTotal, kpiCount, kpiPeople], "row", "m", "stretch")
+kpiTotal = Card([TextContent("Total Spent", "small"), TextContent("$" + @Round(@Sum(expenses.rows.amount), 0), "large-heavy")], "sunk")
+kpiCount = Card([TextContent("Expenses", "small"), TextContent("" + @Count(expenses.rows), "large-heavy")], "sunk")
+kpiPeople = Card([TextContent("People", "small"), TextContent("" + @Count(people.rows), "large-heavy")], "sunk")
 
-Example 4 — Tabs with mixed content:
+tabs = Tabs([tabExpenses, tabChart])
+tabExpenses = TabItem("expenses", "💸 Expenses (" + @Count(expenses.rows) + ")", [addBtn, expTable])
+tabChart = TabItem("chart", "Breakdown", [catChart])
 
-root = Stack([title, tabs])
-title = TextContent("React vs Vue", "large-heavy")
-tabs = Tabs([tabReact, tabVue])
-tabReact = TabItem("react", "React", reactContent)
-tabVue = TabItem("vue", "Vue", vueContent)
-reactContent = [TextContent("React is a library by Meta for building UIs."), Callout("info", "Note", "React uses JSX syntax.")]
-vueContent = [TextContent("Vue is a progressive framework by Evan You."), Callout("success", "Tip", "Vue has a gentle learning curve.")]
+addBtn = Buttons([Button("+ Add Expense", Action([@Set($showAdd, true)]), "primary")])
+$showAdd = false
+
+expTable = @Count(expenses.rows) > 0 ? Table([
+  Col("Description", expenses.rows.description),
+  Col("Amount", @Each(expenses.rows, "e", TextContent("$" + e.amount))),
+  Col("Category", @Each(expenses.rows, "e", Tag(e.category, null, "sm", e.category == "food" ? "success" : e.category == "transport" ? "info" : "neutral"))),
+  Col("Paid by", expenses.rows.paid_by),
+  Col("", @Each(expenses.rows, "e", Button("Delete", Action([@Set($delId, "" + e.id), @Run(delMut), @Run(expenses)]), "tertiary", "destructive", "extra-small")))
+]) : TextContent("No expenses yet")
+
+$delId = ""
+delMut = Mutation("db_execute", {sql: "DELETE FROM expenses WHERE id = " + $delId, namespace: "trip"})
+
+catChart = PieChart(["Food", "Transport", "Stay", "Other"], [
+  @Sum(@Filter(expenses.rows, "category", "==", "food").amount),
+  @Sum(@Filter(expenses.rows, "category", "==", "transport").amount),
+  @Sum(@Filter(expenses.rows, "category", "==", "stay").amount),
+  @Sum(@Filter(expenses.rows, "category", "==", "other").amount)
+], "donut")
+```
+
+Key patterns: per-row delete with $delId state, PieChart with flat arrays from @Sum(@Filter), KPI cards max 3 per row.
+
+### Example 2 — Dashboard (DevOps Command Center with live exec data)
+
+E2E workflow: User asked "build a DevOps dashboard showing PRs, deploys, and tickets."
+
+Agent workflow:
+1. PLAN: 3 data sources via shell scripts (gh CLI for PRs, GitHub Actions for deploys, Linear API for tickets). No cross-dependencies.
+2. TEST: Wrote scripts, saved with `write`, ran with `exec`, verified JSON output shape.
+3. DESIGN: KPI row (3 cards), Tabs for each data source, Tables with conditional Tags, @OpenUrl for external links, Modal for details.
+4. WIRE: Status filter on PRs tab with $prStatus binding. Ticket tab has dual filters.
+
+```openui-lang
+root = Stack([header, kpiRow, tabs])
+header = Stack([CardHeader("DevOps Command Center", "Live Data"), refreshBtn], "row", "m", "center", "between")
+refreshBtn = Button("Refresh", Action([@Run(prs), @Run(deploys), @Run(tickets)]), "secondary", "normal", "small")
+
+prs = Query("exec", {command: "bash scripts/devops/prs.sh"}, [], 120)
+deploys = Query("exec", {command: "bash scripts/devops/deploys.sh"}, [], 120)
+tickets = Query("exec", {command: "bash scripts/devops/tickets.sh"}, [], 60)
+
+kpiRow = Stack([kpiPR, kpiDeploy, kpiTicket], "row", "m", "stretch")
+kpiPR = Card([TextContent("Open PRs", "small"), TextContent("" + @Count(prs), "large-heavy"), @Count(@Filter(prs, "ci_status", "==", "failing")) > 0 ? Tag("CI failing", null, "sm", "danger") : Tag("All passing", null, "sm", "success")], "sunk")
+kpiDeploy = Card([TextContent("Deploys", "small"), TextContent("" + @Count(deploys), "large-heavy")], "sunk")
+kpiTicket = Card([TextContent("Tickets", "small"), TextContent("" + @Count(tickets), "large-heavy")], "sunk")
+
+tabs = Tabs([tabPR, tabDeploy, tabTicket])
+
+$prStatus = "all"
+tabPR = TabItem("prs", "PRs (" + @Count(prs) + ")", [prFilter, prTable, prModal])
+prFilter = FormControl("Status", Select("pr_status", [SelectItem("all", "All"), SelectItem("review", "In Review"), SelectItem("approved", "Approved")], null, null, $prStatus))
+filteredPRs = $prStatus == "all" ? prs : @Filter(prs, "status", "==", $prStatus)
+prTable = Table([
+  Col("PR", @Each(filteredPRs, "p", TextContent("#" + p.id + " " + p.title, "small-heavy"))),
+  Col("CI", @Each(filteredPRs, "p", Tag(p.ci_status == "passing" ? "Pass" : "Fail", null, "sm", p.ci_status == "passing" ? "success" : "danger"))),
+  Col("", @Each(filteredPRs, "p", Stack([Button("Details", Action([@Set($selPR, "" + p.id), @Set($showPR, true)]), "secondary", "normal", "extra-small"), Button("GitHub", Action([@OpenUrl(p.url)]), "tertiary", "normal", "extra-small")], "row", "xs")))
+])
+$selPR = ""
+$showPR = false
+selPRData = @First(@Filter(prs, "id", "==", $selPR))
+prModal = Modal("PR #" + $selPR, $showPR, [
+  CardHeader(selPRData.title, selPRData.branch),
+  MarkDownRenderer(selPRData.agent_summary),
+  Buttons([Button("Open on GitHub", Action([@OpenUrl(selPRData.url)]), "primary"), Button("Close", Action([@Set($showPR, false)]), "secondary")])
+], "lg")
+
+tabDeploy = TabItem("deploys", "Deploys", [deployTable])
+deployTable = Table([
+  Col("Service", deploys.service),
+  Col("Status", @Each(deploys, "d", Tag(d.status == "live" ? "Passed" : "Failed", null, "sm", d.status == "live" ? "success" : "danger"))),
+  Col("", @Each(deploys, "d", Button("View", Action([@OpenUrl(d.url)]), "tertiary", "normal", "extra-small")))
+])
+
+tabTicket = TabItem("tickets", "Tickets", [ticketTable])
+ticketTable = Table([
+  Col("ID", @Each(tickets, "t", Button(t.id, Action([@OpenUrl(t.url)]), "tertiary", "normal", "extra-small"))),
+  Col("Title", tickets.title),
+  Col("Priority", @Each(tickets, "t", Tag(t.priority, null, "sm", t.priority == "urgent" ? "danger" : t.priority == "high" ? "warning" : "info")))
+])
+```
+
+Key patterns: exec Query with shell scripts, filter wiring with "all" option, Table + Modal detail, @OpenUrl for GitHub/Linear links, conditional Tag coloring, KPI cards max 3 per row.
+
+### Example 3 — Growth Dashboard (Multi-source + History + Snapshots)
+
+E2E workflow: User asked "build a dashboard to track our product across GitHub, NPM, and Twitter."
+
+Agent workflow:
+1. PLAN: 3 API scripts (github, npm, twitter) + SQLite for history snapshots. Manual + cron snapshot saving.
+2. TEST: Wrote each script, ran with `exec`, verified JSON output. Tested each API individually.
+3. DESIGN: KPI row (4–6 cards with null-safe display), Tabs per data source + History tab, Charts guarded with @Count.
+4. WIRE: Refresh button for all queries, snapshot mutation pulling values from live queries, history charts from DB.
+
+```openui-lang
+root = Stack([header, kpiRow, tabs])
+header = Stack([CardHeader("🚀 Growth Dashboard", "Product Metrics • Live Data"), headerBtns], "row", "m", "center", "between")
+headerBtns = Stack([refreshBtn, snapshotBtn], "row", "s")
+refreshBtn = Button("↻ Refresh", Action([@Run(gh), @Run(npm), @Run(social), @Run(history)]), "secondary", "normal", "small")
+snapshotBtn = Button("📸 Save Snapshot", Action([@Run(gh), @Run(npm), @Run(social), @Run(saveSnapshot), @Run(history)]), "primary", "normal", "small")
+
+gh = Query("exec", {command: "node scripts/github-stats.js"}, {stars: 0, forks: 0, openIssues: 0}, 300)
+npm = Query("exec", {command: "node scripts/npm-downloads.js"}, {totalDownloads: 0, packages: [], weeklyTrend: []}, 300)
+social = Query("exec", {command: "node scripts/twitter-mentions.js"}, {mentionCount: 0, totalViews: 0, totalLikes: 0, latestTweets: []}, 600)
+
+kpiRow = Stack([starsKpi, dlsKpi, mentionsKpi], "row", "m", "stretch")
+starsKpi = Card([TextContent("⭐ Stars", "small"), TextContent(gh.stars ? "" + gh.stars : "—", "large-heavy"), Tag("GitHub", null, "sm", "info")], "card", "column", "xs", "center")
+dlsKpi = Card([TextContent("📦 Downloads / mo", "small"), TextContent(npm.totalDownloads ? "" + npm.totalDownloads : "—", "large-heavy"), Tag("" + @Count(npm.packages) + " packages", null, "sm", "neutral")], "card", "column", "xs", "center")
+mentionsKpi = Card([TextContent("🐦 Mentions", "small"), TextContent(social.mentionCount ? "" + social.mentionCount : "—", "large-heavy"), Tag("Recent", null, "sm", "neutral")], "card", "column", "xs", "center")
+
+tabs = Tabs([npmTab, socialTab, historyTab])
+
+npmTab = TabItem("npm", "📦 NPM", [trendCard, pkgTable])
+trendCard = Card([CardHeader("Weekly Downloads"), @Count(npm.weeklyTrend) > 0 ? AreaChart(npm.weeklyTrend.week, [Series("Downloads", npm.weeklyTrend.downloads)], "natural") : TextContent("Loading…", "small")])
+pkgTable = Card([CardHeader("Packages"), @Count(npm.packages) > 0 ? Table([Col("Package", npm.packages.shortName), Col("Weekly", npm.packages.weekly, "number"), Col("Monthly", npm.packages.monthly, "number"), Col("", @Each(npm.packages, "p", Button("↑", Action([@OpenUrl("https://www.npmjs.com/package/" + p.name)]), "tertiary", "normal", "small")))]) : TextContent("Loading…", "small")])
+
+socialTab = TabItem("social", "🐦 Twitter", [socialKpis, tweetTable])
+socialKpis = Stack([Card([TextContent("❤️ Likes", "small"), TextContent(social.totalLikes ? "" + social.totalLikes : "—", "large-heavy")], "sunk"), Card([TextContent("👁️ Views", "small"), TextContent(social.totalViews ? "" + social.totalViews : "—", "large-heavy")], "sunk")], "row", "m", "stretch")
+tweetTable = Card([CardHeader("Latest Mentions"), @Count(social.latestTweets) > 0 ? Table([Col("Author", @Each(social.latestTweets, "t", Tag("@" + t.author, null, "sm", "info"))), Col("Tweet", social.latestTweets.text), Col("❤️", social.latestTweets.likes, "number"), Col("", @Each(social.latestTweets, "t", Button("↑", Action([@OpenUrl(t.url)]), "tertiary", "normal", "small")))]) : TextContent("No mentions found.", "small")])
+
+history = Query("db_query", {sql: "SELECT date, stars, forks, downloads, mentions FROM metrics_snapshots ORDER BY date ASC", namespace: "dashboard"}, {rows: []}, 60)
+saveSnapshot = Mutation("db_execute", {sql: "INSERT OR REPLACE INTO metrics_snapshots (date, stars, forks, downloads, mentions) VALUES (date('now'), $stars, $forks, $dls, $mentions)", params: {stars: gh.stars, forks: gh.forks, dls: npm.totalDownloads, mentions: social.mentionCount}, namespace: "dashboard"})
+
+historyTab = TabItem("history", "📈 Growth History", [histStars, histTable])
+histStars = Card([CardHeader("⭐ Stars Over Time"), @Count(history.rows) > 1 ? AreaChart(history.rows.date, [Series("Stars", history.rows.stars)], "natural") : Callout("info", "Building history…", "Save daily snapshots to see trends.")])
+histTable = Card([CardHeader("Snapshots"), @Count(history.rows) > 0 ? Table([Col("Date", history.rows.date), Col("⭐ Stars", history.rows.stars, "number"), Col("📦 Downloads", history.rows.downloads, "number"), Col("🐦 Mentions", history.rows.mentions, "number")]) : TextContent("No snapshots yet.", "small")])
+```
+
+Key patterns: null-safe KPI display (`value ? "" + value : "—"`), empty state guards (`@Count > 0 ?`), manual snapshot mutation referencing live query values, history charts from DB, multi-source scripts with independent refresh rates, Tag labels in KPI cards for context.
 
 
 ## Edit Mode
@@ -504,6 +895,18 @@ exec({command: "node ~/.openclaw/workspace/scripts/my-data.js"})
 
 Verify the output is valid JSON like `{"totalGB":16.0,"freeGB":2.1,"pct":86.9}`. Embedding multi-line scripts inside Query strings causes escaping nightmares — saved script files keep the Query call readable.
 
+**CRITICAL: Test scripts before wiring to the app.** Run the script with `exec`, inspect the output, and confirm:
+- Output is valid JSON (not wrapped in extra text)
+- Field names match what you'll use in the app (e.g. `.rows` for db_query, flat array for exec)
+- Error cases return valid JSON too (e.g. `[]` or `{"error": "..."}`, not a stack trace)
+- If the script depends on environment variables or API keys, load them from a `.env` file:
+  ```bash
+  if [ -f "$HOME/.openclaw/workspace/.env" ]; then
+    export $(grep -v '^#' "$HOME/.openclaw/workspace/.env" | xargs)
+  fi
+  ```
+- Store API keys in `~/.openclaw/workspace/.env` (gitignored), never hardcode in scripts.
+
 **Step 3: Generate the app.** Create openui-lang with `Query()` statements that call the saved script:
 
 ```
@@ -566,9 +969,148 @@ refreshBtn = Button("↻ Refresh", Action([@Run(overview), @Run(procs)]), "secon
 
 A plain `Button("Refresh")` sends a message to the assistant; it does NOT refresh queries. Manual refresh always targets declared query refs via `@Run(queryRef)`.
 
+### External API mutations (exec-based)
+
+For actions that call external services (post tweet, merge PR, create ticket, send email), use `Mutation("exec", ...)` with a script.
+
+**⚠️ Escaping rule:** Direct string concat is safe ONLY for simple machine values (IDs, enum strings, numbers). For user-typed text (titles, descriptions, email bodies), route through `db_execute` params first — see the Common Mistakes section for the safe pattern.
+
+**Safe for direct concat** (no user free-text):
+```openui-lang
+$issueId = ""
+$stateId = ""
+updateIssue = Mutation("exec", {command: "node scripts/update-issue.js '{\"issueId\":\"" + $issueId + "\",\"stateId\":\"" + $stateId + "\"}'"})
+startBtn = Button("▶ Start", Action([@Set($issueId, item.id), @Set($stateId, "state-in-progress"), @Run(updateIssue), @Run(issues)]), "secondary", "normal", "extra-small")
+```
+
+**Unsafe — use DB intermediary** (user free-text like titles, descriptions, email bodies):
+```openui-lang
+$newTitle = ""
+$newDesc = ""
+saveDraft = Mutation("db_execute", {sql: "INSERT OR REPLACE INTO pending_actions (key, title, description) VALUES ('create', $title, $desc)", params: {title: $newTitle, desc: $newDesc}, namespace: "myapp"})
+createTicket = Mutation("exec", {command: "node scripts/create-ticket-from-db.js"})
+createBtn = Button("Create", Action([@Run(saveDraft), @Run(createTicket), @Run(tickets), @Set($showCreate, false), @Reset($newTitle, $newDesc)]), "primary")
+```
+The script reads from the DB instead of parsing shell-escaped args.
+
+The script must:
+- Handle authentication (load API keys from `.env`)
+- Return valid JSON: `{"status": "ok"}` or `{"status": "error", "message": "..."}`
+- Be tested with `exec` before wiring to the app
+
+Show success/error feedback (both states!):
+```openui-lang
+$created = false
+createBtn = Button("Create", Action([@Run(createMut), @Run(data), @Set($created, true)]), "primary")
+successToast = Callout("success", "✅ Created", "Ticket created and synced.", $created)
+errorBanner = createMut.status == "error" ? Callout("error", "Failed", createMut.error != null ? createMut.error : "Creation failed.") : null
+```
+
+### Multi-source aggregation scripts
+
+For dashboards pulling from 3+ APIs, write separate scripts per source (preferred) or a single aggregation script:
+
+**Separate scripts (preferred — independent refresh rates):**
+```openui-lang
+gh = Query("exec", {command: "node scripts/github-stats.js"}, {stars: 0, forks: 0}, 300)
+npm = Query("exec", {command: "node scripts/npm-downloads.js"}, {totalDownloads: 0, packages: []}, 300)
+social = Query("exec", {command: "node scripts/twitter-mentions.js"}, {mentions: [], totalViews: 0}, 600)
+```
+
+Each script should:
+- Be self-contained (own API keys, own error handling)
+- Return valid JSON even on error: `{"error": "...", "totalDownloads": 0, "packages": []}`
+- Be tested individually with `exec` before wiring
+
+**Single aggregation script (when all data refreshes together):**
+```javascript
+// scripts/dashboard-data.js
+const github = callGitHub();   // returns {stars, prs, ...} or null on error
+const posthog = callPostHog(); // returns {pageviews, ...} or null on error
+console.log(JSON.stringify({
+  github: github || {stars: 0},
+  posthog: posthog || {pageviews: 0}
+}));
+```
+Access nested: `data.github.stars`, `data.posthog.pageviews`
+
 ### Scheduled updates (cron-driven apps)
 
 A cron's prompt is its ONLY context at fire time — no session memory. Prompts must include the target explicitly: either `db_execute` with `namespace` + table schema, OR `app_update` with `app_id`. Prefer DB writes for recurring data; `app_update` only when the layout shape changes.
+
+### Progressive architecture — evolving apps
+
+Apps naturally evolve through three tiers. Start simple — add layers only when needed:
+
+1. **Live query** — `Query("exec", {command: "node script.js"})`. Good for: read-only dashboards, fresh-every-time data. Limitation: no persistence, no enrichment, no deduplication.
+2. **DB-backed** — Cron syncs external data into SQLite; app reads from DB. Good for: data that needs deduplication, local state (snoozed/archived), or offline access. Add this layer when the app needs to **remember** things across refreshes.
+3. **AI-enriched** — Second cron runs an LLM agent that reads un-enriched rows and writes classifications/summaries. Good for: triage, sentiment, risk analysis, draft replies. Add this layer when the data needs **judgment**, not just fetching.
+
+Tell the user about this evolution: *"I'll start with live data. If you want AI triage or persistent state, I can add a DB layer with cron enrichment."* First-time users won't know this is possible unless you surface it.
+
+### Agent-enriched apps (Cron → DB → App)
+
+For apps that need AI analysis (sentiment classification, email triage, risk assessment, draft replies), use a three-layer architecture:
+
+```
+┌──────────┐     ┌──────────┐     ┌──────────┐
+│  Cron /  │────▶│  SQLite  │────▶│   App    │
+│  Agent   │     │  (state) │     │ (reads)  │
+└──────────┘     └──────────┘     └──────────┘
+   enriches         stores          displays
+```
+
+**Why:** The app runtime has NO LLM — it can't analyze, classify, or draft. Cron jobs run with a full agent that CAN. SQLite bridges the gap: cron writes enriched data, app reads it.
+
+**Cron prompt rules:**
+- Must include the script path to run
+- Must include DB namespace + full table schema (cron has no memory)
+- Must specify what analysis to perform and where to store results
+- Must use `INSERT OR IGNORE` with unique IDs to avoid duplicates
+
+**Example — Social media monitoring with sentiment:**
+Cron (every 3h):
+1. Run `node scripts/twitter-mentions.js` → get raw tweets
+2. Store each tweet: `INSERT OR IGNORE INTO tweet_log (tweet_id, text, author, sentiment, ...)`
+3. Store snapshot: `INSERT INTO snapshots (mention_count, total_views, total_likes, ...)`
+4. Compare with previous snapshot for delta reporting
+
+App reads:
+```openui-lang
+tweets = Query("db_query", {sql: "SELECT * FROM tweet_log ORDER BY id DESC LIMIT 50", namespace: "social"}, {rows: []}, 60)
+snapshots = Query("db_query", {sql: "SELECT * FROM snapshots ORDER BY id DESC LIMIT 30", namespace: "social"}, {rows: []}, 300)
+```
+
+### Historical trend tracking (Cron → DB → Charts)
+
+To show growth over time, store periodic snapshots in SQLite and chart the history:
+
+**1. Schema:**
+```sql
+CREATE TABLE IF NOT EXISTS metrics_snapshots (
+  id INTEGER PRIMARY KEY,
+  date TEXT UNIQUE NOT NULL DEFAULT (date('now')),
+  stars INTEGER, forks INTEGER, downloads INTEGER, mentions INTEGER
+)
+```
+
+**2. Snapshot capture** — two approaches:
+- **Manual button:** User clicks "📸 Save Snapshot" → Mutation inserts current values from live queries
+- **Cron job:** Automated daily snapshot via cron agentTurn
+
+```openui-lang
+// Manual snapshot button (values come from other live queries)
+saveSnapshot = Mutation("db_execute", {sql: "INSERT OR REPLACE INTO metrics_snapshots (date, stars, forks, downloads) VALUES (date('now'), $stars, $forks, $downloads)", params: {stars: gh.stars, forks: gh.forks, downloads: npm.totalDownloads}, namespace: "dashboard"})
+snapshotBtn = Button("📸 Save Snapshot", Action([@Run(saveSnapshot), @Run(history)]), "primary", "normal", "small")
+```
+
+**3. Chart the history:**
+```openui-lang
+history = Query("db_query", {sql: "SELECT date, stars, downloads, mentions FROM metrics_snapshots ORDER BY date ASC", namespace: "dashboard"}, {rows: []}, 60)
+starsChart = @Count(history.rows) > 1 ? AreaChart(history.rows.date, [Series("Stars", history.rows.stars)], "natural") : Callout("info", "Building history…", "Snapshots are saved daily. Come back tomorrow!")
+```
+
+Key: always guard charts with `@Count > 1` and show a placeholder for sparse data.
 
 ### Creating artifacts
 
