@@ -16,11 +16,11 @@ const SIZE_STYLES: Record<TagSize, string> = {
 const VARIANT_STYLES: Record<TagVariant, string> = {
   neutral:
     "bg-sunk-light text-text-neutral-tertiary dark:text-text-neutral-tertiary/80 border border-border-default/70 dark:border-transparent",
-  accent: "bg-highlight-subtle text-text-accent-primary border border-border-accent",
-  success: "bg-success-background text-text-success-primary border border-border-success",
-  warning: "bg-alert-background text-text-alert-primary border border-border-alert",
-  danger: "bg-danger-background text-text-danger-primary border border-border-danger",
-  info: "bg-info-background text-text-info-primary border border-border-info",
+  accent: "bg-highlight-subtle text-text-accent-primary border border-border-accent/50",
+  success: "bg-success-background text-text-success-primary border border-border-success/50",
+  warning: "bg-alert-background text-text-alert-primary border border-border-alert/50",
+  danger: "bg-danger-background text-text-danger-primary border border-border-danger/50",
+  info: "bg-info-background text-text-info-primary border border-border-info/50",
 };
 
 export interface TagProps {

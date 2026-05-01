@@ -49,6 +49,7 @@ import {
 } from "@/lib/chat/useGateway";
 import { isTabHidden, playCompletionChime } from "@/lib/chime";
 import type { CommandContext, CommandMessageSnapshot } from "@/lib/commands";
+import { DEFAULT_STARTERS } from "@/lib/conversation-starters";
 import type { CronJobRecord, CronRunEntry, CronStatusRecord } from "@/lib/cron";
 import type { CompactSessionResult } from "@/lib/engines/openclaw/OpenClawEngine";
 import type {
@@ -228,6 +229,7 @@ function ThreadArea({
   gatewayCommands,
   createSession,
   deleteSession,
+  renameSession,
 }: {
   sessionMeta: Map<string, SessionRow>;
   availableModels: ModelChoice[];
@@ -266,6 +268,7 @@ function ThreadArea({
   gatewayCommands: GatewayCommand[];
   createSession: (agentId: string) => Promise<string | null>;
   deleteSession: (threadId: string) => Promise<boolean>;
+  renameSession: (threadId: string, label: string) => Promise<boolean>;
 }) {
   const { threads: allThreadsRaw, selectedThreadId } = useThreadList();
   const isRunning = useThread((state) => state.isRunning);
@@ -815,7 +818,7 @@ function ThreadArea({
                 sessions={sessions}
                 onBack={() => navigate({ view: "home" })}
                 onSwitchAgent={(a) => {
-                  // Open that agent's main thread if present, else any thread.
+                  // Open the agent's main thread if present, else any thread.
                   const target =
                     allThreads.find(
                       (t) => (t.clawAgentId ?? t.id) === a.id && t.clawKind === "main",
@@ -824,6 +827,33 @@ function ThreadArea({
                 }}
                 onSelectSession={(threadId) => navigate({ view: "chat", sessionId: threadId })}
                 onNewSession={onNewSession}
+                onRenameSession={async (next) => {
+                  await renameSession(currentThread.id, next);
+                }}
+                onDeleteSession={async () => {
+                  await deleteSession(currentThread.id);
+                  navigate({ view: "agents" });
+                }}
+                // Renaming the agent = renaming its main thread (the one
+                // whose title bubbles up as the agent name in the sidebar).
+                onRenameAgent={async (next) => {
+                  const main =
+                    allThreads.find(
+                      (t) => (t.clawAgentId ?? t.id) === currentAgentId && t.clawKind === "main",
+                    ) ?? allThreads.find((t) => (t.clawAgentId ?? t.id) === currentAgentId);
+                  if (main) await renameSession(main.id, next);
+                }}
+                onDeleteAgent={async () => {
+                  const main =
+                    allThreads.find(
+                      (t) => (t.clawAgentId ?? t.id) === currentAgentId && t.clawKind === "main",
+                    ) ?? allThreads.find((t) => (t.clawAgentId ?? t.id) === currentAgentId);
+                  const target = main?.id;
+                  if (target) {
+                    await deleteSession(target);
+                    navigate({ view: "agents" });
+                  }
+                }}
                 // On mobile, the workspace pane is a drawer instead of the
                 // permanent right-rail. Surface a toggle in the chat header
                 // since the desktop expand-rail doesn't exist here.
@@ -832,27 +862,13 @@ function ThreadArea({
             );
           })()}
           {workspace.linkedApp || workspace.linkedArtifact ? (
-            <div className="sticky top-0 z-20 flex items-center justify-between gap-3 border-b border-border-default/40 bg-info-background px-ml py-2 text-sm dark:border-border-default/16">
-              <div className="flex min-w-0 items-center gap-2">
-                <span className="font-medium text-text-info-primary">Refining</span>
-                <span className="truncate text-text-info-primary">
-                  {workspace.linkedApp?.title ?? workspace.linkedArtifact?.title}
-                </span>
-              </div>
-              <button
-                type="button"
-                className="shrink-0 text-sm font-medium text-text-info-primary underline underline-offset-2 hover:opacity-80"
-                onClick={() => {
-                  if (!selectedThreadId) return;
-                  onUpdateThreadWorkspace(selectedThreadId, (current) => ({
-                    ...current,
-                    linkedApp: null,
-                    linkedArtifact: null,
-                  }));
-                }}
-              >
-                Cancel refine
-              </button>
+            <div className="sticky top-0 z-20 flex items-center gap-xs border-b border-border-default/40 bg-info-background px-ml py-2xs text-sm dark:border-border-default/16">
+              <span className="font-medium text-text-info-primary">
+                {workspace.linkedApp ? "App" : "Artifact"}:
+              </span>
+              <span className="truncate text-text-info-primary">
+                {workspace.linkedApp?.title ?? workspace.linkedArtifact?.title}
+              </span>
             </div>
           ) : null}
           {(() => {
@@ -1904,6 +1920,182 @@ function ChatAppInner({
     return () => window.clearTimeout(timeoutId);
   }, [notificationMatchesRoute, notifications, onMarkNotificationsRead]);
 
+  // Home composer — same SessionComposer used in chat. To make the
+  // composer's `processMessage` (read from `useThread`) land in the
+  // default agent's main session, we make sure that thread is selected
+  // whenever home is the active route. SessionComposer's submit then
+  // dispatches there directly via the global ChatProvider store.
+  const homeMainThreadId = useMemo(() => {
+    const allHere = threads as unknown as ClawThread[];
+    if (allHere.length === 0) return null;
+    // Preferred: the configured default agent's main thread.
+    if (defaultAgentId) {
+      const main = allHere.find(
+        (t) => (t.clawAgentId ?? t.id) === defaultAgentId && t.clawKind === "main",
+      );
+      if (main) return main.id;
+    }
+    // Fallbacks (offline / no defaultAgentId yet): any main thread,
+    // else the first available thread, so the home composer always
+    // has a target session for uploads + processMessage.
+    return allHere.find((t) => t.clawKind === "main")?.id ?? allHere[0]?.id ?? null;
+  }, [threads, defaultAgentId]);
+
+  useEffect(() => {
+    if (route.view !== "home") return;
+    if (!homeMainThreadId) return;
+    if (selectedThreadId === homeMainThreadId) return;
+    selectThread(homeMainThreadId);
+  }, [route.view, homeMainThreadId, selectedThreadId, selectThread]);
+
+  // Once the home composer kicks off a submission, jump to the main
+  // session's chat so the user sees their message + the agent's response
+  // stream in. SessionComposer's submit flips the global `isRunning`
+  // flag, so we react to that — no need to wrap the composer's onSubmit.
+  useEffect(() => {
+    if (route.view !== "home") return;
+    if (!homeMainThreadId) return;
+    if (!selectedThreadIsRunning) return;
+    navigate({ view: "chat", sessionId: homeMainThreadId });
+  }, [route.view, homeMainThreadId, selectedThreadIsRunning]);
+
+  // File-attach plumbing for the home composer. Mirrors the per-thread
+  // pipeline in ThreadArea but pinned to `homeMainThreadId` instead of
+  // `selectedThreadId`. The hidden <input type="file"> is rendered as a
+  // sibling of the composer (see the JSX returned by `homeComposerEl`).
+  const homeFileInputRef = useRef<HTMLInputElement | null>(null);
+  const homeAddFiles = useCallback(
+    async (files: File[]) => {
+      if (!homeMainThreadId || files.length === 0) return;
+      const sessionKey = resolveChatSessionKey(homeMainThreadId, knownAgentIds.current);
+      const nextUploads = await Promise.all(files.map((file) => fileToThreadUpload(file)));
+      onUpdateThreadWorkspace(homeMainThreadId, (current) => ({
+        ...current,
+        uploads: [...current.uploads, ...nextUploads],
+      }));
+      if (uploads && sessionKey) {
+        await Promise.all(
+          nextUploads.map(async (upload) => {
+            if (!upload.attachment?.content) return;
+            const meta = await uploads.putUpload({
+              sessionKey,
+              name: upload.name,
+              mimeType: upload.mimeType,
+              content: upload.attachment.content,
+              size: upload.size,
+            });
+            if (!meta) return;
+            onUpdateThreadWorkspace(homeMainThreadId, (current) => ({
+              ...current,
+              uploads: current.uploads.map((c) =>
+                c.id === upload.id ? { ...c, remoteId: meta.id } : c,
+              ),
+            }));
+          }),
+        );
+      }
+    },
+    [homeMainThreadId, knownAgentIds, onUpdateThreadWorkspace, uploads],
+  );
+  const homeOpenFilePicker = useCallback(() => {
+    homeFileInputRef.current?.click();
+  }, []);
+  const handleHomeFilesSelected = useCallback(
+    async (event: React.ChangeEvent<HTMLInputElement>) => {
+      const files = Array.from(event.target.files ?? []);
+      event.target.value = "";
+      await homeAddFiles(files);
+    },
+    [homeAddFiles],
+  );
+
+  const homeComposerEl = useMemo(() => {
+    const workspace = homeMainThreadId
+      ? (workspaceByThread[homeMainThreadId] ?? EMPTY_THREAD_WORKSPACE)
+      : EMPTY_THREAD_WORKSPACE;
+    const sessionKey = homeMainThreadId
+      ? resolveChatSessionKey(homeMainThreadId, knownAgentIds.current)
+      : "";
+    const meta = sessionKey ? sessionMeta.get(sessionKey) : undefined;
+    return (
+      <>
+        <input
+          ref={homeFileInputRef}
+          type="file"
+          multiple
+          className="hidden"
+          onChange={handleHomeFilesSelected}
+        />
+        <SessionComposer
+          uploads={workspace.uploads}
+          linkedApp={workspace.linkedApp}
+          linkedArtifact={workspace.linkedArtifact}
+          onPickFiles={homeOpenFilePicker}
+          onAddFiles={homeAddFiles}
+          onRemoveUpload={(uploadId) => {
+            if (homeMainThreadId) onRemoveUpload(homeMainThreadId, uploadId);
+          }}
+          onUploadsSent={(uploadIds) => {
+            if (homeMainThreadId) onMarkUploadsSent(homeMainThreadId, uploadIds);
+          }}
+          commandContext={() => ({
+            threadId: homeMainThreadId,
+            messages: [],
+            toast: () => {},
+            downloadBlob: () => {},
+          })}
+          gatewayCommands={[]}
+          onDispatchGatewayCommand={async () => false}
+          models={availableModels}
+          gatewayDefaultModelId={gatewayDefaultModelId}
+          agentDefaultModelId={(() => {
+            const targetAgentId = defaultAgentId;
+            return targetAgentId ? (agentModelById.get(targetAgentId) ?? null) : null;
+          })()}
+          currentModel={meta?.model ? qualifyModel(meta.model, meta.modelProvider ?? "") : ""}
+          currentEffort={meta?.thinkingLevel ?? ""}
+          effortDefault={meta?.thinkingDefault ?? null}
+          effortOptions={meta?.thinkingOptions ?? null}
+          onModelChange={
+            sessionKey
+              ? (value) => {
+                  void patchSession(sessionKey, { model: value || null });
+                }
+              : undefined
+          }
+          onEffortChange={
+            sessionKey
+              ? (value) => {
+                  void patchSession(sessionKey, { thinkingLevel: value || null });
+                }
+              : undefined
+          }
+          // Skip the rotating placeholder + TAB-to-fill UX on mobile — the
+          // overlay assumes a hardware keyboard and the TAB tag has no
+          // affordance on touch.
+          rotatingPlaceholders={isMobile ? undefined : DEFAULT_STARTERS.map((s) => s.displayText)}
+          rotatingPlaceholderFillWith={isMobile ? undefined : DEFAULT_STARTERS.map((s) => s.prompt)}
+        />
+      </>
+    );
+  }, [
+    homeMainThreadId,
+    workspaceByThread,
+    knownAgentIds,
+    sessionMeta,
+    availableModels,
+    gatewayDefaultModelId,
+    defaultAgentId,
+    agentModelById,
+    patchSession,
+    onRemoveUpload,
+    onMarkUploadsSent,
+    homeOpenFilePicker,
+    homeAddFiles,
+    handleHomeFilesSelected,
+    isMobile,
+  ]);
+
   let mainContent: React.ReactNode;
   if (route.view === "home") {
     const homeProps = {
@@ -1928,6 +2120,7 @@ function ChatAppInner({
         await onMarkNotificationsRead();
       },
       onOpenCron: (jobId: string) => setCronTrayJobId(jobId),
+      composer: homeComposerEl,
     };
     mainContent = (
       <div className="flex h-full min-w-0 flex-1 overflow-hidden">
@@ -2105,6 +2298,7 @@ function ChatAppInner({
         patchSession={patchSession}
         createSession={createSession}
         deleteSession={deleteSession}
+        renameSession={renameSession}
         resetSession={resetSession}
         compactSession={compactSession}
         onSessionChanged={onSessionChanged}

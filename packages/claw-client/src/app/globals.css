@@ -59,6 +59,30 @@
   animation: claw-slide-in-left 220ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+/* Placeholder rotation — word-by-word blur-in. Each word in the rotating
+   conversation starter eases out of a soft blur into focus; the parent
+   staggers `animation-delay` per word for a fluid streaming feel. */
+@keyframes claw-word-blur-in {
+  0% {
+    opacity: 0;
+    filter: blur(6px);
+    transform: translateY(2px);
+  }
+  100% {
+    opacity: 1;
+    filter: blur(0);
+    transform: translateY(0);
+  }
+}
+.claw-word-blur-in {
+  animation: claw-word-blur-in 460ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .claw-word-blur-in {
+    animation: none;
+  }
+}
+
 /* The library defaults the chat panel to `visibility: hidden` until a thread
    is loaded. When a stale URL points at a non-existent thread (or while the
    thread list is still loading), the panel stays hidden and the chat area
@@ -157,16 +181,20 @@
   --color-border-interactive: #a0a0a0;
   --color-border-interactive-emphasis: #808080;
   --color-border-interactive-selected: #6366f1;
-  --color-border-accent: #c7d2fe;
+  /* Stored as space-separated rgb channels so the
+     `border-border-{type}/N` Tailwind opacity modifier resolves; see
+     `tailwind.config.ts` border colors. The `*-emphasis` variants stay
+     as hex since they're consumed without alpha. */
+  --color-border-accent: 199 210 254;
   --color-border-accent-emphasis: #a5b4fc;
   --color-border-accent-selected: #6366f1;
-  --color-border-info: #a5d8ff;
+  --color-border-info: 165 216 255;
   --color-border-info-emphasis: #339af0;
-  --color-border-alert: #ffe066;
+  --color-border-alert: 255 224 102;
   --color-border-alert-emphasis: #fcc419;
-  --color-border-success: #8ce99a;
+  --color-border-success: 140 233 154;
   --color-border-success-emphasis: #51cf66;
-  --color-border-danger: #ffc9c9;
+  --color-border-danger: 255 201 201;
   --color-border-danger-emphasis: #ff6b6b;
   --color-chat-user-response-bg: #6366f1;
   --color-chat-user-response-text: #ffffff;
@@ -268,7 +296,10 @@
   --color-highlight-strong: #333333;
   --color-highlight-intense: #3d3d3d;
   --color-inverted-background: #ffffff;
-  --color-info-background: #1a2a1a;
+  /* Sky-blue dark tint, mirroring the light `#e7f5ff`. The previous
+     value (`#1a2a1a`) was actually a dark green — a hue mismatch with
+     the light token and with how `text-text-info-primary` reads.       */
+  --color-info-background: #0f2335;
   --color-success-background: #152a15;
   --color-alert-background: #2a2510;
   --color-danger-background: #2c1515;
@@ -316,16 +347,17 @@
   --color-border-interactive: #525252;
   --color-border-interactive-emphasis: #666666;
   --color-border-interactive-selected: #c7d2fe;
-  --color-border-accent: #333333;
+  /* Space-separated rgb channels so `border-border-{type}/N` works. */
+  --color-border-accent: 51 51 51;
   --color-border-accent-emphasis: #444444;
   --color-border-accent-selected: #c7d2fe;
-  --color-border-info: #1c3d5c;
+  --color-border-info: 28 61 92;
   --color-border-info-emphasis: #1e6cb0;
-  --color-border-alert: #4d3e0a;
+  --color-border-alert: 77 62 10;
   --color-border-alert-emphasis: #8a6d0b;
-  --color-border-success: #1d4425;
+  --color-border-success: 29 68 37;
   --color-border-success-emphasis: #2b6e36;
-  --color-border-danger: #4d2323;
+  --color-border-danger: 77 35 35;
   --color-border-danger-emphasis: #8a2c2c;
   --color-chat-user-response-bg: #818cf8;
   --color-chat-user-response-text: #ffffff;
@@ -555,7 +587,7 @@ body {
   margin-left: 0 !important;
   margin-right: auto !important;
   /* Match the assistant + thinking state bubble radius. */
-  border-radius: 1rem !important;
+  border-radius: 16px !important;
   background: color-mix(
     in srgb,
     var(--color-interactive-accent-default) 10%,

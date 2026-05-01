@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckCircle2, Loader2, X, XCircle } from "lucide-react";
+import { Wifi, WifiOff, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { IconButton } from "@/components/layout/sidebar/IconButton";
@@ -11,7 +11,6 @@ import { validateGatewayUrl } from "@/lib/gateway/url";
 import type { Settings } from "@/lib/storage";
 
 import { AutomatedSetup } from "./AutomatedSetup";
-import { PreferencesPanel } from "./PreferencesPanel";
 
 interface Props {
   open: boolean;
@@ -29,58 +28,71 @@ const STATUS_BANNER: Record<
     /** Color applied to the icon — paired with neutral title + neutral surface. */
     accent: string;
     /** Tile background tint matching the accent. */
-    tile: string;
-    icon: typeof CheckCircle2;
-    spin?: boolean;
+    tileBg: string;
+    /** Tailwind class for the tile's stroke. Uses the `/N` alpha modifier on
+     *  the matching border token so the stroke comes through colored but
+     *  subtle — paired-down to match the visual weight of the colored Tag
+     *  strokes in the sidebar. Token swap handles dark mode automatically. */
+    tileBorder: string;
+    icon: typeof Wifi;
+    /** When true, the icon pulses to convey "in flight" — used for the
+     *  CONNECTING / PAIRING transitional states. */
+    pulse?: boolean;
   }
 > = {
   [ConnectionState.CONNECTED]: {
     label: "Connected",
     description: "The gateway is reachable and ready.",
     accent: "text-text-success-primary",
-    tile: "bg-success-background border-border-success/50",
-    icon: CheckCircle2,
+    tileBg: "bg-success-background",
+    tileBorder: "border-border-success/50",
+    icon: Wifi,
   },
   [ConnectionState.CONNECTING]: {
     label: "Connecting…",
     description: "Reaching the gateway — hold on.",
     accent: "text-text-alert-primary",
-    tile: "bg-alert-background border-border-alert/50",
-    icon: Loader2,
-    spin: true,
+    tileBg: "bg-alert-background",
+    tileBorder: "border-border-alert/50",
+    icon: Wifi,
+    pulse: true,
   },
   [ConnectionState.PAIRING]: {
     label: "Pairing…",
     description: "Waiting for the gateway handshake.",
     accent: "text-text-alert-primary",
-    tile: "bg-alert-background border-border-alert/50",
-    icon: Loader2,
-    spin: true,
+    tileBg: "bg-alert-background",
+    tileBorder: "border-border-alert/50",
+    icon: Wifi,
+    pulse: true,
   },
   [ConnectionState.DISCONNECTED]: {
     label: "Disconnected",
     description: "Add a gateway URL below or run the setup command.",
     accent: "text-text-danger-primary",
-    tile: "bg-danger-background border-border-danger/50",
-    icon: XCircle,
+    tileBg: "bg-danger-background",
+    tileBorder: "border-border-danger/50",
+    icon: WifiOff,
   },
   [ConnectionState.AUTH_FAILED]: {
     label: "Auth failed",
     description: "The token was rejected. Re-run `openclaw auth token`.",
     accent: "text-text-danger-primary",
-    tile: "bg-danger-background border-border-danger/50",
-    icon: XCircle,
+    tileBg: "bg-danger-background",
+    tileBorder: "border-border-danger/50",
+    icon: WifiOff,
   },
   [ConnectionState.UNREACHABLE]: {
     label: "Unreachable",
     description: "Couldn't reach the gateway. Check the URL and try again.",
     accent: "text-text-danger-primary",
-    tile: "bg-danger-background border-border-danger/50",
-    icon: XCircle,
+    tileBg: "bg-danger-background",
+    tileBorder: "border-border-danger/50",
+    icon: WifiOff,
   },
 };
 
-type Tab = "automated" | "manual" | "preferences";
+type Tab = "automated" | "manual";
 
 export function SettingsDialog({ open, currentSettings, connectionState, onClose, onSave }: Props) {
   const [gatewayUrl, setGatewayUrl] = useState(currentSettings?.gatewayUrl ?? "");
@@ -188,11 +200,11 @@ export function SettingsDialog({ open, currentSettings, connectionState, onClose
   return (
     <dialog
       ref={dialogRef}
-      className="w-full max-w-md rounded-2xl border border-border-default/50 bg-background p-ml text-text-neutral-primary shadow-2xl outline-none backdrop:bg-overlay dark:border-border-default/16 dark:bg-foreground"
+      className="w-full max-w-lg rounded-2xl border border-border-default/50 bg-background p-l text-text-neutral-primary shadow-2xl outline-none backdrop:bg-overlay dark:border-border-default/16 dark:bg-foreground"
       onClose={onClose}
     >
       <div className="flex flex-col">
-        <div className="mb-m flex items-center justify-between">
+        <div className="mb-ml flex items-center justify-between">
           <h2 className="font-heading text-md font-bold text-text-neutral-primary">
             Gateway Settings
           </h2>
@@ -206,17 +218,17 @@ export function SettingsDialog({ open, currentSettings, connectionState, onClose
           />
         </div>
 
-        <div className="mb-ml flex items-stretch gap-s rounded-lg border border-border-default/50 bg-background p-s dark:border-border-default/16 dark:bg-foreground">
+        <div className="mb-ml flex items-stretch gap-m rounded-lg border border-border-default/50 bg-background p-m dark:border-border-default/16 dark:bg-foreground">
           <div
-            className={`flex shrink-0 items-center justify-center self-stretch rounded-md border px-s ${banner.tile}`}
+            className={`flex h-2xl w-2xl shrink-0 items-center justify-center rounded-md border ${banner.tileBg} ${banner.tileBorder}`}
           >
-            <Icon size={16} className={`${banner.accent} ${banner.spin ? "animate-spin" : ""}`} />
+            <Icon size={16} className={`${banner.accent} ${banner.pulse ? "animate-pulse" : ""}`} />
           </div>
           <div className="min-w-0 flex-1">
             <p className="font-label text-sm font-medium leading-tight text-text-neutral-primary">
               {banner.label}
             </p>
-            <p className="mt-3xs font-body text-sm leading-snug text-text-neutral-tertiary">
+            <p className="mt-3xs font-body text-md leading-snug text-text-neutral-tertiary">
               {banner.description}
             </p>
           </div>
@@ -229,7 +241,6 @@ export function SettingsDialog({ open, currentSettings, connectionState, onClose
             options={[
               { value: "automated", label: "Automated" },
               { value: "manual", label: "Manual" },
-              { value: "preferences", label: "Preferences" },
             ]}
             ariaLabel="Settings section"
           />
@@ -240,7 +251,7 @@ export function SettingsDialog({ open, currentSettings, connectionState, onClose
 
           {tab === "manual" ? (
             <>
-              <p className="mb-ml font-body text-sm text-text-neutral-tertiary">
+              <p className="mb-ml font-body text-md leading-snug text-text-neutral-tertiary">
                 Connect Claw to your OpenClaw gateway. Run{" "}
                 <code className="rounded bg-sunk-light px-3xs font-mono text-sm dark:bg-elevated">
                   openclaw config show
@@ -248,8 +259,8 @@ export function SettingsDialog({ open, currentSettings, connectionState, onClose
                 in a terminal to see your gateway URL and token.
               </p>
 
-              <form onSubmit={handleSubmit} className="flex flex-col gap-ml">
-                <div className="flex flex-col gap-2xs">
+              <form onSubmit={handleSubmit} className="flex flex-col gap-l">
+                <div className="flex flex-col gap-xs">
                   <label className="font-label text-sm font-medium text-text-neutral-secondary">
                     Gateway URL
                   </label>
@@ -260,7 +271,7 @@ export function SettingsDialog({ open, currentSettings, connectionState, onClose
                     value={gatewayUrl}
                     onChange={(e) => setGatewayUrl(e.target.value)}
                     disabled={pending}
-                    className="rounded-lg border border-border-default bg-background px-s py-xs font-body text-sm text-text-neutral-primary outline-none focus:border-border-interactive-emphasis disabled:opacity-60 dark:border-border-default/16 dark:bg-foreground"
+                    className="rounded-lg border border-border-default bg-background px-m py-s font-body text-md text-text-neutral-primary outline-none focus:border-border-interactive-emphasis disabled:opacity-60 dark:border-border-default/16 dark:bg-foreground"
                   />
                   <p className="font-body text-sm text-text-neutral-tertiary">
                     Use <code className="font-mono">ws://</code> for local,{" "}
@@ -268,7 +279,7 @@ export function SettingsDialog({ open, currentSettings, connectionState, onClose
                   </p>
                 </div>
 
-                <div className="flex flex-col gap-2xs">
+                <div className="flex flex-col gap-xs">
                   <label className="font-label text-sm font-medium text-text-neutral-secondary">
                     Auth Token
                   </label>
@@ -278,7 +289,7 @@ export function SettingsDialog({ open, currentSettings, connectionState, onClose
                     value={token}
                     onChange={(e) => setToken(e.target.value)}
                     disabled={pending}
-                    className="rounded-lg border border-border-default bg-background px-s py-xs font-body text-sm text-text-neutral-primary outline-none focus:border-border-interactive-emphasis disabled:opacity-60 dark:border-border-default/16 dark:bg-foreground"
+                    className="rounded-lg border border-border-default bg-background px-m py-s font-body text-md text-text-neutral-primary outline-none focus:border-border-interactive-emphasis disabled:opacity-60 dark:border-border-default/16 dark:bg-foreground"
                   />
                   <p className="font-body text-sm text-text-neutral-tertiary">
                     Run{" "}
@@ -292,20 +303,20 @@ export function SettingsDialog({ open, currentSettings, connectionState, onClose
                 {error ? (
                   <div
                     role="alert"
-                    className="rounded-lg border border-border-danger bg-danger-background px-s py-xs font-body text-sm text-text-danger-primary"
+                    className="rounded-lg border border-border-danger bg-danger-background px-m py-s font-body text-md text-text-danger-primary"
                   >
                     {error}
                   </div>
                 ) : null}
 
                 {pending ? (
-                  <div className="flex items-center gap-xs font-body text-sm text-text-neutral-tertiary">
-                    <Loader2 size={14} className="animate-spin" />
+                  <div className="flex items-center gap-xs font-body text-md text-text-neutral-tertiary">
+                    <Wifi size={14} className="animate-pulse" />
                     Connecting to {gatewayUrl.trim()}…
                   </div>
                 ) : null}
 
-                <div className="mt-xs flex justify-end gap-xs">
+                <div className="mt-s flex justify-end gap-s">
                   <Button variant="secondary" size="md" onClick={onClose}>
                     Cancel
                   </Button>
@@ -316,8 +327,6 @@ export function SettingsDialog({ open, currentSettings, connectionState, onClose
               </form>
             </>
           ) : null}
-
-          {tab === "preferences" ? <PreferencesPanel /> : null}
         </div>
       </div>
     </dialog>

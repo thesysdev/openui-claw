@@ -18,30 +18,30 @@ export interface ConversationStarter {
 
 export const DEFAULT_STARTERS: ConversationStarter[] = [
   {
-    displayText: "Build me a daily news page that fetches the latest news in AI",
+    displayText: "Build a daily AI news digest",
     prompt:
-      "Build me a daily news page that fetches the latest news in AI. Pull from a few reputable sources, group by topic, and let me click into each headline.",
+      "Build a daily AI news digest. Pull the latest AI news every morning from a few high-signal sources (Hacker News, The Verge, and the Anthropic and OpenAI blogs). Cluster the stories by topic, dedupe write-ups of the same launch, and render a single-page digest with section headers per topic and a one-line summary under each headline.",
     accent: "info",
     iconKey: "newspaper",
   },
   {
-    displayText: "Build me a social monitoring page that tracks mentions of my product",
+    displayText: "Build a social monitoring board",
     prompt:
-      "Build me a social monitoring page that tracks mentions of my product. Surface volume, sentiment, and the top loud voices, with a feed of recent posts.",
+      "Build a social monitoring board. Track mentions of my product across Twitter/X, Reddit, and Hacker News. Show overall mention volume over time, a sentiment trend, the top voices driving the conversation, and a live feed of recent posts I can click through to the source.",
     accent: "accent",
     iconKey: "radar",
   },
   {
-    displayText: "Build me a finance dashboard that tracks my portfolio and market alerts",
+    displayText: "Build a finance dashboard with alerts",
     prompt:
-      "Build me a finance dashboard that tracks my portfolio and market alerts. Show holdings, P/L, watchlist, and a feed of price/news triggers.",
+      "Build a finance dashboard with alerts. Track my portfolio and surface market alerts. Show current holdings with P/L, a watchlist, today's movers, and a feed of price/news triggers I've configured. Refresh quotes during market hours and notify me when an alert fires.",
     accent: "success",
     iconKey: "trending-up",
   },
   {
-    displayText: "Build me an SEO dashboard that tracks rankings and finds content opportunities",
+    displayText: "Build an SEO dashboard with rankings",
     prompt:
-      "Build me an SEO dashboard that tracks rankings and finds content opportunities. Include keyword positions, competitor gaps, and a backlog of topics to write about.",
+      "Build an SEO dashboard with rankings. Track search rankings and surface content opportunities. Include keyword positions over time, top movers, competitor gaps, and a prioritized backlog of topics to write about — each with target keywords and an estimated traffic upside.",
     accent: "alert",
     iconKey: "search-check",
   },

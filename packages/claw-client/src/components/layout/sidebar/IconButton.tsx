@@ -3,7 +3,13 @@
 import type { ComponentType, MouseEventHandler, ReactNode } from "react";
 
 export type IconButtonSize = "sm" | "md" | "lg" | "xl";
-export type IconButtonVariant = "primary" | "secondary" | "tertiary" | "inverted" | "pill";
+export type IconButtonVariant =
+  | "primary"
+  | "secondary"
+  | "tertiary"
+  | "inverted"
+  | "pill"
+  | "ghost";
 
 const SIZE_STYLES: Record<IconButtonSize, { box: string; icon: number }> = {
   sm: { box: "h-l w-l", icon: 12 },
@@ -22,6 +28,11 @@ const VARIANT_STYLES: Record<IconButtonVariant, string> = {
   inverted:
     "bg-inverted-background text-background border border-transparent shadow-sm hover:opacity-90",
   pill: "bg-transparent text-text-neutral-tertiary border border-transparent aria-[pressed=true]:bg-sunk-light aria-[pressed=true]:text-text-neutral-primary",
+  // Black icon, no fill, no stroke. Used by composer send buttons where
+  // a heavy primary chip is too loud — the textarea+send pair carries
+  // the affordance on its own.
+  ghost:
+    "bg-transparent text-text-neutral-primary border border-transparent hover:bg-sunk-light dark:hover:bg-elevated-light",
 };
 
 export interface IconButtonProps {
@@ -34,6 +45,10 @@ export interface IconButtonProps {
   active?: boolean;
   /** When true, the icon spins (e.g. cron Run-now in flight). */
   spin?: boolean;
+  /** Extra classes appended after variant styles — useful for one-off
+   *  overrides (e.g. dropping a hover background) without forking the
+   *  variant. */
+  className?: string;
   onClick?: MouseEventHandler<HTMLButtonElement>;
   "aria-label"?: string;
   children?: ReactNode;
@@ -47,6 +62,7 @@ export function IconButton({
   disabled = false,
   active = false,
   spin = false,
+  className = "",
   onClick,
   ...rest
 }: IconButtonProps) {
@@ -58,7 +74,7 @@ export function IconButton({
       disabled={disabled}
       onClick={onClick}
       aria-pressed={variant === "pill" ? active : undefined}
-      className={`flex shrink-0 items-center justify-center rounded-m transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-50 ${s.box} ${VARIANT_STYLES[variant]}`}
+      className={`flex shrink-0 items-center justify-center rounded-m transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-50 ${s.box} ${VARIANT_STYLES[variant]} ${className}`}
       aria-label={rest["aria-label"] ?? title}
     >
       <Icon size={s.icon} className={spin ? "animate-spin" : undefined} />

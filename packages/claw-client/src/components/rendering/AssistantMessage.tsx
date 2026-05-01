@@ -410,7 +410,7 @@ function ThinkingPanel({
         className="overflow-hidden transition-[max-height,opacity] duration-300 ease-out"
         style={{ maxHeight: open ? 10000 : 0, opacity: open ? 1 : 0 }}
       >
-        <div className="mt-xs space-y-xs rounded-lg bg-sunk-light p-m dark:bg-sunk-deep">
+        <div className="mt-xs space-y-xs rounded-4xl bg-foreground p-m dark:bg-sunk-deep">
           {children}
         </div>
       </div>
@@ -716,7 +716,7 @@ export function AssistantMessage({ message }: Props) {
     ) : (
       <div
         key={`text-${i}`}
-        className="openclaw-ui-assistant-markdown mr-auto w-full max-w-3xl rounded-3xl border border-border-default/40 bg-background px-ml py-m shadow-sm dark:border-border-default/20 dark:bg-sunk-deep"
+        className="openclaw-ui-assistant-markdown mr-auto w-full max-w-3xl rounded-4xl border border-border-default/40 bg-background px-ml py-m shadow-sm dark:border-border-default/20 dark:bg-sunk-deep"
       >
         <div className={ASSISTANT_MARKDOWN_CLASSES}>
           <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{segment.content}</ReactMarkdown>
