@@ -1226,7 +1226,7 @@ export class OpenClawEngine implements Engine {
     try {
       const result = await this._request<{
         messages?: ChatHistoryMessage[];
-      }>("chat.history", { sessionKey, limit: 100 });
+      }>("chat.history", { sessionKey, limit: 200 });
       const raw = result?.messages ?? [];
       log(`chat.history returned ${raw.length} messages`);
       return mergedToStored(mergeHistoryMessages(raw));
