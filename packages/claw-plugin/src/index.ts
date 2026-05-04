@@ -1,5 +1,7 @@
 import { mergeStatements } from "@openuidev/lang-core";
-import { mkdir } from "node:fs/promises";
+import { createReadStream } from "node:fs";
+import { mkdir, stat } from "node:fs/promises";
+import type { IncomingMessage, ServerResponse } from "node:http";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import type {
@@ -126,6 +128,111 @@ export default definePluginEntry({
 
   register(api) {
     api.logger.info("[openclaw-ui-plugin] register() called — plugin loaded OK");
+
+    // ── Static UI route ─────────────────────────────────────────────────────
+    // Serves the claw-client static export bundled into ../static/ at install
+    // time. Authentication is the user's responsibility: open the URL with
+    // #gateway=...&token=... in the fragment (see scripts/open-ui.mjs).
+    const STATIC_ROOT = path.resolve(__dirname, "..", "static");
+    const ROUTE_PREFIX = "/plugins/openui";
+    const MIME_TYPES: Record<string, string> = {
+      ".html": "text/html; charset=utf-8",
+      ".js": "application/javascript; charset=utf-8",
+      ".mjs": "application/javascript; charset=utf-8",
+      ".css": "text/css; charset=utf-8",
+      ".json": "application/json; charset=utf-8",
+      ".map": "application/json; charset=utf-8",
+      ".svg": "image/svg+xml",
+      ".png": "image/png",
+      ".jpg": "image/jpeg",
+      ".jpeg": "image/jpeg",
+      ".gif": "image/gif",
+      ".webp": "image/webp",
+      ".ico": "image/x-icon",
+      ".woff": "font/woff",
+      ".woff2": "font/woff2",
+      ".ttf": "font/ttf",
+      ".txt": "text/plain; charset=utf-8",
+    };
+
+    const serveFile = (res: ServerResponse, absPath: string): void => {
+      const ext = path.extname(absPath).toLowerCase();
+      const contentType = MIME_TYPES[ext] ?? "application/octet-stream";
+      res.writeHead(200, {
+        "Content-Type": contentType,
+        "Cache-Control": ext === ".html" ? "no-cache" : "public, max-age=3600",
+      });
+      createReadStream(absPath)
+        .on("error", (err) => {
+          api.logger.warn(`[openclaw-ui-plugin] static stream error ${absPath}: ${err}`);
+          if (!res.headersSent) {
+            res.writeHead(500);
+          }
+          res.end();
+        })
+        .pipe(res);
+    };
+
+    const tryServe = async (res: ServerResponse, candidate: string): Promise<boolean> => {
+      try {
+        const stats = await stat(candidate);
+        if (stats.isFile()) {
+          serveFile(res, candidate);
+          return true;
+        }
+      } catch {
+        // Falls through to next candidate.
+      }
+      return false;
+    };
+
+    api.registerHttpRoute({
+      path: ROUTE_PREFIX,
+      auth: "plugin",
+      match: "prefix",
+      handler: async (req: IncomingMessage, res: ServerResponse) => {
+        const rawUrl = req.url ?? "/";
+        const urlPath = rawUrl.split("?")[0]!.split("#")[0]!;
+        // Strip the route prefix so /plugins/openui/_next/x → /_next/x
+        let relPath = urlPath.startsWith(ROUTE_PREFIX)
+          ? urlPath.slice(ROUTE_PREFIX.length)
+          : urlPath;
+        if (relPath === "" || relPath === "/") {
+          relPath = "/index.html";
+        }
+
+        // Decode + normalize, then guard against path traversal.
+        let safeRel: string;
+        try {
+          safeRel = decodeURIComponent(relPath);
+        } catch {
+          res.writeHead(400, { "Content-Type": "text/plain; charset=utf-8" });
+          res.end("Bad Request");
+          return true;
+        }
+        const absPath = path.join(STATIC_ROOT, safeRel);
+        const normalizedRoot = path.resolve(STATIC_ROOT) + path.sep;
+        if (!path.resolve(absPath).startsWith(normalizedRoot.slice(0, -1))) {
+          res.writeHead(403, { "Content-Type": "text/plain; charset=utf-8" });
+          res.end("Forbidden");
+          return true;
+        }
+
+        // 1) Direct file hit (incl. /index.html, /_next/static/*, /favicon.ico).
+        if (await tryServe(res, absPath)) return true;
+        // 2) Next.js static export emits clean paths like /setup → setup.html.
+        if (await tryServe(res, absPath + ".html")) return true;
+        // 3) Directory with index.html (e.g. /setup/ → /setup/index.html).
+        if (await tryServe(res, path.join(absPath, "index.html"))) return true;
+        // 4) SPA fallback so client-side routing on the loaded app still works.
+        if (await tryServe(res, path.join(STATIC_ROOT, "index.html"))) return true;
+
+        res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
+        res.end("Not Found");
+        return true;
+      },
+    });
+    api.logger.info(`[openclaw-ui-plugin] static UI route at ${ROUTE_PREFIX} (root=${STATIC_ROOT})`);
 
     // ── Tiny preamble injection ──────────────────────────────────────────────
     // The agent fetches the actual openui-lang prompt body via `read` on the

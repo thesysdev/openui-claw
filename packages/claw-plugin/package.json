@@ -1,10 +1,26 @@
 {
   "name": "@openuidev/openclaw-ui-plugin",
   "version": "0.1.1",
-  "private": true,
+  "description": "OpenClaw plugin that turns agent responses into Generative UI and serves the claw-client at /plugins/openui.",
+  "license": "MIT",
+  "homepage": "https://openui.com",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/thesysdev/openclaw-ui.git",
+    "directory": "packages/claw-plugin"
+  },
   "main": "./src/index.ts",
+  "files": [
+    "src",
+    "static",
+    "skills",
+    "openclaw.plugin.json",
+    "README.md"
+  ],
   "scripts": {
     "generate": "tsx generate-prompt.ts",
+    "bundle-ui": "cd ../claw-client && pnpm install --frozen-lockfile=false && pnpm build && rm -rf ../claw-plugin/static && cp -r out ../claw-plugin/static",
+    "open": "node ../../scripts/open-ui.mjs",
     "lint:check": "eslint ./src",
     "lint:fix": "eslint ./src --fix",
     "format:check": "prettier --check ./src",
@@ -17,7 +33,7 @@
     "@openuidev/lang-core": "^0.2.2"
   },
   "peerDependencies": {
-    "openclaw": "*"
+    "openclaw": ">=2026.4.12"
   },
   "devDependencies": {
     "@openuidev/react-ui": "*",
@@ -30,6 +46,10 @@
   "openclaw": {
     "extensions": [
       "./src/index.ts"
-    ]
+    ],
+    "compat": {
+      "pluginApi": ">=2026.4.12",
+      "minGatewayVersion": "2026.4.12"
+    }
   }
 }
