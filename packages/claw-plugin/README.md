@@ -1,53 +1,48 @@
 # @openuidev/openclaw-ui-plugin
 
-> [OpenClaw](https://github.com/openclaw/openclaw) plugin that turns agent responses into [Generative UI](https://openui.com). When the [`claw-client`](../claw-client) connects to a gateway with this plugin installed, agents respond with interactive [OpenUI Lang](https://openui.com) components — charts, tables, forms, cards — instead of plain markdown.
-
-This is the server side of [OpenClaw UI](../../README.md). The other half is the browser-side [`@openuidev/claw-client`](../claw-client).
+> [OpenClaw](https://github.com/openclaw/openclaw) plugin that bundles the [`claw-client`](../claw-client) and turns agent responses into [Generative UI](https://openui.com). After installing the plugin, the gateway serves the full chat UI at `http://localhost:18789/plugins/openui` — no separate Next.js process, no tunnel, no settings dialog.
 
 ## How it works
 
-The plugin registers a `before_prompt_build` hook. For each agent run initiated by the Claw client, it prepends the OpenUI Lang system prompt, instructing the LLM to emit structured UI components. Runs from other clients (CLI, other web apps) are unaffected.
+The plugin does two things in the same package:
 
-Detection works via a session key convention: the Claw client appends `:openclaw-ui` to its session keys (e.g. `agent:main:main:openclaw-ui`). The plugin checks for this suffix in `ctx.sessionKey` and only activates when it is present.
+1. **Prompt injection.** Registers a `before_prompt_build` hook. For each agent run originating from the claw-client, it prepends the OpenUI Lang system prompt so the LLM emits structured UI instead of plain markdown. Detected by session-key suffix `:openclaw-ui` — runs from other clients are unaffected.
+2. **Static UI serving.** Registers an HTTP route at `/plugins/openui` (via `api.registerHttpRoute`). The route serves the prebuilt claw-client static export (Next.js `output: "export"`) bundled into the plugin's `static/` directory. Browser tabs load the UI from the gateway origin and connect back over the same-origin WebSocket — no CORS, no allowed-origins config, no tunnel.
 
-The OpenUI Lang system prompt is baked directly into `src/index.ts` at generate time — the plugin is a single self-contained `.ts` file with no runtime dependencies beyond `openclaw` itself (which the gateway provides).
+The plugin also exposes lightweight stores for **apps**, **artifacts**, **notifications**, and **uploads**. These give the agent persistent, addressable UI primitives that the client can render and update across turns. See `app-store.ts`, `artifact-store.ts`, `notification-store.ts`, `upload-store.ts`.
 
-The plugin also exposes lightweight stores for **apps**, **artifacts**, **notifications**, and **uploads**. These give the agent persistent, addressable UI primitives that the client can render and update across turns. See `app-store.ts`, `artifact-store.ts`, `notification-store.ts`, and `upload-store.ts`.
-
-## Install
-
-From an installed npm package (when published):
+## Install (local development)
 
 ```sh
-openclaw plugins install @openuidev/openclaw-ui-plugin
-openclaw restart
+# Build the claw-client static export and copy it into ./static/
+pnpm bundle-ui
+
+# Clear local node_modules — pnpm's escaping symlinks trip openclaw's install
+# scanner. The managed install dir gets its own clean node_modules.
+rm -rf node_modules
+
+# Install + reload.
+openclaw plugins install ./packages/claw-plugin --force
+openclaw gateway restart
 ```
 
-From a local checkout (during development):
-
-```sh
-openclaw plugins install -l ./packages/claw-plugin
-openclaw restart
-```
-
-## Usage
-
-Open the [Claw client](../claw-client), enter your gateway URL and auth token in settings, and start chatting. Agent responses will render as interactive UI components. See the [root README](../../README.md#quick-start) for the full end-to-end flow.
+Open the UI at `http://localhost:18789/plugins/openui`. Paste the gateway URL (`ws://localhost:18789`) and the auth token from `~/.openclaw/openclaw.json` into the Settings dialog on first load. To skip the dialog and get a pre-authenticated URL with the token in the fragment (mirrors `openclaw dashboard`), run `node ../../scripts/open-ui.mjs` from the workspace root.
 
 ## Regenerating the system prompt
 
-The system prompt baked into `src/index.ts` is generated from `@openuidev/react-ui`'s component library. Re-run after upgrading that package:
+The OpenUI Lang system prompt is generated from `@openuidev/react-ui`'s component library. Re-run after upgrading that package:
 
 ```sh
 pnpm generate
 ```
 
-This rewrites `src/index.ts` in place. Commit the result.
+This rewrites `src/generated/system-prompt.ts` in place. Commit the result.
 
 ## Scripts
 
 ```sh
-pnpm generate       # regenerate src/index.ts from the OpenUI Lang component library
+pnpm generate       # regenerate src/generated/system-prompt.ts
+pnpm bundle-ui      # build claw-client and copy out/ → ./static/
 pnpm lint:check     # ESLint
 pnpm lint:fix       # ESLint --fix
 pnpm format:check   # Prettier --check
@@ -62,13 +57,14 @@ pnpm ci             # lint + format + typecheck
 ```
 packages/claw-plugin/
 ├── src/
-│   ├── index.ts                # plugin entrypoint (hook registration + system prompt)
+│   ├── index.ts                # entrypoint: hook + tools + RPC + HTTP route
 │   ├── app-store.ts            # app primitive store
 │   ├── artifact-store.ts       # artifact primitive store (SQLite-backed)
 │   ├── lint-openui.ts          # validation for emitted OpenUI Lang
 │   ├── notification-store.ts   # notification store
 │   ├── upload-store.ts         # upload store
 │   └── generated/              # generated prompt assets (do not edit by hand)
+├── static/                     # claw-client static export (gitignored, populated by `pnpm bundle-ui`)
 ├── skills/                     # OpenUI Lang skill instructions
 │   ├── openui-chat-renderer/SKILL.md
 │   └── openui-creator/SKILL.md
@@ -77,30 +73,13 @@ packages/claw-plugin/
 └── package.json
 ```
 
-## Local testing against a remote gateway
-
-The plugin is a single `.ts` file — no build step, no `node_modules` needed on the gateway machine. To install on a remote gateway, copy the directory over first:
-
-```sh
-rsync -az --exclude node_modules --exclude .git \
-  -e "ssh -i <path-to-pem>" \
-  ./packages/claw-plugin/ <user>@<host>:~/openclaw-ui-plugin
-```
-
-Then on the remote machine:
-
-```sh
-openclaw plugins install -l ~/openclaw-ui-plugin
-openclaw restart
-```
-
-Open the Claw client, connect to the gateway, and send a message. If the plugin is active you will see OpenUI Lang components rendered instead of plain text.
-
 ## Notes for plugin developers
 
 - `openclaw` is in `peerDependencies` and `devDependencies`, never `dependencies`. The runtime gateway provides the module.
-- Types come from subpath exports: `import { definePluginEntry } from "openclaw/plugin-sdk/plugin-entry"` and `from "openclaw/plugin-sdk/core"`. See [`AGENTS.md`](../../AGENTS.md#openclaw-types) for the full guidance.
-- Plugins are loaded via [jiti](https://github.com/unjs/jiti), so raw `.ts` ships as-is. There is no bundle step to maintain.
+- Types come from subpath exports: `import { definePluginEntry } from "openclaw/plugin-sdk/plugin-entry"` and `from "openclaw/plugin-sdk/core"`. See [`AGENTS.md`](../../AGENTS.md) for the full guidance.
+- Plugins are loaded via [jiti](https://github.com/unjs/jiti), so raw `.ts` ships as-is. There is no JS bundle step for the plugin's own code.
+- The `static/` directory is treated as opaque content. The plugin's HTTP handler serves whatever is in there with sensible MIME types and a path-traversal guard. `pnpm bundle-ui` is the only thing that should write to it.
+- For end-user setup story, architecture rationale, and what's still TODO, see [`docs/openclaw-os-bundling.md`](../../docs/openclaw-os-bundling.md).
 
 ## License
 
