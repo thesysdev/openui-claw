@@ -314,19 +314,26 @@ function SlashMenu({
   activeIndex,
   onSelect,
   onHover,
+  placement = "above",
 }: {
   entries: SlashEntry[];
   activeIndex: number;
   onSelect: (entry: SlashEntry) => void;
   onHover: (index: number) => void;
+  /** "above" → opens upward (default, for chat composer at viewport bottom).
+   *  "below" → opens downward (for home composer where content sits below). */
+  placement?: "above" | "below";
 }) {
   const activeRef = useRef<HTMLButtonElement | null>(null);
   useEffect(() => {
     activeRef.current?.scrollIntoView({ block: "nearest" });
   }, [activeIndex]);
   if (entries.length === 0) return null;
+  const placementClasses = placement === "below" ? "top-full mt-xs" : "bottom-full mb-xs";
   return (
-    <div className="absolute bottom-full left-0 right-0 z-20 mb-xs max-h-64 overflow-y-auto rounded-xl border border-border-default/70 bg-background p-3xs shadow-xl dark:border-border-default/30 dark:bg-elevated">
+    <div
+      className={`absolute left-0 right-0 z-20 max-h-64 overflow-y-auto rounded-xl border border-border-default/70 bg-background p-3xs shadow-xl dark:border-border-default/30 dark:bg-elevated ${placementClasses}`}
+    >
       {entries.map((entry, index) => (
         <button
           key={`${entry.source}:${entry.name}`}
@@ -386,6 +393,7 @@ export function SessionComposer({
   rotatingPlaceholders,
   rotatingPlaceholderFillWith,
   rotateIntervalMs = 3000,
+  slashMenuPlacement = "above",
 }: {
   uploads: ThreadUpload[];
   linkedApp: LinkedAppContext | null;
@@ -449,6 +457,11 @@ export function SessionComposer({
   /** Milliseconds between rotation steps. Default 3000. Ignored when the
    *  user prefers reduced motion — only the first item is shown. */
   rotateIntervalMs?: number;
+  /** Where the slash-command dropdown should open relative to the
+   *  composer. Default `"above"` — chat composers sit at the bottom of
+   *  the viewport so there's no room below. The home composer sits
+   *  near the top with sections under it, so it passes `"below"`. */
+  slashMenuPlacement?: "above" | "below";
 }) {
   const processMessage = useThread((state) => state.processMessage);
   const cancelMessage = useThread((state) => state.cancelMessage);
@@ -670,7 +683,7 @@ export function SessionComposer({
 
   return (
     <div
-      className={`openclaw-ui-session-composer relative mb-1 w-full rounded-xl bg-foreground p-[2px] sm:mb-3 ${
+      className={`openclaw-ui-session-composer relative mb-1 w-full rounded-xl border border-border-default/25 bg-foreground p-[2px] sm:mb-3 dark:border-border-default/8 ${
         isDragOver ? "ring-2 ring-text-accent-primary ring-offset-2" : ""
       }`}
       onDragEnter={handleDragEnter}
@@ -691,6 +704,7 @@ export function SessionComposer({
           activeIndex={slashActiveIndex}
           onSelect={applySlashCompletion}
           onHover={setSlashActiveIndex}
+          placement={slashMenuPlacement}
         />
       )}
 
@@ -728,7 +742,7 @@ export function SessionComposer({
                     ? "Type / for commands · ⌘↵ to send"
                     : "Type / for commands"
               }
-              className="max-h-48 w-full resize-none bg-transparent py-2xs text-sm leading-5 text-text-neutral-primary outline-none placeholder:text-text-neutral-tertiary"
+              className="max-h-48 min-h-12 w-full resize-none bg-transparent py-2xs text-sm leading-5 text-text-neutral-primary outline-none placeholder:text-text-neutral-tertiary"
               onKeyDown={(event) => {
                 if (slashMatches.length > 0) {
                   if (event.key === "ArrowDown") {
@@ -789,14 +803,16 @@ export function SessionComposer({
               }}
             />
             {rotation.current && textContent.length === 0 ? (
-              // `inset-0` + `items-center` + same py/leading as the
+              // `inset-0` + `items-start` + same py/leading as the
               // textarea → the placeholder sits on the exact same
-              // baseline as typed text. Each word's `wordIndex`
-              // drives its `animation-delay`; the TAB chip waits
-              // for `streamDone` before fading in.
+              // baseline as typed text. `items-start` (not `center`)
+              // is what keeps it pinned to the first line now that
+              // the textarea has a 2-line `min-h`. Each word's
+              // `wordIndex` drives its `animation-delay`; the TAB
+              // chip waits for `streamDone` before fading in.
               <div
                 aria-hidden="true"
-                className="pointer-events-none absolute inset-0 flex items-center gap-xs py-2xs"
+                className="pointer-events-none absolute inset-0 flex items-start gap-xs py-2xs"
               >
                 <span className="min-w-0 truncate text-sm leading-5 text-text-neutral-tertiary/70">
                   {rotation.tokens.map((token, i) =>
@@ -816,14 +832,21 @@ export function SessionComposer({
                   )}
                 </span>
                 {rotation.streamDone ? (
-                  <Tag
-                    key={`tab-${rotation.rotationKey}`}
-                    size="md"
-                    variant="neutral"
-                    className="claw-fade-in opacity-70"
-                  >
-                    TAB
-                  </Tag>
+                  // h-5 matches the placeholder's leading-5 (20px) so the
+                  // shorter Tag sits visually centered on the first text
+                  // line — without this wrapper `items-start` on the parent
+                  // pins the Tag's top edge to the container top, which
+                  // reads as "floating above" the placeholder text.
+                  <span className="flex h-5 shrink-0 items-center">
+                    <Tag
+                      key={`tab-${rotation.rotationKey}`}
+                      size="md"
+                      variant="neutral"
+                      className="claw-fade-in opacity-70"
+                    >
+                      TAB
+                    </Tag>
+                  </span>
                 ) : null}
               </div>
             ) : null}

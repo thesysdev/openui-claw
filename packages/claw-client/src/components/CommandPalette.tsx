@@ -161,9 +161,9 @@ function ResultRow({
       value={row.id}
       keywords={[row.label, row.hint, row.searchValue]}
       onSelect={() => onSelect(row.target)}
-      className="group flex w-full cursor-pointer items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-text-neutral-primary aria-selected:bg-info-background data-[selected=true]:bg-info-background"
+      className="group flex w-full cursor-pointer items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-text-neutral-primary aria-selected:bg-sunk-light data-[selected=true]:bg-sunk-light dark:aria-selected:bg-elevated dark:data-[selected=true]:bg-elevated"
     >
-      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-foreground text-text-neutral-secondary">
+      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-transparent bg-foreground text-text-neutral-secondary transition-all duration-150 group-data-[selected=true]:border-border-default/60 group-data-[selected=true]:bg-background group-data-[selected=true]:shadow-sm dark:group-data-[selected=true]:border-border-default/16 dark:group-data-[selected=true]:bg-elevated-strong">
         <Icon className="h-3.5 w-3.5" />
       </span>
       <span className="flex min-w-0 flex-1 flex-col">
