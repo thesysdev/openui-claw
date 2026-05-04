@@ -2075,10 +2075,6 @@ function ChatAppInner({
           // affordance on touch.
           rotatingPlaceholders={isMobile ? undefined : DEFAULT_STARTERS.map((s) => s.displayText)}
           rotatingPlaceholderFillWith={isMobile ? undefined : DEFAULT_STARTERS.map((s) => s.prompt)}
-          // Home composer sits near the top of the page with sections
-          // (Top agents, Top apps, etc.) below it — no headroom above,
-          // plenty of room below. Chat composers stay default ("above").
-          slashMenuPlacement="below"
         />
       </>
     );

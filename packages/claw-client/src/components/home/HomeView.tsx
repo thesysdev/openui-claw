@@ -203,158 +203,164 @@ export function HomeView({
 
   return (
     <div className="flex h-full flex-1 overflow-hidden bg-background">
-      {/* ── Main scroll area ── */}
-      <div className="min-w-0 flex-1 overflow-y-auto">
-        <div className="mx-auto max-w-[1080px] px-3xl py-3xl">
-          <Greeting name={userName} />
+      {/* ── Main column: scrollable content + sticky composer footer ── */}
+      <div className="flex min-w-0 flex-1 flex-col">
+        <div className="flex-1 overflow-y-auto">
+          <div className="mx-auto max-w-[1080px] px-3xl pb-l pt-3xl">
+            <Greeting name={userName} />
 
-          {/* Welcome composer — same SessionComposer used in chat. */}
-          {composer ? <div className="mb-2xl">{composer}</div> : null}
-
-          {/* Top agents */}
-          <section className="mb-2xl">
-            <SectionHeader
-              title="Top agents"
-              right={
-                agents.length > 0 ? (
-                  <ViewAllButton count={agents.length} onClick={() => onNavigate("agents")} />
-                ) : null
-              }
-            />
-            {agents.length === 0 ? (
-              <div className="flex min-h-[130px] flex-col items-center justify-center gap-m rounded-2xl border border-dashed border-border-default px-ml text-sm text-text-neutral-tertiary">
-                <p>Get work done with your first agent.</p>
-                <Button variant="primary" size="md" icon={Plus}>
-                  Create agent
-                </Button>
-              </div>
-            ) : (
-              <div className="grid grid-cols-2 gap-ml sm:grid-cols-3 lg:grid-cols-4">
-                {agents.slice(0, 4).map((a) => (
-                  <AgentCard key={a.id} agent={a} onClick={() => openAgent(a)} />
-                ))}
-              </div>
-            )}
-          </section>
-
-          {/* Top apps + Recent artifacts */}
-          <section className="mb-2xl grid grid-cols-1 gap-2xl lg:grid-cols-[2fr_1fr] lg:gap-ml">
-            {/* Top apps */}
-            <div className="rounded-2xl border border-border-default/50 bg-popover-background p-ml shadow-xl dark:border-transparent dark:bg-foreground">
+            {/* Top agents */}
+            <section className="mb-2xl">
               <SectionHeader
-                title="Top apps"
+                title="Top agents"
                 right={
-                  recentApps.length > 0 ? (
-                    <ViewAllButton count={recentApps.length} onClick={() => onNavigate("apps")} />
+                  agents.length > 0 ? (
+                    <ViewAllButton count={agents.length} onClick={() => onNavigate("agents")} />
                   ) : null
                 }
               />
-              {recentApps.length === 0 ? (
-                <div className="flex min-h-[150px] flex-col items-center justify-center gap-m rounded-m border border-dashed border-border-default/70 px-ml text-center font-body text-sm text-text-neutral-tertiary dark:border-border-default">
-                  <p>
-                    Ask your agent to create dashboards,
-                    <br />
-                    work trackers, marketing calendars, etc.
-                  </p>
-                  <Button variant="secondary" size="md">
-                    See an example
+              {agents.length === 0 ? (
+                <div className="flex min-h-[130px] flex-col items-center justify-center gap-m rounded-2xl border border-dashed border-border-default px-ml text-sm text-text-neutral-tertiary">
+                  <p>Get work done with your first agent.</p>
+                  <Button variant="primary" size="md" icon={Plus}>
+                    Create agent
                   </Button>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 gap-x-xl sm:grid-cols-2">
-                  {recentApps.slice(0, 6).map((app) => (
-                    <HomeRow
-                      key={app.id}
-                      icon={LayoutGrid}
-                      title={app.title}
-                      subtitle={`by ${truncate(app.agentId)}`}
-                      category="app"
-                      onClick={() => onOpenApp(app.id)}
-                    />
+                <div className="grid grid-cols-2 gap-ml sm:grid-cols-3 lg:grid-cols-4">
+                  {agents.slice(0, 4).map((a) => (
+                    <AgentCard key={a.id} agent={a} onClick={() => openAgent(a)} />
                   ))}
                 </div>
               )}
-            </div>
+            </section>
 
-            {/* Recent artifacts */}
-            <div className="rounded-2xl border border-border-default/50 bg-popover-background p-ml shadow-xl dark:border-transparent dark:bg-foreground">
+            {/* Top apps + Recent artifacts */}
+            <section className="mb-2xl grid grid-cols-1 gap-2xl lg:grid-cols-[2fr_1fr] lg:gap-ml">
+              {/* Top apps */}
+              <div className="rounded-2xl border border-border-default/50 bg-popover-background p-ml shadow-xl dark:border-transparent dark:bg-foreground">
+                <SectionHeader
+                  title="Top apps"
+                  right={
+                    recentApps.length > 0 ? (
+                      <ViewAllButton count={recentApps.length} onClick={() => onNavigate("apps")} />
+                    ) : null
+                  }
+                />
+                {recentApps.length === 0 ? (
+                  <div className="flex min-h-[150px] flex-col items-center justify-center gap-m rounded-m border border-dashed border-border-default/70 px-ml text-center font-body text-sm text-text-neutral-tertiary dark:border-border-default">
+                    <p>
+                      Ask your agent to create dashboards,
+                      <br />
+                      work trackers, marketing calendars, etc.
+                    </p>
+                    <Button variant="secondary" size="md">
+                      See an example
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 gap-x-xl sm:grid-cols-2">
+                    {recentApps.slice(0, 6).map((app) => (
+                      <HomeRow
+                        key={app.id}
+                        icon={LayoutGrid}
+                        title={app.title}
+                        subtitle={`by ${truncate(app.agentId)}`}
+                        category="app"
+                        onClick={() => onOpenApp(app.id)}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Recent artifacts */}
+              <div className="rounded-2xl border border-border-default/50 bg-popover-background p-ml shadow-xl dark:border-transparent dark:bg-foreground">
+                <SectionHeader
+                  title="Recent artifacts"
+                  right={
+                    recentArtifacts.length > 0 ? (
+                      <ViewAllButton
+                        count={recentArtifacts.length}
+                        onClick={() => onNavigate("artifacts")}
+                      />
+                    ) : null
+                  }
+                />
+                {recentArtifacts.length === 0 ? (
+                  <div className="flex min-h-[150px] flex-col items-center justify-center gap-m rounded-m border border-dashed border-border-default/70 px-ml text-center font-body text-sm text-text-neutral-tertiary dark:border-border-default">
+                    <p>
+                      Ask your agent to create
+                      <br />
+                      slides and reports.
+                    </p>
+                    <Button variant="secondary" size="md">
+                      See an example
+                    </Button>
+                  </div>
+                ) : (
+                  recentArtifacts.slice(0, 3).map((art) => {
+                    const Icon = ARTIFACT_ICON[art.kind] ?? ScrollText;
+                    return (
+                      <HomeRow
+                        key={art.id}
+                        icon={Icon}
+                        title={art.title}
+                        subtitle={`by ${truncate(art.source.agentId)}`}
+                        category="artifact"
+                        onClick={() => onOpenArtifact(art.id)}
+                      />
+                    );
+                  })
+                )}
+              </div>
+            </section>
+
+            {/* Cron Jobs */}
+            <section className="mb-2xl">
               <SectionHeader
-                title="Recent artifacts"
+                title="Cron Jobs"
                 right={
-                  recentArtifacts.length > 0 ? (
-                    <ViewAllButton
-                      count={recentArtifacts.length}
-                      onClick={() => onNavigate("artifacts")}
-                    />
+                  cronJobs.length > 0 ? (
+                    <ViewAllButton count={cronJobs.length} onClick={() => onNavigate("crons")} />
                   ) : null
                 }
               />
-              {recentArtifacts.length === 0 ? (
-                <div className="flex min-h-[150px] flex-col items-center justify-center gap-m rounded-m border border-dashed border-border-default/70 px-ml text-center font-body text-sm text-text-neutral-tertiary dark:border-border-default">
+              {visibleCrons.length === 0 ? (
+                <div className="flex min-h-[150px] items-center justify-center rounded-2xl border border-dashed border-border-default px-ml text-center text-sm text-text-neutral-tertiary">
                   <p>
-                    Ask your agent to create
+                    Ask your agent to schedule recurring jobs
                     <br />
-                    slides and reports.
+                    like daily digests or weekly reports.
                   </p>
-                  <Button variant="secondary" size="md">
-                    See an example
-                  </Button>
                 </div>
               ) : (
-                recentArtifacts.slice(0, 3).map((art) => {
-                  const Icon = ARTIFACT_ICON[art.kind] ?? ScrollText;
-                  return (
-                    <HomeRow
-                      key={art.id}
-                      icon={Icon}
-                      title={art.title}
-                      subtitle={`by ${truncate(art.source.agentId)}`}
-                      category="artifact"
-                      onClick={() => onOpenArtifact(art.id)}
-                    />
-                  );
-                })
+                <div className="space-y-xs">
+                  {visibleCrons.map((job) => {
+                    const ownerLabel = cronOwnerLabel(job, threads);
+                    const freq = humanFrequency(job);
+                    return (
+                      <CronHomeRow
+                        key={job.id}
+                        job={job}
+                        ownerLabel={ownerLabel}
+                        frequency={freq}
+                        onOpen={() => onOpenCron?.(job.id)}
+                      />
+                    );
+                  })}
+                </div>
               )}
-            </div>
-          </section>
-
-          {/* Cron Jobs */}
-          <section className="mb-2xl">
-            <SectionHeader
-              title="Cron Jobs"
-              right={
-                cronJobs.length > 0 ? (
-                  <ViewAllButton count={cronJobs.length} onClick={() => onNavigate("crons")} />
-                ) : null
-              }
-            />
-            {visibleCrons.length === 0 ? (
-              <div className="flex min-h-[150px] items-center justify-center rounded-2xl border border-dashed border-border-default px-ml text-center text-sm text-text-neutral-tertiary">
-                <p>
-                  Ask your agent to schedule recurring jobs
-                  <br />
-                  like daily digests or weekly reports.
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-xs">
-                {visibleCrons.map((job) => {
-                  const ownerLabel = cronOwnerLabel(job, threads);
-                  const freq = humanFrequency(job);
-                  return (
-                    <CronHomeRow
-                      key={job.id}
-                      job={job}
-                      ownerLabel={ownerLabel}
-                      frequency={freq}
-                      onOpen={() => onOpenCron?.(job.id)}
-                    />
-                  );
-                })}
-              </div>
-            )}
-          </section>
+            </section>
+          </div>
         </div>
+
+        {/* Sticky composer footer — same SessionComposer used in chat. */}
+        {composer ? (
+          <div className="shrink-0 bg-background">
+            <div className="mx-auto max-w-[1080px] px-3xl pb-ml pt-s">{composer}</div>
+          </div>
+        ) : null}
       </div>
 
       {/* ── Notifications panel ── */}
