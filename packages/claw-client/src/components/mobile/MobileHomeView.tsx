@@ -96,10 +96,13 @@ export function MobileHomeView({
   };
 
   return (
-    <div className="claw-fade-in flex h-full flex-1 flex-col overflow-hidden bg-background">
+    <div className="claw-fade-in flex h-full flex-1 overflow-hidden bg-background">
       <div className="flex-1 overflow-y-auto">
-        <div className="mx-auto max-w-[1080px] px-ml pb-ml pt-ml">
+        <div className="mx-auto max-w-[1080px] px-ml py-ml">
           <Greeting name={userName} />
+
+          {/* Welcome composer — same SessionComposer used in chat. */}
+          {composer ? <div className="mb-ml">{composer}</div> : null}
 
           <section className="mb-ml">
             <SectionHeader title="Top agents" />
@@ -220,9 +223,6 @@ export function MobileHomeView({
           </section>
         </div>
       </div>
-
-      {/* Sticky composer footer — same SessionComposer used in chat. */}
-      {composer ? <div className="shrink-0 bg-background px-ml pb-s pt-xs">{composer}</div> : null}
     </div>
   );
 }
