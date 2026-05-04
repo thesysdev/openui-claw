@@ -1,14 +1,14 @@
-# @openuidev/openclaw-ui-plugin
+# @openuidev/openclaw-os-plugin
 
 > [OpenClaw](https://github.com/openclaw/openclaw) plugin that turns agent responses into [Generative UI](https://openui.com). When the [`claw-client`](../claw-client) connects to a gateway with this plugin installed, agents respond with interactive [OpenUI Lang](https://openui.com) components — charts, tables, forms, cards — instead of plain markdown.
 
-This is the server side of [OpenClaw UI](../../README.md). The other half is the browser-side [`@openuidev/claw-client`](../claw-client).
+This is the server side of [OpenClaw OS](../../README.md). The other half is the browser-side [`@openuidev/claw-client`](../claw-client).
 
 ## How it works
 
 The plugin registers a `before_prompt_build` hook. For each agent run initiated by the Claw client, it prepends the OpenUI Lang system prompt, instructing the LLM to emit structured UI components. Runs from other clients (CLI, other web apps) are unaffected.
 
-Detection works via a session key convention: the Claw client appends `:openclaw-ui` to its session keys (e.g. `agent:main:main:openclaw-ui`). The plugin checks for this suffix in `ctx.sessionKey` and only activates when it is present.
+Detection works via a session key convention: the Claw client appends `:openclaw-os` to its session keys (e.g. `agent:main:main:openclaw-os`). The plugin checks for this suffix in `ctx.sessionKey` and only activates when it is present.
 
 The OpenUI Lang system prompt is baked directly into `src/index.ts` at generate time — the plugin is a single self-contained `.ts` file with no runtime dependencies beyond `openclaw` itself (which the gateway provides).
 
@@ -19,7 +19,7 @@ The plugin also exposes lightweight stores for **apps**, **artifacts**, **notifi
 From an installed npm package (when published):
 
 ```sh
-openclaw plugins install @openuidev/openclaw-ui-plugin
+openclaw plugins install @openuidev/openclaw-os-plugin
 openclaw restart
 ```
 
@@ -84,13 +84,13 @@ The plugin is a single `.ts` file — no build step, no `node_modules` needed on
 ```sh
 rsync -az --exclude node_modules --exclude .git \
   -e "ssh -i <path-to-pem>" \
-  ./packages/claw-plugin/ <user>@<host>:~/openclaw-ui-plugin
+  ./packages/claw-plugin/ <user>@<host>:~/openclaw-os-plugin
 ```
 
 Then on the remote machine:
 
 ```sh
-openclaw plugins install -l ~/openclaw-ui-plugin
+openclaw plugins install -l ~/openclaw-os-plugin
 openclaw restart
 ```
 
